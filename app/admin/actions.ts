@@ -44,6 +44,19 @@ function parseNullableNumber(value: string, integer = false): number | null {
 }
 
 /**
+ * Backstop serveur pour le HTML de `notas` (l'assainissement principal est côté client).
+ * Retire les éléments/handlers dangereux et ne conserve que <strong>/<b>/<br>/<span>.
+ */
+function sanitizeNotasServer(html: string): string {
+  return String(html ?? "")
+    .replace(/<\s*\/?\s*(script|style|iframe|img|svg|object|embed|link|meta|form|input)\b[^>]*>/gi, "")
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/javascript:/gi, "")
+    .replace(/<(?!\/?(?:strong|b|br|span)\b)[^>]*>/gi, "")
+    .trim();
+}
+
+/**
  * Crée une ligne vide avec UID incrémental (préfixe + numéro zéro-paddé).
  * `presets` permet de préremplir des champs (ex. subseccion du bloc), validés par liste blanche.
  */
@@ -223,6 +236,9 @@ export async function updateSubproyecto(uid: string, field: string, value: strin
     }
   } else if (SUB_NUM.has(field)) {
     v = parseNullableNumber(value);
+  } else if (field === "notas") {
+    const clean = sanitizeNotasServer(value);
+    v = clean === "" ? null : clean;
   } else {
     throw new Error(`Campo no editable: ${field}`);
   }
@@ -309,7 +325,7 @@ export async function addSchool(nombre: string): Promise<SubproyectoRow> {
   const { data: ins, error } = await sb
     .from("peebcoolsf_subproyectos")
     .insert({ uid, nombre: nom, tipologia: "E", seccion: "Escuelas", orden: maxOrden + 1 })
-    .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2")
+    .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas")
     .single();
   if (error) throw new Error(error.message);
 

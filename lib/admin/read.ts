@@ -34,6 +34,7 @@ export type SubproyectoRow = {
   lat: number | null;
   lng: number | null;
   superficie_m2: number | null;
+  notas: string | null;
 };
 
 export type MetricaRow = {
@@ -61,7 +62,7 @@ export async function listSubproyectos(): Promise<SubproyectoRow[]> {
   const sb = createServiceClient();
   const { data, error } = await sb
     .from("peebcoolsf_subproyectos")
-    .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2")
+    .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas")
     .order("orden", { ascending: true })
     .order("uid", { ascending: true });
   if (error) throw new Error(`Error al leer subproyectos: ${error.message}`);

@@ -57,6 +57,7 @@ const EDIFICIO_FIELDS: FieldDef[] = [
   { key: "lat", label: "Latitud", type: "number" },
   { key: "lng", label: "Longitud", type: "number" },
   { key: "superficie_m2", label: "Superficie", type: "number", suffix: "m²" },
+  { key: "notas", label: "Notas", type: "richtext" },
 ];
 
 const ENERGIA_FIELDS: FieldDef[] = [

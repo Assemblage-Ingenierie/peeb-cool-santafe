@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { SelectOption } from "./editable-table";
+import { NotasEditor } from "./notas-editor";
 
 // ============================================================
 // Éditeur « par champ » (≠ tableau-liste) pour les sections
@@ -11,7 +12,7 @@ import type { SelectOption } from "./editable-table";
 // Aucune couleur en dur : tokens lib/constants.ts (sauf couleurs d'options).
 // ============================================================
 
-export type FieldType = "text" | "number" | "select";
+export type FieldType = "text" | "number" | "select" | "richtext";
 
 export interface FieldDef {
   key: string;
@@ -64,6 +65,9 @@ function FieldValue({
   }
   if (field.type === "number") {
     return <NumberField field={field} value={value} onCommit={onCommit} />;
+  }
+  if (field.type === "richtext") {
+    return <NotasEditor value={(value as string) ?? ""} onCommit={onCommit} />;
   }
   return <TextField field={field} value={(value as string) ?? ""} onCommit={onCommit} />;
 }
