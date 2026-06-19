@@ -28,8 +28,8 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
         mobileOpen ? "translate-x-0" : "-translate-x-full",
       )}
     >
-      {/* Logo Assemblage */}
-      <div className="px-5 pb-4 pt-6">
+      {/* Logo Assemblage — même hauteur (72px) que le header pour aligner tous les logos */}
+      <div className="flex h-[72px] shrink-0 items-center border-b border-[var(--sidebar-border)] px-5">
         <LogoSlot
           src="/logos/assemblage.png"
           file="assemblage.png"

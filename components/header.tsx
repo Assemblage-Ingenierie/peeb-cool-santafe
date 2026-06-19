@@ -10,7 +10,7 @@ interface HeaderProps {
 
 export function Header({ onMenu, filters, onToggleFilter }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2.5">
+    <header className="sticky top-0 z-20 flex min-h-[72px] flex-wrap items-center gap-x-4 gap-y-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-2">
       {/* Menu mobile */}
       <button
         type="button"
@@ -28,14 +28,14 @@ export function Header({ onMenu, filters, onToggleFilter }: HeaderProps) {
           src="/logos/afd.png"
           file="afd.png"
           alt="AFD — Agence Française de Développement"
-          className="h-8 w-auto sm:h-9"
+          className="h-9 w-auto sm:h-10"
         />
-        <span className="h-7 w-px bg-[var(--border)]" aria-hidden="true" />
+        <span className="h-9 w-px bg-[var(--border)]" aria-hidden="true" />
         <LogoSlot
           src="/logos/santafe.png"
           file="santafe.png"
           alt="Provincia de Santa Fe"
-          className="h-6 w-auto sm:h-7"
+          className="h-8 w-auto sm:h-9"
         />
       </div>
 
