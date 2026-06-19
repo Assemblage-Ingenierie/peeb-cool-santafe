@@ -68,11 +68,11 @@ const ENERGIA_FIELDS: FieldDef[] = [
 
 const BENEF_FIELDS: FieldDef[] = [
   { key: "benef_personal", label: "Personal", type: "number", integer: true },
-  { key: "benef_personal_pct_muj", label: "Personal · % mujeres", type: "number", suffix: "%" },
+  { key: "benef_personal_pct_muj", label: "Personal · % mujeres", type: "number" },
   { key: "benef_usuarios", label: "Usuarios", type: "number", integer: true },
-  { key: "benef_usuarios_pct_muj", label: "Usuarios · % mujeres", type: "number", suffix: "%" },
+  { key: "benef_usuarios_pct_muj", label: "Usuarios · % mujeres", type: "number" },
   { key: "benef_indirectos", label: "Indirectos", type: "number", integer: true },
-  { key: "benef_indirectos_pct_muj", label: "Indirectos · % mujeres", type: "number", suffix: "%" },
+  { key: "benef_indirectos_pct_muj", label: "Indirectos · % mujeres", type: "number" },
 ];
 
 const gestionColumns: AdminColumn[] = [

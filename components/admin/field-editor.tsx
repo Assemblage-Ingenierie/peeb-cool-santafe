@@ -37,7 +37,10 @@ export function FieldEditor({ fields, values, onCommit }: FieldEditorProps) {
     <dl className="divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
       {fields.map((f) => (
         <div key={f.key} className="grid grid-cols-1 gap-1 px-4 py-2.5 sm:grid-cols-[14rem_1fr] sm:items-center sm:gap-3">
-          <dt className="text-sm text-[var(--text-muted)]">{f.label}</dt>
+          <dt className="text-sm text-[var(--text-muted)]">
+            {f.label}
+            {f.suffix ? <span className="ml-1 opacity-70">({f.suffix})</span> : null}
+          </dt>
           <dd className="text-sm text-[var(--text)]">
             <FieldValue field={f} value={values[f.key]} onCommit={(v) => onCommit(f.key, v)} />
           </dd>
@@ -199,10 +202,7 @@ function NumberField({
       {num === null || Number.isNaN(num) ? (
         <span className="text-[var(--text-muted)]">—</span>
       ) : (
-        <span>
-          {NUM_FMT.format(num)}
-          {field.suffix ? <span className="ml-1 text-[var(--text-muted)]">{field.suffix}</span> : null}
-        </span>
+        <span>{NUM_FMT.format(num)}</span>
       )}
     </button>
   );

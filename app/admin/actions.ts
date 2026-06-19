@@ -192,6 +192,8 @@ async function detachEntidad(sb: SupabaseClient, entidadUid: string): Promise<vo
     .eq("entidad_uid", entidadUid);
   if (error) throw new Error(error.message);
   await removeFromArray(sb, "peebcoolsf_capacitaciones_eventos", "entidades", entidadUid);
+  // Une entidad peut être participante d'un evento (Calendario) → la retirer aussi.
+  await removeFromArray(sb, "peebcoolsf_eventos", "participantes", entidadUid);
 }
 
 // ============================================================

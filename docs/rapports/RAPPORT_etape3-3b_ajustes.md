@@ -10,6 +10,8 @@
 | 2 | Remplacer **« faisabilidad » → « factibilidad »** | UI (affichage) | Titre « Datos de la **factibilidad** » + texte d'aide. Le mot ne figure plus à l'écran. **Valeur technique `escenario='faisabilidad'` conservée** (clé d'enum invisible ; migration B *non retenue* par l'utilisateur → CDC §3.3 inchangé). |
 | 3 | « Costo otras » → **« Costo otras medidas »** | UI (libellé) | Champ `costo_otras_eur`, label seul modifié. |
 | 4 | Ajouter fases **Anteproyecto** et **Redacción de pliegos** | **Migration DB** | Voir ci-dessous. |
+| 5 | **Indiquer les unités** sur les champs numériques | UI | Unité dans le **libellé** (toujours visible, même quand « — ») : Demanda (kWh), GEI (tCO₂), Costo (€), Superficie (m²) ; retirée de la valeur (anti-redondance). Les champs `% mujeres` gardent « % » dans le libellé. |
+| 6 | **Calendario** : autoriser les **entidades** comme participantes d'un evento | UI + action | Dropdown « Participantes » des eventos = personas **+ entidades** (marquées « (entidad) »). `capacitaciones_eventos` inchangé (personas + champ entidades dédié). Nettoyage étendu : suppression d'une entidad → retirée aussi de `eventos.participantes[]`. |
 
 ## Migration DB (005) — fases
 `gestion_lineas.fase` étant une **FK vers `peebcoolsf_fases`**, ajouter une fase passe par le référentiel (sinon le select casse à la sélection). Diff proposé puis validé avant exécution.
@@ -27,6 +29,8 @@ Ordre chronologique obtenu (`orden`) :
 | Libellés | « Datos de la factibilidad », « Costo otras medidas » ; **0 occurrence visible de « faisabilidad »** ✅ |
 | Dropdown Fase | 7 fases dans l'ordre chronologique ✅ |
 | FK nouvelle fase | sélection « Anteproyecto » → `gestion_lineas.fase='anteproyecto'` persiste ✅ |
+| Unités | libellés « Demanda antes (kWh) », « GEI antes (tCO₂) », « Costo EE (€) », « Superficie (m²) » ✅ |
+| Entidades en participantes | dropdown evento = personas + 6 entidades « (entidad) » (vérif lecture seule, données réelles non modifiées) ✅ |
 
 `tsc --noEmit` + ESLint : OK.
 

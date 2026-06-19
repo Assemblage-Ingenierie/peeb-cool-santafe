@@ -132,6 +132,12 @@ export function AdminTabs({
     value: p.uid,
     label: `${String(p.apellido ?? "")} ${String(p.nombre ?? "")}`.trim() || p.uid,
   }));
+  // Calendario : un evento peut avoir comme participant une persona OU una entidad.
+  // (capacitaciones_eventos garde personas seules + son champ entidades dédié.)
+  const eventoParticipanteOptions: SelectOption[] = [
+    ...participanteOptions,
+    ...entidadOptions.map((o) => ({ ...o, label: `${o.label} (entidad)` })),
+  ];
 
   const gpColumns: AdminColumn[] = [
     { key: "nombre_documento", label: "Documento", type: "text", placeholder: "Nombre del documento" },
@@ -162,7 +168,7 @@ export function AdminTabs({
     { key: "modalidad", label: "Modalidad", type: "select", options: MODALIDAD_OPTIONS, placeholder: "—" },
     { key: "lugar", label: "Lugar", type: "text", placeholder: "Lugar" },
     { key: "url_conexion", label: "Enlace", type: "url", placeholder: "https://…" },
-    { key: "participantes", label: "Participantes", type: "multiselect", options: participanteOptions, placeholder: "—" },
+    { key: "participantes", label: "Participantes", type: "multiselect", options: eventoParticipanteOptions, placeholder: "—" },
   ];
 
   const equipoFilters: FilterDef[] = [
