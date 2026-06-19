@@ -69,10 +69,12 @@ export const ESTADOS: EnumOption[] = [
   { code: "terminado", nombre: "Terminado", color: "#b6d7a8", onColor: TEXTO_OSCURO },
 ];
 
-// Fases chronologiques (CDC §3.2) — sans couleur.
+// Fases chronologiques (CDC §3.2) — sans couleur. Ordre = `orden` de peebcoolsf_fases.
 export const FASES: EnumOption[] = [
   { code: "estudios_preliminares", nombre: "Estudios preliminares" },
+  { code: "anteproyecto", nombre: "Anteproyecto" },
   { code: "proyecto_ejecutivo", nombre: "Proyecto ejecutivo" },
+  { code: "redaccion_pliegos", nombre: "Redacción de pliegos" },
   { code: "licitacion", nombre: "Licitación" },
   { code: "obra", nombre: "Obra" },
   { code: "general", nombre: "General" },

@@ -63,7 +63,7 @@ const ENERGIA_FIELDS: FieldDef[] = [
   { key: "gei_antes_tco2", label: "GEI antes", type: "number", suffix: "tCO₂" },
   { key: "gei_despues_tco2", label: "GEI después", type: "number", suffix: "tCO₂" },
   { key: "costo_ee_eur", label: "Costo EE", type: "number", suffix: "€" },
-  { key: "costo_otras_eur", label: "Costo otras", type: "number", suffix: "€" },
+  { key: "costo_otras_eur", label: "Costo otras medidas", type: "number", suffix: "€" },
 ];
 
 const BENEF_FIELDS: FieldDef[] = [
@@ -128,7 +128,6 @@ export function SubproyectosPanel({
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
-  const [newNum, setNewNum] = useState("");
 
   const run = (fn: () => Promise<void>) =>
     startTransition(async () => {
@@ -212,13 +211,12 @@ export function SubproyectosPanel({
   const submitSchool = () => {
     startTransition(async () => {
       try {
-        const sub = await addSchool(newName, newNum);
+        const sub = await addSchool(newName);
         setSubs((rs) => [...rs, sub]);
         setMetricas((rs) => [...rs, emptyMetrica(sub.uid, "faisabilidad"), emptyMetrica(sub.uid, "proyecto")]);
         setSelectedUid(sub.uid);
         setAdding(false);
         setNewName("");
-        setNewNum("");
       } catch {
         router.refresh();
       }
@@ -270,16 +268,7 @@ export function SubproyectosPanel({
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         placeholder="Nombre de la escuela"
-                        className="w-44 rounded-sm border border-[var(--border)] bg-[var(--app-bg)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
-                      />
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={newNum}
-                        onChange={(e) => setNewNum(e.target.value)}
-                        placeholder="N.º"
-                        title="Número de escuela (opcional) → UID SUB-E<n>"
-                        className="w-16 rounded-sm border border-[var(--border)] bg-[var(--app-bg)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
+                        className="w-52 rounded-sm border border-[var(--border)] bg-[var(--app-bg)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
                       />
                       <button
                         type="button"
@@ -293,7 +282,6 @@ export function SubproyectosPanel({
                         onClick={() => {
                           setAdding(false);
                           setNewName("");
-                          setNewNum("");
                         }}
                         className="rounded-md px-2 py-1 text-sm text-[var(--text-muted)] hover:text-[var(--text)]"
                       >
@@ -334,8 +322,8 @@ export function SubproyectosPanel({
 
           {/* Section 2 */}
           <section>
-            <h3 className="mb-1 text-base font-semibold text-[var(--text)]">Datos de la faisabilidad</h3>
-            <p className="mb-3 text-sm text-[var(--text-muted)]">Valores del escenario de faisabilidad. Vacío = «&nbsp;—&nbsp;» (dato faltante), nunca 0.</p>
+            <h3 className="mb-1 text-base font-semibold text-[var(--text)]">Datos de la factibilidad</h3>
+            <p className="mb-3 text-sm text-[var(--text-muted)]">Valores del escenario de factibilidad. Vacío = «&nbsp;—&nbsp;» (dato faltante), nunca 0.</p>
             <FieldEditor
               fields={ENERGIA_FIELDS}
               values={(fais ?? {}) as unknown as Record<string, unknown>}

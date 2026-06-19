@@ -282,10 +282,10 @@ export async function updateMetrica(
 
 /**
  * Ajoute une école (nouveau sous-projet, tipología E, sección Escuelas).
- * UID : `SUB-E<num>` si un numéro est fourni, sinon `SUB-ESC-NNN` incrémental.
+ * UID auto-généré `SUB-ESC-NNN` (incrémental, par max+1).
  * Crée aussi les 2 lignes metricas (faisabilidad + proyecto) vides ; gestion_lineas démarre vide.
  */
-export async function addSchool(nombre: string, numero?: string): Promise<SubproyectoRow> {
+export async function addSchool(nombre: string): Promise<SubproyectoRow> {
   assertAdmin();
   const sb = createServiceClient();
   const nom = (nombre ?? "").trim() || "Nueva escuela";
@@ -294,18 +294,12 @@ export async function addSchool(nombre: string, numero?: string): Promise<Subpro
   if (readErr) throw new Error(readErr.message);
   const subs = (allSubs ?? []) as unknown as { uid: string; orden: number }[];
 
-  const num = (numero ?? "").trim();
-  let uid: string;
-  if (/^\d+$/.test(num)) {
-    uid = `SUB-E${num}`;
-  } else {
-    const re = /^SUB-ESC-(\d+)$/;
-    const max = subs.reduce((a, r) => {
-      const m = re.exec(r.uid);
-      return m ? Math.max(a, Number(m[1])) : a;
-    }, 0);
-    uid = `SUB-ESC-${String(max + 1).padStart(3, "0")}`;
-  }
+  const re = /^SUB-ESC-(\d+)$/;
+  const maxN = subs.reduce((a, r) => {
+    const m = re.exec(r.uid);
+    return m ? Math.max(a, Number(m[1])) : a;
+  }, 0);
+  const uid = `SUB-ESC-${String(maxN + 1).padStart(3, "0")}`;
   if (subs.some((s) => s.uid === uid)) throw new Error(`El subproyecto ${uid} ya existe`);
 
   const maxOrden = subs.reduce((a, r) => Math.max(a, r.orden ?? 0), 0);
