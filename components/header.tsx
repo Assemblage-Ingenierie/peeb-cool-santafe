@@ -28,14 +28,14 @@ export function Header({ onMenu, filters, onToggleFilter }: HeaderProps) {
           src="/logos/afd.png"
           file="afd.png"
           alt="AFD — Agence Française de Développement"
-          className="h-9 w-auto sm:h-10"
+          className="h-[40px] w-auto sm:h-[44px]"
         />
         <span className="h-9 w-px bg-[var(--border)]" aria-hidden="true" />
         <LogoSlot
           src="/logos/santafe.png"
           file="santafe.png"
           alt="Provincia de Santa Fe"
-          className="h-8 w-auto sm:h-9"
+          className="h-[35px] w-auto sm:h-[40px]"
         />
       </div>
 
