@@ -59,11 +59,14 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
                 >
                   {active && (
                     <span
-                      className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-[var(--sidebar-text)]"
+                      className="absolute inset-y-1 left-0 w-[3px] rounded-full bg-[var(--accent)]"
                       aria-hidden="true"
                     />
                   )}
-                  <NavIcon name={item.icon} className="h-5 w-5 shrink-0" />
+                  <NavIcon
+                    name={item.icon}
+                    className={cn("h-5 w-5 shrink-0", active && "text-[var(--accent)]")}
+                  />
                   <span>{item.label}</span>
                 </Link>
               </li>

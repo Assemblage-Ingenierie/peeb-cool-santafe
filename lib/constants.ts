@@ -68,6 +68,10 @@ export const UI = {
   text: TEXTO_OSCURO,
   textMuted: "#646b78",
   focus: "#3c78d8",
+  // Accent de marque = rouge Assemblage (#E30513, charte graphique).
+  // Distinct de la typologie H (#cc0000) pour éviter toute confusion.
+  // Usage : indicateur de l'item de navigation actif (CDC §2.1 / charte §8).
+  accent: "#E30513",
 } as const;
 
 // Variables CSS dérivées de UI — à poser en `style` sur <body> (source unique = ce fichier).
@@ -84,4 +88,5 @@ export const themeVars = {
   "--text": UI.text,
   "--text-muted": UI.textMuted,
   "--focus": UI.focus,
+  "--accent": UI.accent,
 } as CSSProperties;
