@@ -9,10 +9,11 @@ import { CopyButton } from "./copy-button";
 // Tableau éditable réutilisable (style Airtable).
 // Types de colonne : text | url | select | date | time | multiselect.
 // - Recherche/filtre client (UID + colonnes texte) — aucune requête DB
-// - Édition inline ; callbacks granulaires → Server Actions par le parent
+// - select / multiselect : dropdown PERSONNALISÉ → options affichées en
+//   badges colorés (fond = couleur, texte = couleur de contraste).
 // - Confidencial (checkbox ROUGE = accès/RLS) et Publicar (interrupteur neutre
 //   = affichage) restent deux axes indépendants, visuellement distincts.
-// Aucune couleur en dur : tokens de lib/constants.ts.
+// Aucune couleur en dur : tokens de lib/constants.ts (sauf couleurs passées en options).
 // ============================================================
 
 export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "multiselect";
@@ -20,7 +21,8 @@ export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "mul
 export interface SelectOption {
   value: string;
   label: string;
-  color?: string;
+  color?: string; // fond du badge
+  onColor?: string; // couleur du texte sur `color`
 }
 
 export interface AdminColumn {
@@ -161,30 +163,22 @@ export function EditableTable({
                   {columns.map((col) =>
                     col.type === "multiselect" ? (
                       <td key={col.key} className="align-middle">
-                        <MultiSelectCell
-                          row={row}
-                          column={col}
-                          onCommit={(vals) => onMultiCommit?.(row.uid, col.key, vals)}
-                        />
+                        <MultiSelectCell row={row} column={col} onCommit={(vals) => onMultiCommit?.(row.uid, col.key, vals)} />
+                      </td>
+                    ) : col.type === "select" ? (
+                      <td key={col.key} className="align-middle">
+                        <SelectCell row={row} column={col} onCommit={(v) => onCellCommit?.(row.uid, col.key, v)} />
                       </td>
                     ) : (
                       <td key={col.key} className="align-middle">
-                        <EditableCell
-                          row={row}
-                          column={col}
-                          onCommit={(v) => onCellCommit?.(row.uid, col.key, v)}
-                        />
+                        <EditableCell row={row} column={col} onCommit={(v) => onCellCommit?.(row.uid, col.key, v)} />
                       </td>
                     ),
                   )}
 
                   {showPublicar && (
                     <td className="px-3 py-1.5 align-middle">
-                      <PublishToggle
-                        on={Boolean(row.publicar)}
-                        uid={row.uid}
-                        onToggle={(v) => onToggleFlag?.(row.uid, "publicar", v)}
-                      />
+                      <PublishToggle on={Boolean(row.publicar)} uid={row.uid} onToggle={(v) => onToggleFlag?.(row.uid, "publicar", v)} />
                     </td>
                   )}
 
@@ -232,6 +226,22 @@ export function EditableTable({
   );
 }
 
+// --- Badge coloré (option de composante, typologie, estado…) -------------------
+
+function Badge({ option }: { option: SelectOption }) {
+  if (option.color) {
+    return (
+      <span
+        className="inline-block rounded px-2 py-0.5 text-xs font-medium"
+        style={{ backgroundColor: option.color, color: option.onColor ?? "var(--text)" }}
+      >
+        {option.label}
+      </span>
+    );
+  }
+  return <span className="text-sm text-[var(--text)]">{option.label}</span>;
+}
+
 // --- Interrupteur « Publicar » -------------------------------------------------
 
 function PublishToggle({ on, uid, onToggle }: { on: boolean; uid: string; onToggle: (value: boolean) => void }) {
@@ -254,19 +264,97 @@ function PublishToggle({ on, uid, onToggle }: { on: boolean; uid: string; onTogg
   );
 }
 
-// --- Pastille de couleur (select componente, etc.) ----------------------------
+// --- Select personnalisé (dropdown avec badges colorés) ------------------------
 
-function Pastille({ color }: { color: string }) {
+function SelectCell({
+  row,
+  column,
+  onCommit,
+}: {
+  row: AdminRow;
+  column: AdminColumn;
+  onCommit: (value: string) => void;
+}) {
+  const value = (row[column.key] as string) ?? "";
+  const options = column.options ?? [];
+  const disabled = column.isDisabled?.(row) ?? false;
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.value === value);
+
+  if (disabled) {
+    return (
+      <span className="block px-3 py-2 text-sm text-[var(--text-muted)]" title="Campo no aplicable">
+        —
+      </span>
+    );
+  }
+
+  const pick = (v: string) => {
+    onCommit(v);
+    setOpen(false);
+  };
+
   return (
-    <span
-      className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
-      style={{ backgroundColor: color, outline: "1px solid var(--border)" }}
-      aria-hidden="true"
-    />
+    <div className="relative px-3 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex min-h-[28px] w-full items-center rounded px-1 py-0.5 text-left transition-colors hover:bg-[var(--app-bg)]"
+      >
+        {current ? (
+          <Badge option={current} />
+        ) : (
+          <span className="text-sm text-[var(--text-muted)]">{column.placeholder ?? "—"}</span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-10 cursor-default"
+          />
+          <div
+            role="listbox"
+            className="absolute left-2 z-20 mt-1 max-h-60 w-56 overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+          >
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === ""}
+              onClick={() => pick("")}
+              className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--app-bg)]"
+            >
+              — <span className="ml-1 text-xs">(vacío)</span>
+            </button>
+            {options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                onClick={() => pick(o.value)}
+                className={cn(
+                  "flex w-full items-center rounded px-2 py-1.5 text-left hover:bg-[var(--app-bg)]",
+                  o.value === value && "bg-[var(--app-bg)]",
+                )}
+              >
+                <Badge option={o} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
-// --- Cellule éditable (text/url/select/date/time) -----------------------------
+// --- Cellule éditable (text/url/date/time) ------------------------------------
 
 function EditableCell({
   row,
@@ -288,49 +376,6 @@ function EditableCell({
       <span className="block px-3 py-2 text-sm text-[var(--text-muted)]" title="Campo no aplicable">
         —
       </span>
-    );
-  }
-
-  // SELECT
-  if (type === "select") {
-    const options = column.options ?? [];
-    const current = options.find((o) => o.value === value);
-    if (editing) {
-      return (
-        <select
-          autoFocus
-          value={value}
-          onChange={(e) => {
-            onCommit(e.target.value);
-            setEditing(false);
-          }}
-          onBlur={() => setEditing(false)}
-          className="block w-full rounded-sm border border-[var(--focus)] bg-[var(--surface)] px-2 py-1.5 text-sm text-[var(--text)] outline-none"
-        >
-          <option value="">—</option>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      );
-    }
-    return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-sm text-[var(--text)] transition-colors hover:bg-[var(--app-bg)]"
-      >
-        {current ? (
-          <>
-            {current.color && <Pastille color={current.color} />}
-            <span>{current.label}</span>
-          </>
-        ) : (
-          <span className="text-[var(--text-muted)]">{column.placeholder ?? "—"}</span>
-        )}
-      </button>
     );
   }
 
@@ -426,18 +471,15 @@ function MultiSelectCell({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex min-h-[28px] w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left text-sm transition-colors hover:bg-[var(--app-bg)]"
+        className="flex min-h-[28px] w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-[var(--app-bg)]"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         {selected.length === 0 ? (
-          <span className="text-[var(--text-muted)]">{column.placeholder ?? "—"}</span>
+          <span className="text-sm text-[var(--text-muted)]">{column.placeholder ?? "—"}</span>
         ) : (
           selected.map((v) => (
-            <span
-              key={v}
-              className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text)]"
-            >
+            <span key={v} className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text)]">
               {labelOf(v)}
             </span>
           ))
@@ -446,13 +488,7 @@ function MultiSelectCell({
 
       {open && (
         <>
-          <button
-            type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-10 cursor-default"
-          />
+          <button type="button" aria-hidden="true" tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
           <div
             role="listbox"
             aria-multiselectable="true"
@@ -461,24 +497,21 @@ function MultiSelectCell({
             {options.length === 0 ? (
               <p className="px-2 py-2 text-xs text-[var(--text-muted)]">Sin opciones.</p>
             ) : (
-              options.map((o) => {
-                const on = selected.includes(o.value);
-                return (
-                  <label
-                    key={o.value}
-                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={on}
-                      onChange={() => toggle(o.value)}
-                      className="h-4 w-4"
-                      style={{ accentColor: "var(--focus)" }}
-                    />
-                    {o.label}
-                  </label>
-                );
-              })
+              options.map((o) => (
+                <label
+                  key={o.value}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(o.value)}
+                    onChange={() => toggle(o.value)}
+                    className="h-4 w-4"
+                    style={{ accentColor: "var(--focus)" }}
+                  />
+                  {o.label}
+                </label>
+              ))
             )}
           </div>
         </>

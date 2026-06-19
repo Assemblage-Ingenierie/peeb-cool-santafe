@@ -26,6 +26,7 @@ const COMPONENTE_OPTIONS: SelectOption[] = COMPONENTES.map((c) => ({
   value: c.code,
   label: c.nombre,
   color: c.color,
+  onColor: c.onColor,
 }));
 const SEXO_OPTIONS: SelectOption[] = [
   { value: "F", label: "F" },
