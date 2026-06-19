@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { COMPONENTES } from "@/lib/constants";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 
@@ -10,7 +11,10 @@ import { Header } from "./header";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [filters, setFilters] = useState<Set<string>>(() => new Set());
+  // Filtres composante : tous actifs par défaut (= aucune restriction), comme la capture.
+  const [filters, setFilters] = useState<Set<string>>(
+    () => new Set(COMPONENTES.map((c) => c.code)),
+  );
 
   const toggleFilter = useCallback((code: string) => {
     setFilters((prev) => {
