@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { TrashIcon, SearchIcon } from "@/components/icons";
 import { CopyButton } from "./copy-button";
@@ -9,11 +10,11 @@ import { CopyButton } from "./copy-button";
 // Tableau éditable réutilisable (style Airtable).
 // Types de colonne : text | url | select | date | time | multiselect.
 // - Recherche/filtre client (UID + colonnes texte) — aucune requête DB
-// - select / multiselect : dropdown PERSONNALISÉ → options affichées en
-//   badges colorés (fond = couleur, texte = couleur de contraste).
+// - select / multiselect / filtres : dropdown PERSONNALISÉ rendu en PORTAIL
+//   (échappe aux overflow → jamais rogné, même si le tableau est court).
 // - Confidencial (checkbox ROUGE = accès/RLS) et Publicar (interrupteur neutre
 //   = affichage) restent deux axes indépendants, visuellement distincts.
-// Aucune couleur en dur : tokens de lib/constants.ts (sauf couleurs passées en options).
+// Aucune couleur en dur : tokens lib/constants.ts (sauf couleurs passées en options).
 // ============================================================
 
 export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "multiselect";
@@ -84,12 +85,10 @@ export function EditableTable({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rows.filter((row) => {
-      // Filtres structurés (entidad, componente…) — combinés en ET
       for (const f of filters ?? []) {
         const sel = filterValues[f.key];
         if (sel && String(row[f.key] ?? "") !== sel) return false;
       }
-      // Recherche texte
       if (!q) return true;
       if (row.uid.toLowerCase().includes(q)) return true;
       return columns.some((c) => {
@@ -251,7 +250,73 @@ export function EditableTable({
   );
 }
 
-// --- Badge coloré (option de composante, typologie, estado…) -------------------
+// --- Panneau flottant rendu en portail (échappe aux overflow) -----------------
+
+function PortalPanel({
+  anchorRef,
+  open,
+  onClose,
+  align = "start",
+  width = 224,
+  children,
+}: {
+  anchorRef: React.RefObject<HTMLElement | null>;
+  open: boolean;
+  onClose: () => void;
+  align?: "start" | "end";
+  width?: number;
+  children: React.ReactNode;
+}) {
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  useEffect(() => {
+    if (!open || !anchorRef.current) {
+      setRect(null);
+      return;
+    }
+    setRect(anchorRef.current.getBoundingClientRect());
+    // En cas de scroll/resize, on ferme (évite un panneau positionné de façon obsolète).
+    const close = () => onClose();
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open, anchorRef, onClose]);
+
+  if (!open || !rect) return null;
+
+  const rawLeft = align === "end" ? rect.right - width : rect.left;
+  const left = Math.max(8, Math.min(rawLeft, window.innerWidth - width - 8));
+  const spaceBelow = window.innerHeight - rect.bottom;
+  const openUp = spaceBelow < 240 && rect.top > spaceBelow;
+  const vStyle: React.CSSProperties = openUp
+    ? { bottom: window.innerHeight - rect.top + 4, maxHeight: rect.top - 16 }
+    : { top: rect.bottom + 4, maxHeight: spaceBelow - 16 };
+
+  return createPortal(
+    <>
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onClose}
+        className="fixed inset-0 z-40 cursor-default"
+      />
+      <div
+        role="listbox"
+        style={{ position: "fixed", left, width, ...vStyle }}
+        className="z-50 overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+      >
+        {children}
+      </div>
+    </>,
+    document.body,
+  );
+}
+
+// --- Badge coloré --------------------------------------------------------------
 
 function Badge({ option }: { option: SelectOption }) {
   if (option.color) {
@@ -278,6 +343,7 @@ function FilterDropdown({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const current = def.options.find((o) => o.value === value);
   const allLabel = def.allLabel ?? "Todos";
@@ -287,8 +353,9 @@ function FilterDropdown({
   };
 
   return (
-    <div className="relative">
+    <>
       <button
+        ref={ref}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
@@ -301,51 +368,36 @@ function FilterDropdown({
         <span className="text-[var(--text-muted)]">{def.label}:</span>
         {current ? <Badge option={current} /> : <span className="text-[var(--text)]">{allLabel}</span>}
       </button>
-
-      {open && (
-        <>
+      <PortalPanel anchorRef={ref} open={open} onClose={() => setOpen(false)} align="end" width={224}>
+        <button
+          type="button"
+          role="option"
+          aria-selected={value === ""}
+          onClick={() => pick("")}
+          className={cn(
+            "flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text)] hover:bg-[var(--app-bg)]",
+            value === "" && "bg-[var(--app-bg)]",
+          )}
+        >
+          {allLabel}
+        </button>
+        {def.options.map((o) => (
           <button
+            key={o.value}
             type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-10 cursor-default"
-          />
-          <div
-            role="listbox"
-            className="absolute right-0 z-20 mt-1 max-h-72 w-56 overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+            role="option"
+            aria-selected={o.value === value}
+            onClick={() => pick(o.value)}
+            className={cn(
+              "flex w-full items-center rounded px-2 py-1.5 text-left hover:bg-[var(--app-bg)]",
+              o.value === value && "bg-[var(--app-bg)]",
+            )}
           >
-            <button
-              type="button"
-              role="option"
-              aria-selected={value === ""}
-              onClick={() => pick("")}
-              className={cn(
-                "flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text)] hover:bg-[var(--app-bg)]",
-                value === "" && "bg-[var(--app-bg)]",
-              )}
-            >
-              {allLabel}
-            </button>
-            {def.options.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                role="option"
-                aria-selected={o.value === value}
-                onClick={() => pick(o.value)}
-                className={cn(
-                  "flex w-full items-center rounded px-2 py-1.5 text-left hover:bg-[var(--app-bg)]",
-                  o.value === value && "bg-[var(--app-bg)]",
-                )}
-              >
-                <Badge option={o} />
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+            <Badge option={o} />
+          </button>
+        ))}
+      </PortalPanel>
+    </>
   );
 }
 
@@ -371,7 +423,7 @@ function PublishToggle({ on, uid, onToggle }: { on: boolean; uid: string; onTogg
   );
 }
 
-// --- Select personnalisé (dropdown avec badges colorés) ------------------------
+// --- Select personnalisé (dropdown badges colorés, en portail) ----------------
 
 function SelectCell({
   row,
@@ -385,6 +437,7 @@ function SelectCell({
   const value = (row[column.key] as string) ?? "";
   const options = column.options ?? [];
   const disabled = column.isDisabled?.(row) ?? false;
+  const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value);
 
@@ -402,8 +455,9 @@ function SelectCell({
   };
 
   return (
-    <div className="relative px-3 py-1.5">
+    <div className="px-3 py-1.5">
       <button
+        ref={ref}
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="listbox"
@@ -416,47 +470,32 @@ function SelectCell({
           <span className="text-sm text-[var(--text-muted)]">{column.placeholder ?? "—"}</span>
         )}
       </button>
-
-      {open && (
-        <>
+      <PortalPanel anchorRef={ref} open={open} onClose={() => setOpen(false)} width={224}>
+        <button
+          type="button"
+          role="option"
+          aria-selected={value === ""}
+          onClick={() => pick("")}
+          className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--app-bg)]"
+        >
+          — <span className="ml-1 text-xs">(vacío)</span>
+        </button>
+        {options.map((o) => (
           <button
+            key={o.value}
             type="button"
-            aria-hidden="true"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-10 cursor-default"
-          />
-          <div
-            role="listbox"
-            className="absolute left-2 z-20 mt-1 max-h-60 w-56 overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+            role="option"
+            aria-selected={o.value === value}
+            onClick={() => pick(o.value)}
+            className={cn(
+              "flex w-full items-center rounded px-2 py-1.5 text-left hover:bg-[var(--app-bg)]",
+              o.value === value && "bg-[var(--app-bg)]",
+            )}
           >
-            <button
-              type="button"
-              role="option"
-              aria-selected={value === ""}
-              onClick={() => pick("")}
-              className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--app-bg)]"
-            >
-              — <span className="ml-1 text-xs">(vacío)</span>
-            </button>
-            {options.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                role="option"
-                aria-selected={o.value === value}
-                onClick={() => pick(o.value)}
-                className={cn(
-                  "flex w-full items-center rounded px-2 py-1.5 text-left hover:bg-[var(--app-bg)]",
-                  o.value === value && "bg-[var(--app-bg)]",
-                )}
-              >
-                <Badge option={o} />
-              </button>
-            ))}
-          </div>
-        </>
-      )}
+            <Badge option={o} />
+          </button>
+        ))}
+      </PortalPanel>
     </div>
   );
 }
@@ -486,7 +525,6 @@ function EditableCell({
     );
   }
 
-  // DATE / TIME — commit on change
   if (type === "date" || type === "time") {
     if (editing) {
       return (
@@ -511,7 +549,6 @@ function EditableCell({
     );
   }
 
-  // TEXT / URL — draft + commit on blur/Enter
   if (editing) {
     return (
       <input
@@ -566,6 +603,7 @@ function MultiSelectCell({
 }) {
   const selected = (row[column.key] as string[]) ?? [];
   const options = column.options ?? [];
+  const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const labelOf = (v: string) => options.find((o) => o.value === v)?.label ?? v;
 
@@ -574,8 +612,9 @@ function MultiSelectCell({
   };
 
   return (
-    <div className="relative px-3 py-1.5">
+    <div className="px-3 py-1.5">
       <button
+        ref={ref}
         type="button"
         onClick={() => setOpen((o) => !o)}
         className="flex min-h-[28px] w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-[var(--app-bg)]"
@@ -592,37 +631,27 @@ function MultiSelectCell({
           ))
         )}
       </button>
-
-      {open && (
-        <>
-          <button type="button" aria-hidden="true" tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
-          <div
-            role="listbox"
-            aria-multiselectable="true"
-            className="absolute left-2 z-20 mt-1 max-h-60 w-64 overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
-          >
-            {options.length === 0 ? (
-              <p className="px-2 py-2 text-xs text-[var(--text-muted)]">Sin opciones.</p>
-            ) : (
-              options.map((o) => (
-                <label
-                  key={o.value}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(o.value)}
-                    onChange={() => toggle(o.value)}
-                    className="h-4 w-4"
-                    style={{ accentColor: "var(--focus)" }}
-                  />
-                  {o.label}
-                </label>
-              ))
-            )}
-          </div>
-        </>
-      )}
+      <PortalPanel anchorRef={ref} open={open} onClose={() => setOpen(false)} width={256}>
+        {options.length === 0 ? (
+          <p className="px-2 py-2 text-xs text-[var(--text-muted)]">Sin opciones.</p>
+        ) : (
+          options.map((o) => (
+            <label
+              key={o.value}
+              className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(o.value)}
+                onChange={() => toggle(o.value)}
+                className="h-4 w-4"
+                style={{ accentColor: "var(--focus)" }}
+              />
+              {o.label}
+            </label>
+          ))
+        )}
+      </PortalPanel>
     </div>
   );
 }
