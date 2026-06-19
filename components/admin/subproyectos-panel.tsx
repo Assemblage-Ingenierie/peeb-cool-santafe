@@ -4,12 +4,14 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { COMPONENTES, TIPOLOGIAS, ESTADOS, FASES, TIPO_LINEA, getTipologia } from "@/lib/constants";
+import { TrashIcon } from "@/components/icons";
 import { EditableTable, type AdminColumn, type AdminRow, type SelectOption } from "./editable-table";
 import { FieldEditor, type FieldDef } from "./field-editor";
 import {
   updateSubproyecto,
   updateMetrica,
   addSchool,
+  deleteSubproyecto,
   addGestionLinea,
   reorderRows,
   updateField,
@@ -128,6 +130,13 @@ export function SubproyectosPanel({
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Sélectionne un sous-projet et referme une éventuelle confirmation de suppression.
+  const selectSub = (uid: string) => {
+    setSelectedUid(uid);
+    setConfirmingDelete(false);
+  };
 
   const run = (fn: () => Promise<void>) =>
     startTransition(async () => {
@@ -223,6 +232,19 @@ export function SubproyectosPanel({
     });
   };
 
+  // --- Suppression d'une école (uniquement Escuelas) ---
+  const deleteSchool = () => {
+    if (!selected || selected.seccion !== "Escuelas") return;
+    const uid = selected.uid;
+    const remaining = subs.filter((s) => s.uid !== uid);
+    setSubs(remaining);
+    setMetricas((rs) => rs.filter((m) => m.subproyecto_uid !== uid));
+    setGestion((rs) => rs.filter((g) => g.subproyecto_uid !== uid));
+    setSelectedUid(remaining[0]?.uid ?? null);
+    setConfirmingDelete(false);
+    run(() => deleteSubproyecto(uid));
+  };
+
   return (
     <div className="space-y-6">
       {/* Sélecteur */}
@@ -241,7 +263,7 @@ export function SubproyectosPanel({
                     <button
                       key={s.uid}
                       type="button"
-                      onClick={() => setSelectedUid(s.uid)}
+                      onClick={() => selectSub(s.uid)}
                       aria-pressed={on}
                       className={cn(
                         "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors",
@@ -309,9 +331,41 @@ export function SubproyectosPanel({
         </p>
       ) : (
         <div className="space-y-10">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-[var(--text)]">{selected.nombre}</h2>
             <code className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">{selected.uid}</code>
+            {selected.seccion === "Escuelas" &&
+              (confirmingDelete ? (
+                <span className="ml-auto inline-flex flex-wrap items-center gap-2 rounded-md border border-[var(--accent)] bg-[var(--surface)] px-2 py-1">
+                  <span className="text-sm text-[var(--text)]">
+                    ¿Eliminar «&nbsp;{selected.nombre}&nbsp;» y todos sus datos? No se puede deshacer.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={deleteSchool}
+                    className="rounded-md px-2.5 py-1 text-sm font-medium text-white"
+                    style={{ backgroundColor: "var(--accent)" }}
+                  >
+                    Sí, eliminar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    className="rounded-md px-2 py-1 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+                  >
+                    Cancelar
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-muted)] transition-colors hover:border-[var(--accent)] hover:text-[var(--accent)]"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                  Eliminar escuela
+                </button>
+              ))}
           </div>
 
           {/* Section 1 */}

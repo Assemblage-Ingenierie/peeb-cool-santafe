@@ -697,18 +697,27 @@ function MultiSelectCell({
   const options = column.options ?? [];
   const ref = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const [mq, setMq] = useState("");
   const labelOf = (v: string) => options.find((o) => o.value === v)?.label ?? v;
+
+  const close = () => {
+    setOpen(false);
+    setMq("");
+  };
 
   const toggle = (v: string) => {
     onCommit(selected.includes(v) ? selected.filter((x) => x !== v) : [...selected, v]);
   };
+
+  const q = mq.trim().toLowerCase();
+  const shown = q ? options.filter((o) => o.label.toLowerCase().includes(q)) : options;
 
   return (
     <div className="px-3 py-1.5">
       <button
         ref={ref}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? close() : setOpen(true))}
         className="flex min-h-[28px] w-full flex-wrap items-center gap-1 rounded px-1 py-0.5 text-left transition-colors hover:bg-[var(--app-bg)]"
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -723,11 +732,24 @@ function MultiSelectCell({
           ))
         )}
       </button>
-      <PortalPanel anchorRef={ref} open={open} onClose={() => setOpen(false)} width={256}>
+      <PortalPanel anchorRef={ref} open={open} onClose={close} width={256}>
+        <div className="sticky top-0 z-10 mb-1 -mx-1 -mt-1 border-b border-[var(--border)] bg-[var(--surface)] p-1">
+          <input
+            autoFocus
+            type="search"
+            value={mq}
+            onChange={(e) => setMq(e.target.value)}
+            placeholder="Buscar…"
+            aria-label="Buscar opción"
+            className="w-full rounded-sm border border-[var(--border)] bg-[var(--app-bg)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
+          />
+        </div>
         {options.length === 0 ? (
           <p className="px-2 py-2 text-xs text-[var(--text-muted)]">Sin opciones.</p>
+        ) : shown.length === 0 ? (
+          <p className="px-2 py-2 text-xs text-[var(--text-muted)]">Sin resultados.</p>
         ) : (
-          options.map((o) => (
+          shown.map((o) => (
             <label
               key={o.value}
               className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"

@@ -323,6 +323,36 @@ export async function addSchool(nombre: string): Promise<SubproyectoRow> {
   return ins as unknown as SubproyectoRow;
 }
 
+/**
+ * Supprime une école (et ses metricas + gestion_lineas). Garde-fou : SEULES les
+ * écoles (seccion='Escuelas') sont supprimables — jamais aéroports/hôpitaux.
+ */
+export async function deleteSubproyecto(uid: string): Promise<void> {
+  assertAdmin();
+  const sb = createServiceClient();
+
+  const { data, error: readErr } = await sb
+    .from("peebcoolsf_subproyectos")
+    .select("seccion")
+    .eq("uid", uid)
+    .maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+  if (!data) throw new Error(`Subproyecto inexistente: ${uid}`);
+  if ((data as { seccion: string }).seccion !== "Escuelas") {
+    throw new Error("Solo se pueden eliminar escuelas");
+  }
+
+  // Suppressions explicites (indépendantes du ON DELETE CASCADE).
+  const delGest = await sb.from("peebcoolsf_gestion_lineas").delete().eq("subproyecto_uid", uid);
+  if (delGest.error) throw new Error(delGest.error.message);
+  const delMet = await sb.from("peebcoolsf_metricas").delete().eq("subproyecto_uid", uid);
+  if (delMet.error) throw new Error(delMet.error.message);
+  const delSub = await sb.from("peebcoolsf_subproyectos").delete().eq("uid", uid);
+  if (delSub.error) throw new Error(delSub.error.message);
+
+  revalidatePath("/admin");
+}
+
 /** Ajoute une ligne de gestion à un sous-projet. UID `GEST-<code>-NNNN` (numéroté par sous-projet). */
 export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
   assertAdmin();
