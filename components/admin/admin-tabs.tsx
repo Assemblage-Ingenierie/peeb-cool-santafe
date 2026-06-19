@@ -38,13 +38,8 @@ const MODALIDAD_OPTIONS: SelectOption[] = [
   { value: "Presencial", label: "Presencial" },
   { value: "Virtual", label: "Virtual" },
 ];
-// Sous-sections capacitaciones (EE / AyS / G) — couleurs des composantes.
-const SUBSECCION_OPTIONS: SelectOption[] = COMPONENTES.filter((c) => c.code !== "GP").map((c) => ({
-  value: c.code,
-  label: c.code,
-  color: c.color,
-  onColor: c.onColor,
-}));
+// Sous-sections capacitaciones (EE / AyS / G) — subdivisions du tableau (pas une colonne).
+const SUBSECCIONES = COMPONENTES.filter((c) => c.code !== "GP");
 
 // Hook : état optimiste + persistance réelle (Server Actions) pour une table.
 function useAdminTable(tableKey: string, initial: AdminRow[]) {
@@ -74,22 +69,26 @@ function useAdminTable(tableKey: string, initial: AdminRow[]) {
       setRows((rs) => rs.map((r) => (r.uid === uid ? { ...r, [flag]: value } : r)));
       run(() => setFlag(tableKey, uid, flag, value));
     },
-    onAdd: () =>
-      startTransition(async () => {
-        try {
-          const row = (await addRow(tableKey)) as AdminRow;
-          setRows((rs) => [...rs, row]);
-        } catch {
-          router.refresh();
-        }
-      }),
+    onAdd: () => add(),
     onDelete: (uid: string) => {
       setRows((rs) => rs.filter((r) => r.uid !== uid));
       run(() => deleteRow(tableKey, uid));
     },
   };
 
-  return { rows, handlers };
+  // `presets` : valeurs préremplies (ex. subseccion du bloc) pour la nouvelle ligne.
+  function add(presets?: Record<string, unknown>) {
+    startTransition(async () => {
+      try {
+        const row = (await addRow(tableKey, presets)) as AdminRow;
+        setRows((rs) => [...rs, row]);
+      } catch {
+        router.refresh();
+      }
+    });
+  }
+
+  return { rows, handlers, add };
 }
 
 export function AdminTabs({
@@ -171,23 +170,18 @@ export function AdminTabs({
     label: `${String(d.subseccion ?? "")} — ${String(d.titulo ?? "") || d.uid}`,
   }));
   const capdocColumns: AdminColumn[] = [
-    { key: "subseccion", label: "Subsección", type: "select", options: SUBSECCION_OPTIONS, required: true },
-    { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
     { key: "titulo", label: "Título", type: "text", placeholder: "Título" },
+    { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
     { key: "url", label: "Enlace (URL)", type: "url", placeholder: "https://…" },
   ];
   const capevtColumns: AdminColumn[] = [
-    { key: "subseccion", label: "Subsección", type: "select", options: SUBSECCION_OPTIONS, required: true },
     { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
     { key: "documento_uid", label: "Documento", type: "select", options: documentoOptions, placeholder: "—" },
     { key: "fecha_hora", label: "Fecha y hora", type: "datetime" },
     { key: "entidades", label: "Entidades", type: "multiselect", options: entidadOptions, placeholder: "—" },
     { key: "participantes", label: "Participantes", type: "multiselect", options: participanteOptions, placeholder: "—" },
   ];
-  const capFilters: FilterDef[] = [
-    { key: "subseccion", label: "Subsección", options: SUBSECCION_OPTIONS },
-    { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
-  ];
+  const capFilters: FilterDef[] = [{ key: "componente", label: "Componente", options: COMPONENTE_OPTIONS }];
 
   return (
     <div>
@@ -303,35 +297,47 @@ export function AdminTabs({
           <div className="space-y-10">
             <section>
               <h2 className="text-base font-semibold text-[var(--text)]">Documentos</h2>
-              <p className="mb-3 mt-1 text-sm text-[var(--text-muted)]">
-                Material de formación por subsección (EE / AyS / G).
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Material de formación, dividido por subsección.
               </p>
-              <EditableTable
-                columns={capdocColumns}
-                rows={capdocT.rows}
-                showConfidencial
-                showPublicar
-                {...capdocT.handlers}
-                filters={capFilters}
-                addLabel="+ Agregar documento"
-                emptyLabel="Sin documentos."
-              />
+              {SUBSECCIONES.map((sub) => (
+                <div key={sub.code} className="mt-5">
+                  <SubseccionHeading code={sub.code} nombre={sub.nombre} color={sub.color} onColor={sub.onColor} />
+                  <EditableTable
+                    columns={capdocColumns}
+                    rows={capdocT.rows.filter((r) => r.subseccion === sub.code)}
+                    showConfidencial
+                    showPublicar
+                    {...capdocT.handlers}
+                    onAdd={() => capdocT.add({ subseccion: sub.code })}
+                    filters={capFilters}
+                    addLabel="+ Agregar documento"
+                    emptyLabel="Sin documentos."
+                  />
+                </div>
+              ))}
             </section>
             <section>
               <h2 className="text-base font-semibold text-[var(--text)]">Eventos</h2>
-              <p className="mb-3 mt-1 text-sm text-[var(--text-muted)]">
-                Formaciones realizadas o previstas (vinculadas a un documento de la misma subsección).
+              <p className="mt-1 text-sm text-[var(--text-muted)]">
+                Formaciones realizadas o previstas, divididas por subsección.
               </p>
-              <EditableTable
-                columns={capevtColumns}
-                rows={capevtT.rows}
-                showConfidencial
-                showPublicar
-                {...capevtT.handlers}
-                filters={capFilters}
-                addLabel="+ Agregar evento"
-                emptyLabel="Sin eventos."
-              />
+              {SUBSECCIONES.map((sub) => (
+                <div key={sub.code} className="mt-5">
+                  <SubseccionHeading code={sub.code} nombre={sub.nombre} color={sub.color} onColor={sub.onColor} />
+                  <EditableTable
+                    columns={capevtColumns}
+                    rows={capevtT.rows.filter((r) => r.subseccion === sub.code)}
+                    showConfidencial
+                    showPublicar
+                    {...capevtT.handlers}
+                    onAdd={() => capevtT.add({ subseccion: sub.code })}
+                    filters={capFilters}
+                    addLabel="+ Agregar evento"
+                    emptyLabel="Sin eventos."
+                  />
+                </div>
+              ))}
             </section>
           </div>
         )}
@@ -339,6 +345,30 @@ export function AdminTabs({
         {active === "subproyectos" && <Placeholder />}
       </div>
     </div>
+  );
+}
+
+function SubseccionHeading({
+  code,
+  nombre,
+  color,
+  onColor,
+}: {
+  code: string;
+  nombre: string;
+  color: string;
+  onColor: string;
+}) {
+  return (
+    <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-[var(--text)]">
+      <span
+        className="inline-block rounded px-2 py-0.5 text-xs font-medium"
+        style={{ backgroundColor: color, color: onColor }}
+      >
+        {code}
+      </span>
+      {nombre}
+    </h3>
   );
 }
 

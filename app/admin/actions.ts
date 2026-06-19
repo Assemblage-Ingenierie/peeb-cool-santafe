@@ -30,8 +30,11 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Crée une ligne vide avec UID incrémental (préfixe + numéro zéro-paddé). */
-export async function addRow(tableKey: string): Promise<Row> {
+/**
+ * Crée une ligne vide avec UID incrémental (préfixe + numéro zéro-paddé).
+ * `presets` permet de préremplir des champs (ex. subseccion du bloc), validés par liste blanche.
+ */
+export async function addRow(tableKey: string, presets?: Record<string, unknown>): Promise<Row> {
   assertAdmin();
   const cfg = cfgOf(tableKey);
   const sb = createServiceClient();
@@ -48,6 +51,12 @@ export async function addRow(tableKey: string): Promise<Row> {
   const uid = cfg.uidPrefix + String(max + 1).padStart(cfg.uidPad, "0");
 
   const insert: Record<string, unknown> = { uid, ...cfg.defaults };
+  if (presets) {
+    const allowed = new Set([...cfg.textFields, ...cfg.flagFields, ...cfg.arrayFields]);
+    for (const [k, v] of Object.entries(presets)) {
+      if (allowed.has(k)) insert[k] = v;
+    }
+  }
   if (cfg.todayField) insert[cfg.todayField] = todayISO();
 
   const { data, error } = await sb.from(cfg.table).insert(insert).select(cfg.select).single();
