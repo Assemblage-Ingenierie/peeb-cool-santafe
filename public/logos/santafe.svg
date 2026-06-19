@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="50" viewBox="0 0 120 50">
+  <rect width="118" height="48" x="1" y="1" rx="4" fill="#f8f8f8" stroke="#aaa" stroke-dasharray="5,3" stroke-width="1.5"/>
+  <text x="60" y="22" dominant-baseline="middle" text-anchor="middle" fill="#888" font-size="9" font-family="monospace">[ placeholder ]</text>
+  <text x="60" y="36" dominant-baseline="middle" text-anchor="middle" fill="#555" font-size="11" font-family="monospace" font-weight="bold">santafe.svg</text>
+</svg>
