@@ -17,7 +17,7 @@ import { CopyButton } from "./copy-button";
 // Aucune couleur en dur : tokens lib/constants.ts (sauf couleurs passées en options).
 // ============================================================
 
-export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "multiselect";
+export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "datetime" | "multiselect";
 
 export interface SelectOption {
   value: string;
@@ -40,6 +40,7 @@ export interface AdminColumn {
   type?: AdminColumnType; // défaut : text
   placeholder?: string;
   options?: SelectOption[]; // select / multiselect
+  required?: boolean; // select : pas d'option « vide »
   isDisabled?: (row: AdminRow) => boolean;
 }
 
@@ -471,15 +472,17 @@ function SelectCell({
         )}
       </button>
       <PortalPanel anchorRef={ref} open={open} onClose={() => setOpen(false)} width={224}>
-        <button
-          type="button"
-          role="option"
-          aria-selected={value === ""}
-          onClick={() => pick("")}
-          className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--app-bg)]"
-        >
-          — <span className="ml-1 text-xs">(vacío)</span>
-        </button>
+        {!column.required && (
+          <button
+            type="button"
+            role="option"
+            aria-selected={value === ""}
+            onClick={() => pick("")}
+            className="flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text-muted)] hover:bg-[var(--app-bg)]"
+          >
+            — <span className="ml-1 text-xs">(vacío)</span>
+          </button>
+        )}
         {options.map((o) => (
           <button
             key={o.value}
@@ -525,13 +528,16 @@ function EditableCell({
     );
   }
 
-  if (type === "date" || type === "time") {
+  if (type === "date" || type === "time" || type === "datetime") {
+    const inputType = type === "datetime" ? "datetime-local" : type;
+    const inputVal = type === "datetime" ? value.slice(0, 16) : value;
+    const shown = type === "datetime" ? value.slice(0, 16).replace("T", " ") : value;
     if (editing) {
       return (
         <input
           autoFocus
-          type={type}
-          defaultValue={value}
+          type={inputType}
+          defaultValue={inputVal}
           onChange={(e) => onCommit(e.target.value)}
           onBlur={() => setEditing(false)}
           className="block w-full rounded-sm border border-[var(--focus)] bg-[var(--surface)] px-2 py-1.5 text-sm text-[var(--text)] outline-none"
@@ -542,9 +548,9 @@ function EditableCell({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="block w-full px-3 py-2 text-left text-sm text-[var(--text)] transition-colors hover:bg-[var(--app-bg)]"
+        className="block w-full whitespace-nowrap px-3 py-2 text-left text-sm text-[var(--text)] transition-colors hover:bg-[var(--app-bg)]"
       >
-        {value || <span className="text-[var(--text-muted)]">—</span>}
+        {shown || <span className="text-[var(--text-muted)]">—</span>}
       </button>
     );
   }

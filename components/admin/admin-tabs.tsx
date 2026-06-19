@@ -38,6 +38,13 @@ const MODALIDAD_OPTIONS: SelectOption[] = [
   { value: "Presencial", label: "Presencial" },
   { value: "Virtual", label: "Virtual" },
 ];
+// Sous-sections capacitaciones (EE / AyS / G) — couleurs des composantes.
+const SUBSECCION_OPTIONS: SelectOption[] = COMPONENTES.filter((c) => c.code !== "GP").map((c) => ({
+  value: c.code,
+  label: c.code,
+  color: c.color,
+  onColor: c.onColor,
+}));
 
 // Hook : état optimiste + persistance réelle (Server Actions) pour une table.
 function useAdminTable(tableKey: string, initial: AdminRow[]) {
@@ -90,11 +97,15 @@ export function AdminTabs({
   equipo,
   entidades,
   eventos,
+  capdoc,
+  capevt,
 }: {
   gp: AdminRow[];
   equipo: AdminRow[];
   entidades: AdminRow[];
   eventos: AdminRow[];
+  capdoc: AdminRow[];
+  capevt: AdminRow[];
 }) {
   const [active, setActive] = useState<TabKey>("gp");
 
@@ -102,6 +113,8 @@ export function AdminTabs({
   const equipoT = useAdminTable("equipo", equipo);
   const entidadesT = useAdminTable("entidades", entidades);
   const eventosT = useAdminTable("eventos", eventos);
+  const capdocT = useAdminTable("capdoc", capdoc);
+  const capevtT = useAdminTable("capevt", capevt);
 
   // Options dynamiques (dépendent des données vivantes)
   const entidadOptions: SelectOption[] = entidadesT.rows.map((e) => ({
@@ -150,6 +163,29 @@ export function AdminTabs({
     { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
   ];
   const eventosFilters: FilterDef[] = [
+    { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
+  ];
+
+  const documentoOptions: SelectOption[] = capdocT.rows.map((d) => ({
+    value: d.uid,
+    label: `${String(d.subseccion ?? "")} — ${String(d.titulo ?? "") || d.uid}`,
+  }));
+  const capdocColumns: AdminColumn[] = [
+    { key: "subseccion", label: "Subsección", type: "select", options: SUBSECCION_OPTIONS, required: true },
+    { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
+    { key: "titulo", label: "Título", type: "text", placeholder: "Título" },
+    { key: "url", label: "Enlace (URL)", type: "url", placeholder: "https://…" },
+  ];
+  const capevtColumns: AdminColumn[] = [
+    { key: "subseccion", label: "Subsección", type: "select", options: SUBSECCION_OPTIONS, required: true },
+    { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
+    { key: "documento_uid", label: "Documento", type: "select", options: documentoOptions, placeholder: "—" },
+    { key: "fecha_hora", label: "Fecha y hora", type: "datetime" },
+    { key: "entidades", label: "Entidades", type: "multiselect", options: entidadOptions, placeholder: "—" },
+    { key: "participantes", label: "Participantes", type: "multiselect", options: participanteOptions, placeholder: "—" },
+  ];
+  const capFilters: FilterDef[] = [
+    { key: "subseccion", label: "Subsección", options: SUBSECCION_OPTIONS },
     { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
   ];
 
@@ -263,7 +299,44 @@ export function AdminTabs({
           </div>
         )}
 
-        {(active === "capacitaciones" || active === "subproyectos") && <Placeholder />}
+        {active === "capacitaciones" && (
+          <div className="space-y-10">
+            <section>
+              <h2 className="text-base font-semibold text-[var(--text)]">Documentos</h2>
+              <p className="mb-3 mt-1 text-sm text-[var(--text-muted)]">
+                Material de formación por subsección (EE / AyS / G).
+              </p>
+              <EditableTable
+                columns={capdocColumns}
+                rows={capdocT.rows}
+                showConfidencial
+                showPublicar
+                {...capdocT.handlers}
+                filters={capFilters}
+                addLabel="+ Agregar documento"
+                emptyLabel="Sin documentos."
+              />
+            </section>
+            <section>
+              <h2 className="text-base font-semibold text-[var(--text)]">Eventos</h2>
+              <p className="mb-3 mt-1 text-sm text-[var(--text-muted)]">
+                Formaciones realizadas o previstas (vinculadas a un documento de la misma subsección).
+              </p>
+              <EditableTable
+                columns={capevtColumns}
+                rows={capevtT.rows}
+                showConfidencial
+                showPublicar
+                {...capevtT.handlers}
+                filters={capFilters}
+                addLabel="+ Agregar evento"
+                emptyLabel="Sin eventos."
+              />
+            </section>
+          </div>
+        )}
+
+        {active === "subproyectos" && <Placeholder />}
       </div>
     </div>
   );

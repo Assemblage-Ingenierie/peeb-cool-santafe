@@ -20,11 +20,13 @@ export default async function AdminPage() {
     );
   }
 
-  const [gp, equipo, entidades, eventos] = await Promise.all([
+  const [gp, equipo, entidades, eventos, capdoc, capevt] = await Promise.all([
     listTable("gp"),
     listTable("equipo"),
     listTable("entidades"),
     listTable("eventos"),
+    listTable("capdoc"),
+    listTable("capevt"),
   ]);
 
   return (
@@ -34,7 +36,14 @@ export default async function AdminPage() {
         Base de datos del proyecto. Cada fila muestra su UID (copiable) para referenciarla.
       </p>
       <div className="mt-6">
-        <AdminTabs gp={gp} equipo={equipo} entidades={entidades} eventos={eventos} />
+        <AdminTabs
+          gp={gp}
+          equipo={equipo}
+          entidades={entidades}
+          eventos={eventos}
+          capdoc={capdoc}
+          capevt={capevt}
+        />
       </div>
     </section>
   );

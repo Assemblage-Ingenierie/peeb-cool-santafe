@@ -86,6 +86,42 @@ export const TABLES: Record<string, TableConfig> = {
       { col: "uid", ascending: true },
     ],
   },
+
+  capdoc: {
+    table: "peebcoolsf_capacitaciones_documentos",
+    uidPrefix: "CAP-DOC-",
+    uidPad: 4,
+    textFields: ["subseccion", "componente", "titulo", "url"],
+    notNull: ["subseccion", "titulo"],
+    dateFields: [],
+    flagFields: ["confidencial", "publicar"],
+    arrayFields: [],
+    select: "uid, subseccion, componente, titulo, url, confidencial, publicar, orden",
+    defaults: { subseccion: "EE", titulo: "", confidencial: false, publicar: false },
+    orderBy: [
+      { col: "subseccion", ascending: true },
+      { col: "orden", ascending: true, nullsFirst: false },
+      { col: "uid", ascending: true },
+    ],
+  },
+
+  capevt: {
+    table: "peebcoolsf_capacitaciones_eventos",
+    uidPrefix: "CAPEVT-",
+    uidPad: 4,
+    textFields: ["subseccion", "componente", "fecha_hora", "documento_uid"],
+    notNull: ["subseccion"],
+    dateFields: [],
+    flagFields: ["confidencial", "publicar"],
+    arrayFields: ["entidades", "participantes"],
+    select:
+      "uid, subseccion, componente, entidades, participantes, fecha_hora, documento_uid, confidencial, publicar",
+    defaults: { subseccion: "EE", entidades: [], participantes: [], confidencial: false, publicar: false },
+    orderBy: [
+      { col: "subseccion", ascending: true },
+      { col: "uid", ascending: true },
+    ],
+  },
 };
 
 export type TableKey = keyof typeof TABLES;
