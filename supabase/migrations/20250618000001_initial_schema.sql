@@ -1,252 +1,242 @@
 -- ============================================================
 -- Migration 001 — Schéma initial PEEB Cool Santa Fe
+-- Déployé sur le projet Supabase EXTERNAL (tables préfixées peebcoolsf_).
+-- Reflet du déploiement réel effectué via le connecteur MCP (execute_sql).
+-- Ordre d'exécution : schéma privé + set_updated_at → tables → is_admin → index → triggers.
 -- ============================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Schéma non exposé pour les fonctions SECURITY DEFINER (best practice)
+create schema if not exists peebcoolsf_private;
 
--- ============================================================
--- TABLES DE RÉFÉRENCE (ÉNUMÉRATIONS)
--- ============================================================
-
-CREATE TABLE componentes (
-  code        TEXT    PRIMARY KEY,
-  nombre      TEXT    NOT NULL,
-  color       TEXT    NOT NULL,
-  texto_claro BOOLEAN NOT NULL DEFAULT FALSE  -- true = texte clair sur fond foncé
-);
-
-CREATE TABLE tipologias (
-  code        TEXT    PRIMARY KEY,
-  nombre      TEXT    NOT NULL,
-  color       TEXT    NOT NULL,
-  texto_claro BOOLEAN NOT NULL DEFAULT FALSE
-);
-
-CREATE TABLE fases (
-  code   TEXT     PRIMARY KEY,
-  nombre TEXT     NOT NULL,
-  orden  SMALLINT NOT NULL
-);
-
-CREATE TABLE estados (
-  code   TEXT PRIMARY KEY,
-  nombre TEXT NOT NULL,
-  color  TEXT NOT NULL
-);
-
-CREATE TABLE tipo_linea (
-  code   TEXT PRIMARY KEY,
-  nombre TEXT NOT NULL
-);
-
--- ============================================================
--- ENTITÉS ET PROFILS
--- ============================================================
-
-CREATE TABLE entidades (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid        TEXT        UNIQUE NOT NULL,
-  nombre     TEXT        NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Profils utilisateurs (liés à auth.users via Supabase Auth)
-CREATE TABLE perfiles (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id    UUID        UNIQUE NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  rol        TEXT        NOT NULL CHECK (rol IN ('admin', 'usuario')),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- SOUS-PROJETS
--- ============================================================
-
-CREATE TABLE subproyectos (
-  id           UUID             PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid          TEXT             UNIQUE NOT NULL,
-  nombre       TEXT             NOT NULL,
-  tipologia    TEXT             NOT NULL REFERENCES tipologias(code),
-  seccion      TEXT             NOT NULL CHECK (seccion IN ('Aeropuertos', 'Hospitales', 'Escuelas')),
-  orden        SMALLINT         NOT NULL,
-  -- Datos del edificio
-  direccion    TEXT,
-  lat          DOUBLE PRECISION,
-  lng          DOUBLE PRECISION,
-  superficie_m2 DOUBLE PRECISION,
-  created_at   TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ      NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- MÉTRIQUES (1 ligne par sous-projet × scénario)
--- ============================================================
-
--- Ne jamais stocker les calculs dérivés (économie kWh, %, kWh/m²).
--- Données manquantes = NULL → afficher « — », jamais 0.
-CREATE TABLE metricas (
-  id                    UUID             PRIMARY KEY DEFAULT uuid_generate_v4(),
-  subproyecto_uid       TEXT             NOT NULL REFERENCES subproyectos(uid) ON DELETE CASCADE,
-  escenario             TEXT             NOT NULL CHECK (escenario IN ('faisabilidad', 'proyecto')),
-  -- Consommations
-  demanda_kwh           DOUBLE PRECISION,
-  demanda_despues_kwh   DOUBLE PRECISION,
-  -- GEI
-  gei_antes_tco2        DOUBLE PRECISION,
-  gei_despues_tco2      DOUBLE PRECISION,
-  -- Coûts
-  costo_ee_eur          DOUBLE PRECISION,
-  costo_otras_eur       DOUBLE PRECISION,
-  -- Bénéficiaires (scénario faisabilidad uniquement)
-  benef_personal        INTEGER,
-  benef_personal_pct_muj    DOUBLE PRECISION,
-  benef_usuarios        INTEGER,
-  benef_usuarios_pct_muj    DOUBLE PRECISION,
-  benef_indirectos      INTEGER,
-  benef_indirectos_pct_muj  DOUBLE PRECISION,
-  created_at            TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-  updated_at            TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
-  UNIQUE (subproyecto_uid, escenario)
-);
-
--- ============================================================
--- ÉQUIPE
--- ============================================================
-
-CREATE TABLE equipo (
-  id           UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid          TEXT        UNIQUE NOT NULL,
-  apellido     TEXT        NOT NULL,
-  nombre       TEXT        NOT NULL,
-  entidad_uid  TEXT        REFERENCES entidades(uid),
-  rol          TEXT,
-  componente   TEXT        REFERENCES componentes(code),
-  telefono     TEXT,
-  mail         TEXT,
-  sexo         TEXT,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- ÉVÉNEMENTS CALENDRIER
--- ============================================================
-
-CREATE TABLE eventos (
-  id            UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid           TEXT        UNIQUE NOT NULL,
-  nombre        TEXT        NOT NULL,
-  fecha         DATE        NOT NULL,
-  hora_inicio   TIME,
-  hora_fin      TIME,
-  participantes TEXT[]      NOT NULL DEFAULT '{}',  -- UIDs equipo
-  componente    TEXT        REFERENCES componentes(code),
-  modalidad     TEXT        CHECK (modalidad IN ('Presencial', 'Virtual')),
-  lugar         TEXT,
-  url_conexion  TEXT,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- DOCUMENTATION GP
--- ============================================================
-
-CREATE TABLE documentacion_gp (
-  id               UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid              TEXT        UNIQUE NOT NULL,
-  nombre_documento TEXT        NOT NULL,
-  url              TEXT,
-  orden            SMALLINT,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- GESTION FINANCIÈRE (structure minimale, contenu à définir)
--- ============================================================
-
-CREATE TABLE gestion_financiera (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid        TEXT        UNIQUE NOT NULL,
-  titulo     TEXT,
-  url        TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- CAPACITACIONES — DOCUMENTS
--- ============================================================
-
-CREATE TABLE capacitaciones_documentos (
-  id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid        TEXT        UNIQUE NOT NULL,
-  subseccion TEXT        NOT NULL CHECK (subseccion IN ('EE', 'AyS', 'G')),
-  componente TEXT        REFERENCES componentes(code),
-  titulo     TEXT        NOT NULL,
-  url        TEXT,
-  orden      SMALLINT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- CAPACITACIONES — ÉVÉNEMENTS
--- ============================================================
-
-CREATE TABLE capacitaciones_eventos (
-  id             UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid            TEXT        UNIQUE NOT NULL,
-  subseccion     TEXT        NOT NULL CHECK (subseccion IN ('EE', 'AyS', 'G')),
-  componente     TEXT        REFERENCES componentes(code),
-  entidades      TEXT[]      NOT NULL DEFAULT '{}',  -- UIDs entidades
-  participantes  TEXT[]      NOT NULL DEFAULT '{}',  -- UIDs equipo
-  fecha_hora     TIMESTAMPTZ,
-  documento_uid  TEXT        REFERENCES capacitaciones_documentos(uid),
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- GESTION DES SOUS-PROJETS — LIGNES FLEXIBLES
--- ============================================================
-
-CREATE TABLE gestion_lineas (
-  id               UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
-  uid              TEXT        UNIQUE NOT NULL,
-  subproyecto_uid  TEXT        NOT NULL REFERENCES subproyectos(uid) ON DELETE CASCADE,
-  titulo           TEXT        NOT NULL,
-  orden            SMALLINT    NOT NULL DEFAULT 0,
-  tipo_linea       TEXT        REFERENCES tipo_linea(code),
-  componente       TEXT        REFERENCES componentes(code),
-  -- url actif uniquement si tipo_linea = 'documento' (règle UI, non contrainte DB)
-  url              TEXT,
-  estado           TEXT        REFERENCES estados(code),
-  fecha            DATE,
-  fase             TEXT        REFERENCES fases(code),
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- ============================================================
--- TRIGGER updated_at (appliqué à toutes les tables mutables)
--- ============================================================
-
-CREATE OR REPLACE FUNCTION update_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
+-- Maintien automatique de updated_at
+create or replace function peebcoolsf_private.set_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
 $$;
 
-CREATE TRIGGER trg_subproyectos_upd   BEFORE UPDATE ON subproyectos           FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_metricas_upd        BEFORE UPDATE ON metricas               FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_equipo_upd          BEFORE UPDATE ON equipo                 FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_eventos_upd         BEFORE UPDATE ON eventos                FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_doc_gp_upd          BEFORE UPDATE ON documentacion_gp       FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_gf_upd              BEFORE UPDATE ON gestion_financiera      FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_cap_docs_upd        BEFORE UPDATE ON capacitaciones_documentos FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_cap_evts_upd        BEFORE UPDATE ON capacitaciones_eventos  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
-CREATE TRIGGER trg_gestion_lineas_upd  BEFORE UPDATE ON gestion_lineas          FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+-- ============================================================
+-- Tables de référence (énumérations)
+-- ============================================================
+create table public.peebcoolsf_componentes (
+  code        text primary key,
+  nombre      text    not null,
+  color       text    not null,
+  texto_claro boolean not null default false   -- true = texte clair sur fond foncé
+);
+
+create table public.peebcoolsf_tipologias (
+  code        text primary key,
+  nombre      text    not null,
+  color       text    not null,
+  texto_claro boolean not null default false
+);
+
+create table public.peebcoolsf_fases (
+  code   text     primary key,
+  nombre text     not null,
+  orden  smallint not null
+);
+
+create table public.peebcoolsf_estados (
+  code   text primary key,
+  nombre text not null,
+  color  text not null
+);
+
+create table public.peebcoolsf_tipo_linea (
+  code   text primary key,
+  nombre text not null
+);
+
+-- ============================================================
+-- Tables principales
+-- ============================================================
+create table public.peebcoolsf_perfiles (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid unique not null references auth.users(id) on delete cascade,
+  rol        text not null check (rol in ('admin','usuario')),
+  created_at timestamptz not null default now()
+);
+
+create table public.peebcoolsf_entidades (
+  id         uuid primary key default gen_random_uuid(),
+  uid        text unique not null,
+  nombre     text not null,
+  created_at timestamptz not null default now()
+);
+
+create table public.peebcoolsf_subproyectos (
+  id            uuid primary key default gen_random_uuid(),
+  uid           text unique not null,
+  nombre        text not null,
+  tipologia     text not null references public.peebcoolsf_tipologias(code),
+  seccion       text not null check (seccion in ('Aeropuertos','Hospitales','Escuelas')),
+  orden         smallint not null,
+  direccion     text,
+  lat           double precision,
+  lng           double precision,
+  superficie_m2 double precision,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+-- 1 ligne par (sous-projet × scénario). TOUS les numériques nullables, AUCUN default.
+create table public.peebcoolsf_metricas (
+  id                       uuid primary key default gen_random_uuid(),
+  subproyecto_uid          text not null references public.peebcoolsf_subproyectos(uid) on delete cascade,
+  escenario                text not null check (escenario in ('faisabilidad','proyecto')),
+  demanda_kwh              double precision,
+  demanda_despues_kwh      double precision,
+  gei_antes_tco2           double precision,
+  gei_despues_tco2         double precision,
+  costo_ee_eur             double precision,
+  costo_otras_eur          double precision,
+  benef_personal           integer,
+  benef_personal_pct_muj   double precision,
+  benef_usuarios           integer,
+  benef_usuarios_pct_muj   double precision,
+  benef_indirectos         integer,
+  benef_indirectos_pct_muj double precision,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now(),
+  unique (subproyecto_uid, escenario)
+);
+
+create table public.peebcoolsf_equipo (
+  id          uuid primary key default gen_random_uuid(),
+  uid         text unique not null,
+  apellido    text not null,
+  nombre      text not null,
+  entidad_uid text references public.peebcoolsf_entidades(uid),
+  rol         text,
+  componente  text references public.peebcoolsf_componentes(code),
+  telefono    text,
+  mail        text,
+  sexo        text check (sexo in ('F','M','X') or sexo is null),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create table public.peebcoolsf_eventos (
+  id            uuid primary key default gen_random_uuid(),
+  uid           text unique not null,
+  nombre        text not null,
+  fecha         date not null,
+  hora_inicio   time,
+  hora_fin      time,
+  participantes text[] not null default '{}',          -- UIDs equipo
+  componente    text references public.peebcoolsf_componentes(code),
+  modalidad     text check (modalidad in ('Presencial','Virtual')),
+  lugar         text,
+  url_conexion  text,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create table public.peebcoolsf_documentacion_gp (
+  id               uuid primary key default gen_random_uuid(),
+  uid              text unique not null,
+  nombre_documento text not null,
+  url              text,
+  orden            smallint,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now()
+);
+
+create table public.peebcoolsf_gestion_financiera (
+  id         uuid primary key default gen_random_uuid(),
+  uid        text unique not null,
+  titulo     text,
+  url        text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.peebcoolsf_capacitaciones_documentos (
+  id         uuid primary key default gen_random_uuid(),
+  uid        text unique not null,
+  subseccion text not null check (subseccion in ('EE','AyS','G')),
+  componente text references public.peebcoolsf_componentes(code),
+  titulo     text not null,
+  url        text,
+  orden      smallint,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.peebcoolsf_capacitaciones_eventos (
+  id            uuid primary key default gen_random_uuid(),
+  uid           text unique not null,
+  subseccion    text not null check (subseccion in ('EE','AyS','G')),
+  componente    text references public.peebcoolsf_componentes(code),
+  entidades     text[] not null default '{}',          -- UIDs entidades
+  participantes text[] not null default '{}',          -- UIDs equipo
+  fecha_hora    timestamptz,
+  documento_uid text references public.peebcoolsf_capacitaciones_documentos(uid),
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create table public.peebcoolsf_gestion_lineas (
+  id              uuid primary key default gen_random_uuid(),
+  uid             text unique not null,
+  subproyecto_uid text not null references public.peebcoolsf_subproyectos(uid) on delete cascade,
+  titulo          text not null,
+  orden           smallint not null default 0,
+  tipo_linea      text references public.peebcoolsf_tipo_linea(code),
+  componente      text references public.peebcoolsf_componentes(code),
+  url             text,                                  -- actif si tipo_linea='documento' (règle UI)
+  estado          text references public.peebcoolsf_estados(code),
+  fecha           date,
+  fase            text references public.peebcoolsf_fases(code),
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+-- ============================================================
+-- is_admin() (après création de perfiles)
+-- SECURITY DEFINER : lit perfiles en bypass RLS (anti-récursion). search_path vide.
+-- ============================================================
+create or replace function peebcoolsf_private.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.peebcoolsf_perfiles
+    where user_id = auth.uid() and rol = 'admin'
+  );
+$$;
+
+-- ============================================================
+-- Index (FK + colonnes filtrées)
+-- ============================================================
+create index idx_peebcoolsf_gestion_lineas_subproyecto on public.peebcoolsf_gestion_lineas(subproyecto_uid);
+create index idx_peebcoolsf_gestion_lineas_componente  on public.peebcoolsf_gestion_lineas(componente);
+create index idx_peebcoolsf_eventos_fecha              on public.peebcoolsf_eventos(fecha);
+create index idx_peebcoolsf_eventos_componente         on public.peebcoolsf_eventos(componente);
+create index idx_peebcoolsf_capevt_documento           on public.peebcoolsf_capacitaciones_eventos(documento_uid);
+create index idx_peebcoolsf_equipo_entidad             on public.peebcoolsf_equipo(entidad_uid);
+create index idx_peebcoolsf_equipo_componente          on public.peebcoolsf_equipo(componente);
+-- subproyecto_uid + escenario : couverts par unique(subproyecto_uid, escenario) sur metricas.
+
+-- ============================================================
+-- Triggers updated_at
+-- ============================================================
+create trigger trg_sub_upd    before update on public.peebcoolsf_subproyectos              for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_met_upd    before update on public.peebcoolsf_metricas                  for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_eq_upd     before update on public.peebcoolsf_equipo                    for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_evt_upd    before update on public.peebcoolsf_eventos                   for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_docgp_upd  before update on public.peebcoolsf_documentacion_gp          for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_gf_upd     before update on public.peebcoolsf_gestion_financiera        for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_capdoc_upd before update on public.peebcoolsf_capacitaciones_documentos for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_capevt_upd before update on public.peebcoolsf_capacitaciones_eventos    for each row execute function peebcoolsf_private.set_updated_at();
+create trigger trg_gl_upd     before update on public.peebcoolsf_gestion_lineas            for each row execute function peebcoolsf_private.set_updated_at();

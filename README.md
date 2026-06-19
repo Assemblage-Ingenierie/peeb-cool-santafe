@@ -45,23 +45,22 @@ npm run dev
 
 ## Base de données
 
-### Migrations SQL
+> **Déploiement : connecteur MCP Supabase** (`execute_sql`), **pas la CLI**. Projet **EXTERNAL** (partagé entre apps clients/partenaires) → **toutes les tables sont préfixées `peebcoolsf_`**. Les fonctions `SECURITY DEFINER` vivent dans le schéma privé `peebcoolsf_private`.
 
-Les migrations sont dans `supabase/migrations/`, à appliquer dans l'ordre numérique.
+### Schéma SQL (source de vérité du repo)
+
+Les fichiers reflètent le déploiement réel, à appliquer dans l'ordre :
 
 ```
 supabase/migrations/
-  20250618000001_initial_schema.sql   — toutes les tables + triggers
-  20250618000002_rls.sql              — politiques RLS
+  20250618000001_initial_schema.sql   — schéma privé + fonctions + 16 tables + index + triggers
+  20250618000002_rls.sql              — RLS (16 tables) + 32 policies
+supabase/seed.sql                     — données §5 (idempotent : on conflict do nothing)
 ```
 
-**Via Supabase CLI** (une fois le projet Supabase configuré) :
-```bash
-supabase link --project-ref <ref>
-supabase db push
-```
+**Application** : copier-coller chaque fichier dans l'éditeur SQL de la console Supabase (ou via `execute_sql` du connecteur MCP), dans l'ordre `001 → 002 → seed`.
 
-**Manuellement** : copier-coller chaque fichier dans l'éditeur SQL de la console Supabase, dans l'ordre.
+Voir [`supabase/SCHEMA_peebcoolsf.md`](supabase/SCHEMA_peebcoolsf.md) pour le schéma documenté complet.
 
 ### Seed
 
