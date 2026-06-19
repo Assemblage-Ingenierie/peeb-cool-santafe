@@ -1,6 +1,6 @@
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { AdminTabs } from "@/components/admin/admin-tabs";
-import { listGp } from "@/lib/admin/gp";
+import { listTable } from "@/lib/admin/read";
 
 // L'Admin lit/écrit les données en direct (service_role serveur), sans cache —
 // jamais le snapshot caché (réservé au dashboard public, Étape 4).
@@ -20,7 +20,12 @@ export default async function AdminPage() {
     );
   }
 
-  const gp = await listGp();
+  const [gp, equipo, entidades, eventos] = await Promise.all([
+    listTable("gp"),
+    listTable("equipo"),
+    listTable("entidades"),
+    listTable("eventos"),
+  ]);
 
   return (
     <section className="mx-auto max-w-6xl">
@@ -29,7 +34,7 @@ export default async function AdminPage() {
         Base de datos del proyecto. Cada fila muestra su UID (copiable) para referenciarla.
       </p>
       <div className="mt-6">
-        <AdminTabs initialGp={gp} />
+        <AdminTabs gp={gp} equipo={equipo} entidades={entidades} eventos={eventos} />
       </div>
     </section>
   );
