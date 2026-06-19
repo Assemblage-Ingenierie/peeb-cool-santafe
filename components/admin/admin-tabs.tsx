@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { EditableTable, type AdminColumn, type AdminRow } from "./editable-table";
-import { DEMO_DOCUMENTACION_GP } from "./demo-data";
+import { EditableTable, type AdminColumn } from "./editable-table";
+import type { GpRow } from "@/lib/admin/gp";
+import { addGp, updateGpField, setGpFlag, deleteGp } from "@/app/admin/actions";
 
 const TABS = [
   { key: "gp", label: "Gestión de proyecto" },
@@ -20,10 +22,61 @@ const GP_COLUMNS: AdminColumn[] = [
   { key: "url", label: "Enlace (URL)", type: "url", placeholder: "https://…" },
 ];
 
-export function AdminTabs() {
+export function AdminTabs({ initialGp }: { initialGp: GpRow[] }) {
   const [active, setActive] = useState<TabKey>("gp");
-  // Démo locale (Étape 3.1) — persistance réelle branchée ensuite.
-  const [gpRows, setGpRows] = useState<AdminRow[]>(DEMO_DOCUMENTACION_GP);
+  const [gpRows, setGpRows] = useState<GpRow[]>(initialGp);
+  const [, startTransition] = useTransition();
+  const router = useRouter();
+
+  // Mises à jour optimistes + persistance réelle (Server Actions). En cas d'erreur,
+  // on resynchronise depuis le serveur (router.refresh()).
+  const handleCellCommit = (uid: string, key: string, value: string) => {
+    setGpRows((rows) =>
+      rows.map((r) =>
+        r.uid === uid ? { ...r, [key]: key === "url" && value.trim() === "" ? null : value } : r,
+      ),
+    );
+    startTransition(async () => {
+      try {
+        await updateGpField(uid, key, value);
+      } catch {
+        router.refresh();
+      }
+    });
+  };
+
+  const handleToggle = (uid: string, flag: "confidencial" | "publicar", value: boolean) => {
+    setGpRows((rows) => rows.map((r) => (r.uid === uid ? { ...r, [flag]: value } : r)));
+    startTransition(async () => {
+      try {
+        await setGpFlag(uid, flag, value);
+      } catch {
+        router.refresh();
+      }
+    });
+  };
+
+  const handleAdd = () => {
+    startTransition(async () => {
+      try {
+        const row = await addGp();
+        setGpRows((rows) => [...rows, row]);
+      } catch {
+        router.refresh();
+      }
+    });
+  };
+
+  const handleDelete = (uid: string) => {
+    setGpRows((rows) => rows.filter((r) => r.uid !== uid));
+    startTransition(async () => {
+      try {
+        await deleteGp(uid);
+      } catch {
+        router.refresh();
+      }
+    });
+  };
 
   return (
     <div>
@@ -43,9 +96,7 @@ export function AdminTabs() {
               onClick={() => setActive(t.key)}
               className={cn(
                 "relative px-3 py-2 text-sm font-medium transition-colors",
-                on
-                  ? "text-[var(--text)]"
-                  : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                on ? "text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]",
               )}
             >
               {t.label}
@@ -68,23 +119,24 @@ export function AdminTabs() {
                 Documentación de proyecto
               </h2>
               <p className="mb-3 mt-1 text-sm text-[var(--text-muted)]">
-                Edición en línea (clic en una celda). La casilla{" "}
-                <span className="font-medium text-[var(--accent)]">Confidencial</span> oculta la
-                fila al rol Consultor.
+                Edición en línea (clic en una celda).{" "}
+                <span className="font-medium text-[var(--accent)]">Confidencial</span> controla el
+                acceso (oculto para Consultor) ; <span className="font-medium">Publicar</span>{" "}
+                controla la visibilidad en las páginas públicas. Son ejes independientes.
               </p>
               <EditableTable
                 columns={GP_COLUMNS}
                 rows={gpRows}
-                onChange={setGpRows}
                 showConfidencial
-                onDelete={(uid) =>
-                  setGpRows((rows) => rows.filter((r) => r.uid !== uid))
-                }
+                showPublicar
+                onCellCommit={handleCellCommit}
+                onToggleConfidencial={(uid, v) => handleToggle(uid, "confidencial", v)}
+                onTogglePublicar={(uid, v) => handleToggle(uid, "publicar", v)}
+                onAdd={handleAdd}
+                onDelete={handleDelete}
+                addLabel="+ Agregar documento"
+                emptyLabel="Sin documentos."
               />
-              <p className="mt-2 text-xs text-[var(--text-muted)]">
-                Datos de demostración (locales). La persistencia real se conecta al configurar el
-                acceso de servidor (service_role).
-              </p>
             </section>
 
             <section>

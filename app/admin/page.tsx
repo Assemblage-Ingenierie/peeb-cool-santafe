@@ -1,7 +1,12 @@
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { AdminTabs } from "@/components/admin/admin-tabs";
+import { listGp } from "@/lib/admin/gp";
 
-export default function AdminPage() {
+// L'Admin lit/écrit les données en direct (service_role serveur), sans cache —
+// jamais le snapshot caché (réservé au dashboard public, Étape 4).
+export const dynamic = "force-dynamic";
+
+export default async function AdminPage() {
   const user = getCurrentUser();
 
   if (!isAdmin(user)) {
@@ -15,6 +20,8 @@ export default function AdminPage() {
     );
   }
 
+  const gp = await listGp();
+
   return (
     <section className="mx-auto max-w-6xl">
       <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">Admin</h1>
@@ -22,7 +29,7 @@ export default function AdminPage() {
         Base de datos del proyecto. Cada fila muestra su UID (copiable) para referenciarla.
       </p>
       <div className="mt-6">
-        <AdminTabs />
+        <AdminTabs initialGp={gp} />
       </div>
     </section>
   );
