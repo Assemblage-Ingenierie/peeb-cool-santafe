@@ -51,3 +51,6 @@ supabase/.temp
 # Données brutes (fichiers bootstrap non versionnés)
 *.xlsx
 *.xls
+
+# Document binaire redondant (le .md source fait foi)
+CAHIER_DES_CHARGES_FR.pdf
