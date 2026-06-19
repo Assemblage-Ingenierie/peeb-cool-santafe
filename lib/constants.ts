@@ -51,6 +51,40 @@ export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
 // ============================================================
+// Référentiels de gestion (CDC §3.2) — codes alignés sur les tables
+// peebcoolsf_estados / _fases / _tipo_linea (seed). Source unique des
+// libellés/couleurs côté UI (selects de « Gestión del subproyecto »).
+// ============================================================
+
+export interface EnumOption {
+  code: string;
+  nombre: string;
+  color?: string; // badge (estados uniquement)
+  onColor?: string;
+}
+
+// Estados (CDC §3.2 : « En proceso » jaune / « Terminado » vert clair) + vide autorisé.
+export const ESTADOS: EnumOption[] = [
+  { code: "en_proceso", nombre: "En proceso", color: "#ffd966", onColor: TEXTO_OSCURO },
+  { code: "terminado", nombre: "Terminado", color: "#b6d7a8", onColor: TEXTO_OSCURO },
+];
+
+// Fases chronologiques (CDC §3.2) — sans couleur.
+export const FASES: EnumOption[] = [
+  { code: "estudios_preliminares", nombre: "Estudios preliminares" },
+  { code: "proyecto_ejecutivo", nombre: "Proyecto ejecutivo" },
+  { code: "licitacion", nombre: "Licitación" },
+  { code: "obra", nombre: "Obra" },
+  { code: "general", nombre: "General" },
+];
+
+// Tipo de línea (CDC §3.2) — pilote la règle « url active seulement si Documento ».
+export const TIPO_LINEA: EnumOption[] = [
+  { code: "documento", nombre: "Documento" },
+  { code: "etapa", nombre: "Etapa" },
+];
+
+// ============================================================
 // Tokens de surface (UI neutre). NE SONT PAS des couleurs de marque :
 // implémentation du « fond gris clair » et de la sidebar #30323e (CDC §2.1).
 // `focus` réutilise le bleu Escuelas (#3c78d8) de la palette — pas une couleur nouvelle.

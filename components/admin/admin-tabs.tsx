@@ -11,7 +11,9 @@ import {
   type SelectOption,
   type FilterDef,
 } from "./editable-table";
+import { SubproyectosPanel } from "./subproyectos-panel";
 import { addRow, updateField, setFlag, setArrayField, deleteRow } from "@/app/admin/actions";
+import type { SubproyectoRow, MetricaRow } from "@/lib/admin/read";
 
 const TABS = [
   { key: "gp", label: "Gestión de proyecto" },
@@ -98,6 +100,9 @@ export function AdminTabs({
   eventos,
   capdoc,
   capevt,
+  subproyectos,
+  metricas,
+  gestion,
 }: {
   gp: AdminRow[];
   equipo: AdminRow[];
@@ -105,6 +110,9 @@ export function AdminTabs({
   eventos: AdminRow[];
   capdoc: AdminRow[];
   capevt: AdminRow[];
+  subproyectos: SubproyectoRow[];
+  metricas: MetricaRow[];
+  gestion: AdminRow[];
 }) {
   const [active, setActive] = useState<TabKey>("gp");
 
@@ -342,7 +350,9 @@ export function AdminTabs({
           </div>
         )}
 
-        {active === "subproyectos" && <Placeholder />}
+        {active === "subproyectos" && (
+          <SubproyectosPanel subproyectos={subproyectos} metricas={metricas} gestionLineas={gestion} />
+        )}
       </div>
     </div>
   );

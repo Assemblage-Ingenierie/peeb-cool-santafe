@@ -59,6 +59,8 @@ interface EditableTableProps {
   onToggleFlag?: (uid: string, flag: "confidencial" | "publicar", value: boolean) => void;
   onDelete?: (uid: string) => void;
   onAdd?: () => void;
+  /** Active le drag & drop : reçoit l'ordre des UID après déplacement. */
+  onReorder?: (orderedUids: string[]) => void;
   addLabel?: string;
   emptyLabel?: string;
   searchPlaceholder?: string;
@@ -75,6 +77,7 @@ export function EditableTable({
   onToggleFlag,
   onDelete,
   onAdd,
+  onReorder,
   addLabel = "+ Agregar fila",
   emptyLabel = "Sin registros.",
   searchPlaceholder = "Buscar…",
@@ -82,6 +85,13 @@ export function EditableTable({
 }: EditableTableProps) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [dragUid, setDragUid] = useState<string | null>(null);
+  const [overUid, setOverUid] = useState<string | null>(null);
+
+  const hasFilterActive = query.trim() !== "" || Object.values(filterValues).some(Boolean);
+  const reorderable = Boolean(onReorder);
+  // Le drag n'a de sens que sur la liste complète et stable (sinon réordonnancement ambigu).
+  const canReorder = reorderable && !hasFilterActive;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -99,8 +109,27 @@ export function EditableTable({
     });
   }, [rows, columns, query, filters, filterValues]);
 
+  function handleDrop(targetUid: string) {
+    const from = dragUid;
+    setDragUid(null);
+    setOverUid(null);
+    if (!from || from === targetUid) return;
+    const order = rows.map((r) => r.uid);
+    const fromIdx = order.indexOf(from);
+    const toIdx = order.indexOf(targetUid);
+    if (fromIdx < 0 || toIdx < 0) return;
+    order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, from);
+    onReorder?.(order);
+  }
+
   const colCount =
-    (showConfidencial ? 1 : 0) + columns.length + (showPublicar ? 1 : 0) + 1 + (onDelete ? 1 : 0);
+    (reorderable ? 1 : 0) +
+    (showConfidencial ? 1 : 0) +
+    columns.length +
+    (showPublicar ? 1 : 0) +
+    1 +
+    (onDelete ? 1 : 0);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
@@ -130,6 +159,11 @@ export function EditableTable({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--app-bg)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              {reorderable && (
+                <th scope="col" className="w-px px-1 py-2" title="Arrastrar para reordenar">
+                  <span className="sr-only">Orden</span>
+                </th>
+              )}
               {showConfidencial && (
                 <th scope="col" className="w-px whitespace-nowrap px-3 py-2" title="Confidencial — controla el acceso (oculto para Consultor)">
                   Conf.
@@ -170,7 +204,44 @@ export function EditableTable({
               </tr>
             ) : (
               filtered.map((row) => (
-                <tr key={row.uid} className="border-b border-[var(--border)] last:border-b-0">
+                <tr
+                  key={row.uid}
+                  onDragOver={
+                    canReorder
+                      ? (e) => {
+                          if (!dragUid) return;
+                          e.preventDefault();
+                          if (overUid !== row.uid) setOverUid(row.uid);
+                        }
+                      : undefined
+                  }
+                  onDrop={canReorder ? () => handleDrop(row.uid) : undefined}
+                  className={cn(
+                    "border-b border-[var(--border)] last:border-b-0",
+                    dragUid === row.uid && "opacity-40",
+                    canReorder && overUid === row.uid && dragUid !== row.uid && "border-t-2 border-t-[var(--focus)]",
+                  )}
+                >
+                  {reorderable && (
+                    <td className="px-1 py-1.5 align-middle">
+                      <span
+                        draggable={canReorder}
+                        onDragStart={canReorder ? () => setDragUid(row.uid) : undefined}
+                        onDragEnd={() => {
+                          setDragUid(null);
+                          setOverUid(null);
+                        }}
+                        aria-label={`Reordenar ${row.uid}`}
+                        title={canReorder ? "Arrastrar para reordenar" : "Quitar el filtro/búsqueda para reordenar"}
+                        className={cn(
+                          "flex h-7 w-6 items-center justify-center text-[var(--text-muted)]",
+                          canReorder ? "cursor-grab active:cursor-grabbing hover:text-[var(--text)]" : "cursor-not-allowed opacity-40",
+                        )}
+                      >
+                        <DragHandleIcon className="h-4 w-4" />
+                      </span>
+                    </td>
+                  )}
                   {showConfidencial && (
                     <td className="px-3 py-1.5 align-middle">
                       <input
@@ -593,6 +664,21 @@ function EditableCell({
         <span className="text-[var(--text-muted)]">{column.placeholder ?? "—"}</span>
       )}
     </button>
+  );
+}
+
+// --- Poignée de drag (deux colonnes de points) --------------------------------
+
+function DragHandleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <circle cx="9" cy="6" r="1.5" />
+      <circle cx="15" cy="6" r="1.5" />
+      <circle cx="9" cy="12" r="1.5" />
+      <circle cx="15" cy="12" r="1.5" />
+      <circle cx="9" cy="18" r="1.5" />
+      <circle cx="15" cy="18" r="1.5" />
+    </svg>
   );
 }
 

@@ -16,6 +16,7 @@ export interface TableConfig {
   select: string; // colonnes PostgREST
   defaults: Record<string, unknown>; // valeurs des nouvelles lignes
   todayField?: string; // champ date à initialiser à aujourd'hui à l'insertion
+  orderField?: string; // colonne d'ordre réécrite par le drag & drop (ex. "orden")
   orderBy: { col: string; ascending?: boolean; nullsFirst?: boolean }[];
 }
 
@@ -119,6 +120,28 @@ export const TABLES: Record<string, TableConfig> = {
     defaults: { subseccion: "EE", entidades: [], participantes: [], confidencial: false, publicar: false },
     orderBy: [
       { col: "subseccion", ascending: true },
+      { col: "uid", ascending: true },
+    ],
+  },
+
+  // Gestion de sous-projet (style Airtable). UID per-subproyecto (GEST-<code>-NNNN) :
+  // généré par l'action dédiée addGestionLinea, pas par addRow générique.
+  // `fecha` est une date NULLABLE (≠ eventos) → hors dateFields : vide ⇒ NULL.
+  gestion: {
+    table: "peebcoolsf_gestion_lineas",
+    uidPrefix: "GEST-",
+    uidPad: 4,
+    textFields: ["titulo", "tipo_linea", "componente", "url", "estado", "fecha", "fase"],
+    notNull: ["titulo"],
+    dateFields: [],
+    flagFields: ["confidencial", "publicar"],
+    arrayFields: [],
+    select:
+      "uid, subproyecto_uid, titulo, orden, tipo_linea, componente, url, estado, fecha, fase, confidencial, publicar",
+    defaults: { titulo: "", confidencial: false, publicar: false, orden: 0 },
+    orderField: "orden",
+    orderBy: [
+      { col: "orden", ascending: true },
       { col: "uid", ascending: true },
     ],
   },
