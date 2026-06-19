@@ -9,6 +9,7 @@ import {
   type AdminColumn,
   type AdminRow,
   type SelectOption,
+  type FilterDef,
 } from "./editable-table";
 import { addRow, updateField, setFlag, setArrayField, deleteRow } from "@/app/admin/actions";
 
@@ -144,6 +145,14 @@ export function AdminTabs({
     { key: "participantes", label: "Participantes", type: "multiselect", options: participanteOptions, placeholder: "—" },
   ];
 
+  const equipoFilters: FilterDef[] = [
+    { key: "entidad_uid", label: "Entidad", options: entidadOptions, allLabel: "Todas" },
+    { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
+  ];
+  const eventosFilters: FilterDef[] = [
+    { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
+  ];
+
   return (
     <div>
       <div
@@ -215,6 +224,7 @@ export function AdminTabs({
               columns={eventosColumns}
               rows={eventosT.rows}
               {...eventosT.handlers}
+              filters={eventosFilters}
               addLabel="+ Agregar evento"
               emptyLabel="Sin eventos."
             />
@@ -232,6 +242,7 @@ export function AdminTabs({
                 columns={equipoColumns}
                 rows={equipoT.rows}
                 {...equipoT.handlers}
+                filters={equipoFilters}
                 addLabel="+ Agregar persona"
                 emptyLabel="Sin personas."
               />

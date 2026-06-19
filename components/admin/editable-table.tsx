@@ -25,6 +25,14 @@ export interface SelectOption {
   onColor?: string; // couleur du texte sur `color`
 }
 
+// Filtre structuré (client) sur la valeur d'une colonne (ex. entidad, componente).
+export interface FilterDef {
+  key: string;
+  label: string;
+  options: SelectOption[];
+  allLabel?: string; // libellé « tout » (défaut « Todos »)
+}
+
 export interface AdminColumn {
   key: string;
   label: string;
@@ -52,6 +60,7 @@ interface EditableTableProps {
   addLabel?: string;
   emptyLabel?: string;
   searchPlaceholder?: string;
+  filters?: FilterDef[];
 }
 
 export function EditableTable({
@@ -67,28 +76,36 @@ export function EditableTable({
   addLabel = "+ Agregar fila",
   emptyLabel = "Sin registros.",
   searchPlaceholder = "Buscar…",
+  filters,
 }: EditableTableProps) {
   const [query, setQuery] = useState("");
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return rows;
     return rows.filter((row) => {
+      // Filtres structurés (entidad, componente…) — combinés en ET
+      for (const f of filters ?? []) {
+        const sel = filterValues[f.key];
+        if (sel && String(row[f.key] ?? "") !== sel) return false;
+      }
+      // Recherche texte
+      if (!q) return true;
       if (row.uid.toLowerCase().includes(q)) return true;
       return columns.some((c) => {
         const v = row[c.key];
         return typeof v === "string" && v.toLowerCase().includes(q);
       });
     });
-  }, [rows, columns, query]);
+  }, [rows, columns, query, filters, filterValues]);
 
   const colCount =
     (showConfidencial ? 1 : 0) + columns.length + (showPublicar ? 1 : 0) + 1 + (onDelete ? 1 : 0);
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-      <div className="border-b border-[var(--border)] p-2">
-        <div className="relative max-w-xs">
+      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-2">
+        <div className="relative w-full min-w-[12rem] max-w-xs sm:flex-1">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
             type="search"
@@ -99,6 +116,14 @@ export function EditableTable({
             className="w-full rounded-md border border-[var(--border)] bg-[var(--app-bg)] py-1.5 pl-8 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
           />
         </div>
+        {filters?.map((f) => (
+          <FilterDropdown
+            key={f.key}
+            def={f}
+            value={filterValues[f.key] ?? ""}
+            onChange={(v) => setFilterValues((prev) => ({ ...prev, [f.key]: v }))}
+          />
+        ))}
       </div>
 
       <div className="overflow-x-auto">
@@ -140,7 +165,7 @@ export function EditableTable({
             ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={colCount} className="px-3 py-10 text-center text-[var(--text-muted)]">
-                  Sin resultados para « {query} ».
+                  {query ? `Sin resultados para « ${query} ».` : "Sin resultados con los filtros aplicados."}
                 </td>
               </tr>
             ) : (
@@ -240,6 +265,88 @@ function Badge({ option }: { option: SelectOption }) {
     );
   }
   return <span className="text-sm text-[var(--text)]">{option.label}</span>;
+}
+
+// --- Filtre déroulant (par entidad, componente…) ------------------------------
+
+function FilterDropdown({
+  def,
+  value,
+  onChange,
+}: {
+  def: FilterDef;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = def.options.find((o) => o.value === value);
+  const allLabel = def.allLabel ?? "Todos";
+  const pick = (v: string) => {
+    onChange(v);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition-colors",
+          value ? "border-[var(--focus)]" : "border-[var(--border)] hover:bg-[var(--app-bg)]",
+        )}
+      >
+        <span className="text-[var(--text-muted)]">{def.label}:</span>
+        {current ? <Badge option={current} /> : <span className="text-[var(--text)]">{allLabel}</span>}
+      </button>
+
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-hidden="true"
+            tabIndex={-1}
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-10 cursor-default"
+          />
+          <div
+            role="listbox"
+            className="absolute right-0 z-20 mt-1 max-h-72 w-56 overflow-auto rounded-md border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+          >
+            <button
+              type="button"
+              role="option"
+              aria-selected={value === ""}
+              onClick={() => pick("")}
+              className={cn(
+                "flex w-full items-center rounded px-2 py-1.5 text-left text-sm text-[var(--text)] hover:bg-[var(--app-bg)]",
+                value === "" && "bg-[var(--app-bg)]",
+              )}
+            >
+              {allLabel}
+            </button>
+            {def.options.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                onClick={() => pick(o.value)}
+                className={cn(
+                  "flex w-full items-center rounded px-2 py-1.5 text-left hover:bg-[var(--app-bg)]",
+                  o.value === value && "bg-[var(--app-bg)]",
+                )}
+              >
+                <Badge option={o} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 // --- Interrupteur « Publicar » -------------------------------------------------
