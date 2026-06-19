@@ -16,7 +16,7 @@ Application web (PWA) de suivi de projet qui permet de :
 - Localiser les sous-projets sur une carte avec les données énergétiques clés (**Mapa**).
 - Gérer l'équipe, le calendrier, les formations et la documentation.
 
-**Utilisateurs :** ~40 personnes. Deux rôles : **admin** (accès total + page Admin + gestion des rôles) et **usuario** (lecture seule du dashboard, de la carte et du calendrier).
+**Utilisateurs :** ~40 personnes. **Trois rôles** : **Admin** (accès total + page Admin + gestion des rôles), **Gestión** (lecture complète, y compris les éléments confidentiels ; périmètre d'édition à préciser) et **Consultor** (lecture, **sans accès aux éléments marqués confidentiels**). Voir §3.4 (sécurité) et §4.4 (confidentialité par ligne).
 
 **Contraintes techniques :**
 - Déploiement **Vercel** + base de données **Supabase** (les deux en free-tier → optimiser l'egress).
@@ -35,7 +35,7 @@ Application web (PWA) de suivi de projet qui permet de :
   - En bas à droite : logo **« A »** en transparence (filigrane).
   - Pied : nom de l'utilisateur + rôle + bouton de déconnexion.
 - **Fond** de l'application : gris clair.
-- **Header** supérieur : ligne avec les logos **AFD** et **Province de Santa Fe** (placeholders), et à droite les filtres par composante (GP, EE, AyS, G).
+- **Header** supérieur : ligne avec les logos **AFD** et **Province de Santa Fe** (placeholders), et à droite les **4 boutons de filtre par composante (GP, EE, AyS, G)**. Ces boutons sont **fixes et persistants** (présents en permanence dans le header, quelle que soit la page) et permettent de **filtrer la vue par composante à tout moment**. Les modalités précises de filtrage (effet sur chaque page, combinaison de filtres, état actif) seront définies ultérieurement.
 
 ### 2.2 Dossier des logos (placeholders)
 Créer dans le repo : `public/logos/` avec les fichiers attendus :
@@ -67,6 +67,8 @@ Tant que les fichiers n'existent pas, afficher des **placeholders** avec le nom 
 ---
 
 ## 3. Modèle de données
+
+> **Convention de nommage des tables (protocole entreprise) :** toutes les tables sont créées dans le projet Supabase **External** (apps clients/partenaires) et **préfixées** du nom de l'app : **`peebcoolsf_`** (ex. `peebcoolsf_subproyectos`). Les noms de tables ci-dessous sont donnés sans préfixe pour la lisibilité ; le préfixe `peebcoolsf_` est ajouté à la création. Voir §9 pour le protocole de déploiement Supabase.
 
 > Principe : schéma **relationnel typé** pour tout ce qui est consulté/filtré (sous-projets, métriques, événements, équipe), et tables **« ligne flexible » type Airtable** uniquement là où c'est nécessaire (gestion de sous-projet, formations, documentation GP). Chaque ligne visible par l'utilisateur possède un **UID lisible et stable** (clé métier) en plus de l'UUID technique, afin de pouvoir le référencer dans les prompts ultérieurs.
 
@@ -128,12 +130,16 @@ Tant que les fichiers n'existent pas, afficher des **placeholders** avec le nom 
 - Bouton **+** pour ajouter des lignes.
 
 ### 3.4 Sécurité (RLS dès le départ)
-- Activer le **Row Level Security** sur toutes les tables dès le jour 1.
-- Lecture : tous les utilisateurs authentifiés.
-- Écriture : rôle `admin` uniquement.
-- Table `perfiles` (`user_id`, `rol` ∈ {admin, usuario}).
-- **En développement :** bypass d'auth avec un utilisateur mock admin (flag d'environnement), pour ne pas bloquer l'avancement. L'auth réelle (Supabase Auth) est branchée à la fin.
+- Activer le **Row Level Security** sur toutes les tables (préfixées `peebcoolsf_`) dès le jour 1.
+- **Trois rôles** dans `perfiles` (`user_id`, `rol` ∈ {`admin`, `gestion`, `consultor`}) :
+  - **Admin** : lecture + écriture sur tout ; accès page Admin et gestion des rôles.
+  - **Gestión** : lecture de tout (y compris confidentiel) ; écriture selon périmètre à préciser (par défaut, pas d'écriture tant que non défini).
+  - **Consultor** : lecture seule, **excluant les lignes marquées confidentielles**.
+- **Confidentialité par ligne :** les tables documentaires (voir liste §4.4) portent un champ `confidencial` (booléen, défaut `false`). Une ligne `confidencial = true` n'est **pas lisible par un Consultor** (filtrée par RLS). Admin et Gestión voient tout.
+- **Écriture** : rôle `admin` (et `gestion` si/quand son périmètre d'édition est défini).
+- **En développement :** bypass d'auth avec un utilisateur mock admin (flag d'environnement), pour ne pas bloquer l'avancement. L'auth réelle (Supabase Auth) est branchée à la fin (Étape 6).
 - Données personnelles (Equipo) : écriture admin uniquement ; `sexo` optionnel.
+- **Déploiement Supabase :** voir §9. Le schéma étant **déjà déployé** avec 2 rôles + RLS lecture/écriture, le passage à 3 rôles + confidentialité se fait par **migration incrémentale** (voir §10).
 
 ---
 
@@ -158,7 +164,7 @@ Permet un suivi **global ou par sous-projet**, dans les deux cas **filtrable par
 ### 4.3 Calendario
 - Agenda type Google Calendar : créer des événements avec date, horaire, participants, thématique (dropdown = composantes), nom, modalité présentiel/virtuel + URL de connexion. Les événements alimentent l'Agenda du dashboard.
 
-### 4.4 Admin (admins uniquement) — base de données vivante
+### 4.4 Admin (Admin uniquement) — base de données vivante
 Onglets :
 1. **Gestion de proyecto** → sous-sections **Documentation de projet** et **Gestion financière**.
 2. **Calendario** (gestion des événements).
@@ -167,6 +173,13 @@ Onglets :
 5. **Gestion de subproyectos** (voir §4.5).
 
 Chaque ligne éditable expose son **UID** (visible/copiable) pour référencement dans les prompts.
+
+**Confidentialité par ligne.** Sur les tables documentaires/informationnelles, chaque ligne commence par une **checkbox rouge** « Confidencial » (champ `confidencial`, défaut `false`). Cochée, la ligne devient invisible pour les **Consultor** (filtrée par RLS) ; Admin et Gestión la voient toujours. Tables concernées :
+- `documentacion_gp` (Documentation de projet)
+- `gestion_financiera`
+- `capacitaciones_documentos` et `capacitaciones_eventos`
+- `gestion_lineas` (lignes de gestion des sous-projets)
+- *(à étendre si d'autres tables portent des documents ; pas les tables de métriques/référence)*
 
 ### 4.5 Gestion de subproyectos (dans Admin)
 Regroupement :
@@ -180,8 +193,8 @@ Par sous-projet, sous-sections :
 - **Datos de proyecto** (métriques scénario `proyecto` ; sans bénéficiaires).
 - **Gestión del subproyecto** (table flexible, voir `gestion_lineas`).
 
-### 4.6 Gestion des rôles (admins uniquement)
-- Lister les utilisateurs, assigner le rôle admin/usuario.
+### 4.6 Gestion des rôles (Admin uniquement)
+- Lister les utilisateurs, assigner l'un des trois rôles : **Admin** / **Gestión** / **Consultor**.
 
 ---
 
@@ -253,3 +266,37 @@ Par sous-projet, sous-sections :
 - Structure de la **Gestion financière** → à définir.
 - Coordonnées de l'école 407 (Pocho Lepratti) approximatives (déduites de l'adresse) à affiner ; coordonnées des aéroports/hôpitaux par web.
 - Aucune fonction non demandée n'est incluse. Toute extension est validée au préalable.
+
+---
+
+## 9. Protocole de déploiement Supabase (entreprise)
+
+> Règle organisationnelle. Le plan gratuit Supabase est limité à 2 projets ; l'entreprise en maintient deux :
+> - **INTERNAL** — applications internes (ChantierAI, outils métier).
+> - **External** — applications destinées aux clients ou partenaires. Les tables y sont **préfixées du nom de l'application** pour les identifier facilement.
+
+- **Projet cible :** cette application est destinée à la Province de Santa Fe et à ses partenaires → projet **External**.
+- **Préfixe des tables :** **`peebcoolsf_`** (l'entreprise a d'autres projets « peeb », d'où un préfixe spécifique à celui-ci). Ex. `peebcoolsf_subproyectos`, `peebcoolsf_metricas`, `peebcoolsf_perfiles`, …
+- **Outil :** le **connecteur MCP Supabase** (pas la CLI `supabase link` / migrations). Lire au préalable les skills `supabase` et `supabase-postgres-best-practices`.
+- **Création / itération :** utiliser **`execute_sql`** pendant toute la phase de développement. **Ne jamais utiliser `apply_migration`** pour itérer (cela écrit dans l'historique à chaque appel).
+- **Confirmation :** lister les projets (`list_projects`) et confirmer le projet **External** avant toute écriture ; proposer le schéma complet (noms, colonnes, relations, index) avant exécution.
+- **Sécurité :** activer le **RLS** et créer les **policies** pour **chaque** table dès la création (lecture pour authentifiés, écriture pour le rôle `admin` uniquement).
+- **Import de données :** si le connecteur propose d'importer les données de la base locale, c'est accepté ; suivre les instructions de connexion le cas échéant (pas de copier-coller manuel de SQL en principe).
+
+---
+
+## 10. Évolution rôles + confidentialité (migration incrémentale sur schéma déployé)
+
+> Le schéma `peebcoolsf_` est **déjà déployé** (Étape 1) avec 2 rôles ({admin, usuario}) et un RLS « lecture authentifiés / écriture admin ». Le passage à **3 rôles** + **confidentialité par ligne** se fait par migration incrémentale, sans recréer les tables ni re-seeder, via `execute_sql` (idempotent autant que possible).
+
+**Changements à appliquer :**
+1. **Rôles** : faire évoluer la contrainte de `peebcoolsf_perfiles.rol` de `{admin, usuario}` vers `{admin, gestion, consultor}`. Définir la stratégie pour d'éventuelles lignes `usuario` existantes (aucune en base à ce stade — `perfiles` est vide). Mettre à jour la fonction `is_admin()` si besoin et **ajouter une fonction `current_rol()`** (ou équivalent) en schéma privé `peebcoolsf_private` pour exposer le rôle courant aux policies.
+2. **Champ `confidencial`** : ajouter `confidencial boolean not null default false` sur les tables documentaires listées en §4.4 (`documentacion_gp`, `gestion_financiera`, `capacitaciones_documentos`, `capacitaciones_eventos`, `gestion_lineas`).
+3. **Policies RLS** : sur ces tables, la policy de lecture doit autoriser :
+   - `admin` et `gestion` → toutes les lignes ;
+   - `consultor` → uniquement les lignes où `confidencial = false`.
+   Les autres tables (métriques, sous-projets, référentiels, équipe, événements) restent en lecture pour tous les rôles authentifiés, sauf décision contraire ultérieure.
+4. **Écriture** : conserver `admin` ; le périmètre d'écriture de `gestion` est **à définir** (par défaut : pas d'écriture).
+5. **Index** : ajouter un index sur `confidencial` uniquement si nécessaire (faible cardinalité → probablement inutile ; à évaluer).
+
+**Procédure :** proposer le diff SQL complet (ALTER + nouvelles policies) **avant exécution**, l'appliquer via `execute_sql` par lots idempotents, puis fournir un **rapport `.md`** (état des rôles, champ `confidencial` présent par table, matrice rôle × table × lecture/écriture) pour validation. Mettre à jour les fichiers SQL locaux du repo en conséquence.
