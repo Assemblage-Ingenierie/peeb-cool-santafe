@@ -60,7 +60,7 @@ supabase/seed.sql                     — données §5 (idempotent : on conflict
 
 **Application** : copier-coller chaque fichier dans l'éditeur SQL de la console Supabase (ou via `execute_sql` du connecteur MCP), dans l'ordre `001 → 002 → seed`.
 
-Voir [`supabase/SCHEMA_peebcoolsf.md`](supabase/SCHEMA_peebcoolsf.md) pour le schéma documenté complet.
+Voir [`docs/rapports/SCHEMA_peebcoolsf.md`](docs/rapports/SCHEMA_peebcoolsf.md) pour le schéma documenté complet. Tous les rapports et clôtures d'étape sont regroupés dans [`docs/rapports/`](docs/rapports/).
 
 ### Seed
 
