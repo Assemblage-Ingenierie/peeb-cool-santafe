@@ -67,6 +67,7 @@ interface EditableTableProps {
   searchPlaceholder?: string;
   filters?: FilterDef[];
   hideUid?: boolean; // masque la colonne UID (ex. liste de fases fixe)
+  hideSearch?: boolean; // masque le champ de recherche (ex. liste fixe et courte)
 }
 
 export function EditableTable({
@@ -85,6 +86,7 @@ export function EditableTable({
   searchPlaceholder = "Buscar…",
   filters,
   hideUid = false,
+  hideSearch = false,
 }: EditableTableProps) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
@@ -136,27 +138,31 @@ export function EditableTable({
 
   return (
     <div className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-2">
-        <div className="relative w-full min-w-[12rem] max-w-xs sm:flex-1">
-          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            aria-label="Buscar en la tabla"
-            className="w-full rounded-md border border-[var(--border)] bg-[var(--app-bg)] py-1.5 pl-8 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
-          />
+      {(!hideSearch || (filters?.length ?? 0) > 0) && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-[var(--border)] p-2">
+          {!hideSearch && (
+            <div className="relative w-full min-w-[12rem] max-w-xs sm:flex-1">
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={searchPlaceholder}
+                aria-label="Buscar en la tabla"
+                className="w-full rounded-md border border-[var(--border)] bg-[var(--app-bg)] py-1.5 pl-8 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
+              />
+            </div>
+          )}
+          {filters?.map((f) => (
+            <FilterDropdown
+              key={f.key}
+              def={f}
+              value={filterValues[f.key] ?? ""}
+              onChange={(v) => setFilterValues((prev) => ({ ...prev, [f.key]: v }))}
+            />
+          ))}
         </div>
-        {filters?.map((f) => (
-          <FilterDropdown
-            key={f.key}
-            def={f}
-            value={filterValues[f.key] ?? ""}
-            onChange={(v) => setFilterValues((prev) => ({ ...prev, [f.key]: v }))}
-          />
-        ))}
-      </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">

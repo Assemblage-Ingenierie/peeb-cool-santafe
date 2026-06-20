@@ -439,6 +439,7 @@ export function SubproyectosPanel({
                 rows={gestionFases}
                 onCellCommit={gestionHandlers.onCellCommit}
                 hideUid
+                hideSearch
                 emptyLabel="Sin fases."
               />
             </div>
