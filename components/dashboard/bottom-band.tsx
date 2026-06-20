@@ -254,7 +254,7 @@ function DocumentosBlock({ docs }: { docs: SnapshotDocumento[] }) {
 function colorFase(estado: string | null): { bg: string; fg: string } {
   const e = ESTADOS.find((x) => x.code === estado);
   if (e?.color) return { bg: e.color, fg: e.onColor ?? UI.text };
-  return { bg: UI.sidebarBg, fg: UI.sidebarText };
+  return { bg: UI.surface, fg: UI.text }; // non démarrée = blanc (visible grâce à la bordure)
 }
 
 /** Fases dans l'ordre chronologique (FASES), empilées verticalement. */
@@ -272,7 +272,7 @@ function ProgresoBlock({ fases }: { fases: SnapshotFase[] }) {
         return (
           <li
             key={f.code}
-            className="rounded px-3 py-1.5 text-xs font-medium"
+            className="rounded border border-[var(--border)] px-3 py-1.5 text-xs font-medium"
             style={{ backgroundColor: c.bg, color: c.fg }}
           >
             {f.nombre}

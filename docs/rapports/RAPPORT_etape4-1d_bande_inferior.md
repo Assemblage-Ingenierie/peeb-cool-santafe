@@ -15,13 +15,13 @@ La bande du bas devient active en mode **Subproyectos** ; elle reste en placehol
 - **`datos-card.tsx`** *(réutilisable — resservira pour la card de la page Mapa 4.2)* : consommation avant/après (**kWh et kWh/m²**), **réduction (kWh et %)**, le **% resalté** (gros, accent rouge). Toggle **Factibilidad/Proyecto**.
 - **`use-escenario.ts`** : état du toggle. `canToggle` = fase « Proyecto ejecutivo » démarrée (`en_proceso` OU `terminado`) ; défaut = `proyecto` si activable **et** données présentes, sinon `faisabilidad` ; réinitialisé au changement de sélection.
 - **`bottom-band.tsx`** :
-  - **bâtiment sélectionné** → Datos (sa fiche), Documentos (liens **groupés par composante**, cliquables si URL), Progreso (**fases en vertical**, colorées : `terminado`=vert clair, `en_proceso`=jaune, non démarrée=**foncé**) ;
+  - **bâtiment sélectionné** → Datos (sa fiche), Documentos (liens **groupés par composante**, cliquables si URL), Progreso (**fases en vertical**, colorées : `terminado`=vert clair, `en_proceso`=jaune, non démarrée=**blanc bordé**) ;
   - **groupe** (Todos / Aeropuertos / Hospitales / Escuelas) → Datos = **totaux du groupe** (somme kWh ; kWh/m² = Σ kWh ÷ Σ m²) ; Documentos + Progreso **désactivés** (titre seul).
 - **`dashboard-client.tsx`** : cliquer un groupe **efface** la sélection d'un bâtiment (et inversement) ; la bande reçoit `mode`/`data`/`tipo`/`selected`.
 
 ### Décisions
 - **Documentos** : affiche **tous** les documents (en dev, mock admin) ; cliquables si un lien existe (aucun pour l'instant en base). Filtrage `publicar`/`confidencial` → **Étape 6** (auth).
-- **Non démarrée** = couleur foncée (token `UI.sidebarBg`). Couleurs estados via `ESTADOS` (constants).
+- **Non démarrée** = **blanc bordé** (token `UI.surface` + bordure). Couleurs estados via `ESTADOS` (constants).
 - Toggle de groupe **désactivé** tant que **tous** les bâtiments du groupe n'ont pas démarré le projet (donc partout sur Factibilidad pour l'instant).
 
 ## Vérification (serveur de dev, contre la base réelle)
