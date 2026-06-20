@@ -1,11 +1,27 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { SnapshotSubproyecto } from "@/lib/snapshot";
 import { TIPOLOGIAS, getTipologia } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 
+// Carte chargée uniquement côté client (Leaflet touche `window`) et seulement
+// quand le panneau est déplié → pas de rendu serveur, pas de souci de dimension.
+const SubproyectosMap = dynamic(
+  () => import("./subproyectos-map").then((m) => m.SubproyectosMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[320px] w-full items-center justify-center rounded-md border border-dashed border-[var(--border)] bg-[var(--app-bg)] text-xs text-[var(--text-muted)]">
+        Cargando mapa…
+      </div>
+    ),
+  },
+);
+
 interface SeguimientoPanelProps {
   subproyectos: SnapshotSubproyecto[];
+  expanded: boolean;
   tipo: string;
   onTipo: (t: string) => void;
   selected: string | null;
@@ -20,11 +36,12 @@ const TIPO_OPCIONES: { key: string; label: string }[] = [
 
 /**
  * Panneau central (déplié quand « Subproyectos ») : sélecteur par typologie +
- * tableau des sous-projets (colonnes de données à définir). La carte de sélection
- * arrive au sous-lot 4.1b. Le clic sur une ligne sélectionne le sous-projet.
+ * tableau des sous-projets (colonnes de données à définir) + carte de sélection.
+ * Le clic (ligne OU point) sélectionne le sous-projet ; l'état est partagé.
  */
 export function SeguimientoPanel({
   subproyectos,
+  expanded,
   tipo,
   onTipo,
   selected,
@@ -117,11 +134,16 @@ export function SeguimientoPanel({
         <p className="mt-2 text-xs text-[var(--text-muted)]">Columnas de datos por definir.</p>
       </div>
 
-      {/* Carte de sélection — sous-lot 4.1b */}
+      {/* Carte de sélection (montée seulement quand le panneau est déplié) */}
       <div className="shrink-0 lg:w-[320px]">
-        <div className="flex h-full min-h-[260px] items-center justify-center rounded-md border border-dashed border-[var(--border)] bg-[var(--app-bg)] p-4 text-center text-xs text-[var(--text-muted)]">
-          Mapa de selección (próximo sub-lote 4.1b)
-        </div>
+        {expanded ? (
+          <SubproyectosMap subproyectos={lista} selected={selected} onSelect={onSelect} />
+        ) : (
+          <div
+            className="h-[320px] w-full rounded-md border border-dashed border-[var(--border)] bg-[var(--app-bg)]"
+            aria-hidden="true"
+          />
+        )}
       </div>
     </div>
   );

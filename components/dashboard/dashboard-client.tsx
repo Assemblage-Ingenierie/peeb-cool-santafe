@@ -81,6 +81,7 @@ export function DashboardClient() {
             ) : (
               <SeguimientoPanel
                 subproyectos={snap.status === "ready" ? snap.data.subproyectos : []}
+                expanded={expanded}
                 tipo={tipo}
                 onTipo={setTipo}
                 selected={selected}
