@@ -85,11 +85,14 @@ export function DatosCard({
         </div>
       </dl>
 
-      {/* Réduction — le % est mis en valeur (resalté) */}
-      <div className="rounded-md bg-[var(--app-bg)] p-3">
-        <p className="text-xs text-[var(--text-muted)]">Reducción</p>
-        <p className="text-2xl font-bold leading-tight text-[var(--accent)]">{fmtPct(redPct)}</p>
-        <p className="text-xs text-[var(--text-muted)]">{fmtNumero(redKwh)} kWh</p>
+      {/* Réduction — le % est mis en valeur (resalté). <div> (pas <p>) : Leaflet
+          ajoute des marges aux <p> dans les popups → card trop espacée. */}
+      <div className="rounded-md bg-[var(--app-bg)] px-3 py-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs text-[var(--text-muted)]">Reducción</span>
+          <span className="text-xs text-[var(--text-muted)]">{fmtNumero(redKwh)} kWh</span>
+        </div>
+        <div className="text-2xl font-bold leading-tight text-[var(--accent)]">{fmtPct(redPct)}</div>
       </div>
     </div>
   );
