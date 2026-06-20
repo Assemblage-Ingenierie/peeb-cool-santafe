@@ -15,6 +15,13 @@ interface SubproyectosMapProps {
   subproyectos: SnapshotSubproyecto[]; // déjà filtrés par typologie
   selected: string | null;
   onSelect: (uid: string) => void;
+  /**
+   * Comportement de la molette :
+   * - "ctrl" (défaut) : zoom seulement avec Ctrl enfoncé (la molette seule fait
+   *   défiler la page) — adapté à la carte intégrée d'Inicio.
+   * - "always" : zoom libre à la molette — pour la page Mapa (plein écran).
+   */
+  wheelZoom?: "ctrl" | "always";
 }
 
 // Recadre la vue sur les points affichés.
@@ -31,7 +38,36 @@ function FitBounds({ points }: { points: LatLngTuple[] }) {
   return null;
 }
 
-export function SubproyectosMap({ subproyectos, selected, onSelect }: SubproyectosMapProps) {
+// Zoom à la molette uniquement quand Ctrl est enfoncé ; relâché, la molette
+// redonne le défilement de la page (carte intégrée dans une page scrollable).
+function CtrlWheelZoom() {
+  const map = useMap();
+  useEffect(() => {
+    const enable = (e: KeyboardEvent) => {
+      if (e.key === "Control") map.scrollWheelZoom.enable();
+    };
+    const disable = (e: KeyboardEvent) => {
+      if (e.key === "Control") map.scrollWheelZoom.disable();
+    };
+    const off = () => map.scrollWheelZoom.disable();
+    window.addEventListener("keydown", enable);
+    window.addEventListener("keyup", disable);
+    window.addEventListener("blur", off);
+    return () => {
+      window.removeEventListener("keydown", enable);
+      window.removeEventListener("keyup", disable);
+      window.removeEventListener("blur", off);
+    };
+  }, [map]);
+  return null;
+}
+
+export function SubproyectosMap({
+  subproyectos,
+  selected,
+  onSelect,
+  wheelZoom = "ctrl",
+}: SubproyectosMapProps) {
   const puntos = useMemo(
     () => subproyectos.filter((s) => s.lat != null && s.lng != null),
     [subproyectos],
@@ -48,7 +84,7 @@ export function SubproyectosMap({ subproyectos, selected, onSelect }: Subproyect
     <MapContainer
       center={center}
       zoom={7}
-      scrollWheelZoom={false}
+      scrollWheelZoom={wheelZoom === "always"}
       className="h-[320px] w-full rounded-md"
     >
       <TileLayer
@@ -56,6 +92,7 @@ export function SubproyectosMap({ subproyectos, selected, onSelect }: Subproyect
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <FitBounds points={coords} />
+      {wheelZoom === "ctrl" && <CtrlWheelZoom />}
       {puntos.map((s) => {
         const tp = getTipologia(s.tipologia);
         const sel = s.uid === selected;
