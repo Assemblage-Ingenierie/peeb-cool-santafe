@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useSnapshot } from "./use-snapshot";
 import { Agenda } from "./agenda";
 import { SeguimientoPanel } from "./seguimiento-panel";
+import { GlobalTable } from "./global-table";
 import { BottomBand } from "./bottom-band";
 
 type GestionMode = "global" | "subproyectos";
@@ -98,6 +99,15 @@ export function DashboardClient() {
           </div>
         </div>
       </div>
+
+      {/* Mode « Proyecto global » : grand tableau « Resumen » au-dessus des blocs */}
+      {mode === "global" && snap.status === "ready" && (
+        <GlobalTable
+          subproyectos={snap.data.subproyectos}
+          metricas={snap.data.metricas}
+          fases={snap.data.fases}
+        />
+      )}
 
       {/* Bande du bas — Datos / Documentos / Progreso (actifs en mode Subproyectos) */}
       <BottomBand

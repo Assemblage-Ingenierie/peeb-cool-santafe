@@ -30,3 +30,15 @@ export function kwhPorM2(kwh: number | null, m2: number | null): number | null {
   if (kwh == null || m2 == null || m2 === 0) return null;
   return kwh / m2;
 }
+
+/**
+ * Valeur rapportée à la surface (par m²) : value / superficie. null si valeur
+ * manque ou m² = 0. Générique (kWh/m², tCO₂/m², €/m²) — alias lisible de kwhPorM2.
+ */
+export const porM2 = kwhPorM2;
+
+/** Somme de deux valeurs ; null si l'une manque (NULL = donnée manquante, jamais 0). */
+export function suma(a: number | null, b: number | null): number | null {
+  if (a == null || b == null) return null;
+  return a + b;
+}
