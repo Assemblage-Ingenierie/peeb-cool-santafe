@@ -1,27 +1,28 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup, useMap } from "react-leaflet";
 import type { LatLngTuple } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { SnapshotSubproyecto } from "@/lib/snapshot";
 import { getTipologia, UI } from "@/lib/constants";
+import { cn } from "@/lib/cn";
 
-// Carte de SÉLECTION (Dashboard) — tuiles OSM directes (CDC §6), un point par
-// sous-projet coloré selon la typologie (A/H/E). Le clic sélectionne le sous-projet
-// (état partagé avec le tableau). PAS de card de données ici → c'est la page Mapa (4.2).
+// Carte OSM réutilisable (tuiles directes, CDC §6) : un point par sous-projet
+// coloré selon la typologie (A/H/E).
+// - Dashboard (Inicio) : sélection seule (zoom Ctrl) — pas de `renderPopup`.
+// - Page Mapa : zoom libre + `renderPopup` → fiche de données au clic (CDC §4.2).
 
 interface SubproyectosMapProps {
-  subproyectos: SnapshotSubproyecto[]; // déjà filtrés par typologie
+  subproyectos: SnapshotSubproyecto[]; // déjà filtrés
   selected: string | null;
-  onSelect: (uid: string) => void;
-  /**
-   * Comportement de la molette :
-   * - "ctrl" (défaut) : zoom seulement avec Ctrl enfoncé (la molette seule fait
-   *   défiler la page) — adapté à la carte intégrée d'Inicio.
-   * - "always" : zoom libre à la molette — pour la page Mapa (plein écran).
-   */
+  onSelect?: (uid: string) => void;
+  /** "ctrl" (défaut) = zoom seulement avec Ctrl ; "always" = zoom libre (page Mapa). */
   wheelZoom?: "ctrl" | "always";
+  /** Hauteur du conteneur (classe Tailwind). Défaut : encart d'Inicio. */
+  heightClass?: string;
+  /** Si fourni, une popup (card) s'ouvre au clic sur le point. */
+  renderPopup?: (sub: SnapshotSubproyecto) => ReactNode;
 }
 
 // Recadre la vue sur les points affichés.
@@ -67,6 +68,8 @@ export function SubproyectosMap({
   selected,
   onSelect,
   wheelZoom = "ctrl",
+  heightClass = "h-[320px]",
+  renderPopup,
 }: SubproyectosMapProps) {
   const puntos = useMemo(
     () => subproyectos.filter((s) => s.lat != null && s.lng != null),
@@ -85,7 +88,7 @@ export function SubproyectosMap({
       center={center}
       zoom={7}
       scrollWheelZoom={wheelZoom === "always"}
-      className="h-[320px] w-full rounded-md"
+      className={cn(heightClass, "w-full rounded-md")}
     >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -109,9 +112,10 @@ export function SubproyectosMap({
               fillColor: color,
               fillOpacity: 1,
             }}
-            eventHandlers={{ click: () => onSelect(s.uid) }}
+            eventHandlers={{ click: () => onSelect?.(s.uid) }}
           >
             <Tooltip>{s.nombre}</Tooltip>
+            {renderPopup && <Popup>{renderPopup(s)}</Popup>}
           </CircleMarker>
         );
       })}

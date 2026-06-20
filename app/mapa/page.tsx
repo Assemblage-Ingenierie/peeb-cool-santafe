@@ -1,10 +1,6 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { MapaClient } from "@/components/mapa/mapa-client";
 
+// Mapa (CDC §4.2) — coquille serveur ; carte interactive + cards dans MapaClient.
 export default function MapaPage() {
-  return (
-    <PagePlaceholder
-      title="Mapa"
-      description="Ubicación de los subproyectos sobre el mapa."
-    />
-  );
+  return <MapaClient />;
 }
