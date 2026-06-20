@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase } from "@/lib/snapshot";
 import { TIPOLOGIAS } from "@/lib/constants";
 import { economiaPct } from "@/lib/calc";
-import { fmtPct } from "@/lib/format";
+import { fmtNumero, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { DatosCard } from "@/components/dashboard/datos-card";
@@ -135,7 +135,15 @@ function MarkerCard({
 
   return (
     <div className="w-56">
-      <h3 className="mb-2 text-sm font-semibold text-[var(--text)]">{sub.nombre}</h3>
+      <h3 className="text-sm font-semibold text-[var(--text)]">{sub.nombre}</h3>
+      {/* Datos del edificio (<div>, pas <p> : Leaflet marge les <p> des popups) */}
+      <div className="mb-2 mt-1 space-y-0.5 text-xs text-[var(--text-muted)]">
+        {sub.direccion && <div>{sub.direccion}</div>}
+        <div>
+          Superficie:{" "}
+          <span className="font-medium text-[var(--text)]">{fmtNumero(sub.superficie_m2)} m²</span>
+        </div>
+      </div>
       <DatosCard
         antes={m?.demanda_kwh ?? null}
         despues={m?.demanda_despues_kwh ?? null}
