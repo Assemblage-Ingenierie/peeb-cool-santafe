@@ -75,6 +75,7 @@ export const FASES: EnumOption[] = [
   { code: "anteproyecto", nombre: "Anteproyecto" },
   { code: "proyecto_ejecutivo", nombre: "Proyecto ejecutivo" },
   { code: "redaccion_pliegos", nombre: "Redacción de pliegos" },
+  { code: "no_objecion_afd", nombre: "No objeción AFD" },
   { code: "licitacion", nombre: "Licitación" },
   { code: "obra", nombre: "Obra" },
   { code: "general", nombre: "General" },

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { COMPONENTES, TIPOLOGIAS, ESTADOS, FASES, TIPO_LINEA, getTipologia } from "@/lib/constants";
+import { COMPONENTES, TIPOLOGIAS, ESTADOS, getTipologia } from "@/lib/constants";
 import { TrashIcon } from "@/components/icons";
 import { EditableTable, type AdminColumn, type AdminRow, type SelectOption } from "./editable-table";
 import { FieldEditor, type FieldDef } from "./field-editor";
@@ -47,8 +47,6 @@ const ESTADO_OPTIONS: SelectOption[] = ESTADOS.map((e) => ({
   color: e.color,
   onColor: e.onColor,
 }));
-const FASE_OPTIONS: SelectOption[] = FASES.map((f) => ({ value: f.code, label: f.nombre }));
-const TIPO_LINEA_OPTIONS: SelectOption[] = TIPO_LINEA.map((t) => ({ value: t.code, label: t.nombre }));
 
 const EDIFICIO_FIELDS: FieldDef[] = [
   { key: "nombre", label: "Nombre", type: "text", placeholder: "Nombre del edificio" },
@@ -78,20 +76,21 @@ const BENEF_FIELDS: FieldDef[] = [
   { key: "benef_indirectos_pct_muj", label: "Indirectos · % mujeres", type: "number" },
 ];
 
-const gestionColumns: AdminColumn[] = [
+// Documentos : tableau libre (style Airtable). Plus de colonnes Tipo/Fase ; url toujours active.
+const documentosColumns: AdminColumn[] = [
   { key: "titulo", label: "Título", type: "text", placeholder: "Título" },
-  { key: "tipo_linea", label: "Tipo", type: "select", options: TIPO_LINEA_OPTIONS, placeholder: "—" },
   { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
-  {
-    key: "url",
-    label: "Enlace (URL)",
-    type: "url",
-    placeholder: "https://…",
-    isDisabled: (row) => row.tipo_linea !== "documento", // url activa solo si Documento
-  },
+  { key: "url", label: "Enlace (URL)", type: "url", placeholder: "https://…" },
   { key: "estado", label: "Estado", type: "select", options: ESTADO_OPTIONS, placeholder: "—" },
   { key: "fecha", label: "Fecha", type: "date" },
-  { key: "fase", label: "Fase", type: "select", options: FASE_OPTIONS, placeholder: "—" },
+];
+
+// Fases : liste fixe (1 ligne par fase). Nom de fase en lecture seule + estado + 2 dates.
+const fasesColumns: AdminColumn[] = [
+  { key: "titulo", label: "Fase", readOnly: true },
+  { key: "estado", label: "Estado", type: "select", options: ESTADO_OPTIONS, placeholder: "—" },
+  { key: "fecha_inicio", label: "Fecha inicio", type: "date" },
+  { key: "fecha_fin", label: "Fecha fin", type: "date" },
 ];
 
 function emptyMetrica(subUid: string, escenario: Escenario): MetricaRow {
@@ -151,8 +150,15 @@ export function SubproyectosPanel({
   const selected = subs.find((s) => s.uid === selectedUid) ?? null;
   const fais = metricas.find((m) => m.subproyecto_uid === selectedUid && m.escenario === "faisabilidad") ?? null;
   const proy = metricas.find((m) => m.subproyecto_uid === selectedUid && m.escenario === "proyecto") ?? null;
-  const gestionRows = useMemo(
-    () => gestion.filter((g) => g.subproyecto_uid === selectedUid),
+  const gestionDocs = useMemo(
+    () => gestion.filter((g) => g.subproyecto_uid === selectedUid && g.tipo_linea !== "etapa"),
+    [gestion, selectedUid],
+  );
+  const gestionFases = useMemo(
+    () =>
+      gestion
+        .filter((g) => g.subproyecto_uid === selectedUid && g.tipo_linea === "etapa")
+        .sort((a, b) => Number(a.orden ?? 0) - Number(b.orden ?? 0)),
     [gestion, selectedUid],
   );
 
@@ -202,9 +208,13 @@ export function SubproyectosPanel({
     onReorder: (orderedUids: string[]) => {
       if (!selectedUid) return;
       setGestion((prev) => {
-        const others = prev.filter((g) => g.subproyecto_uid !== selectedUid);
+        // On ne réordonne que les DOCUMENTS du sous-projet courant ; on préserve tout le reste
+        // (autres sous-projets + les lignes de fase du sous-projet courant).
+        const others = prev.filter((g) => g.subproyecto_uid !== selectedUid || g.tipo_linea === "etapa");
         const byUid = new Map(
-          prev.filter((g) => g.subproyecto_uid === selectedUid).map((r) => [r.uid, r] as const),
+          prev
+            .filter((g) => g.subproyecto_uid === selectedUid && g.tipo_linea !== "etapa")
+            .map((r) => [r.uid, r] as const),
         );
         const reordered: AdminRow[] = [];
         orderedUids.forEach((uid, i) => {
@@ -221,9 +231,10 @@ export function SubproyectosPanel({
   const submitSchool = () => {
     startTransition(async () => {
       try {
-        const sub = await addSchool(newName);
+        const { sub, fases } = await addSchool(newName);
         setSubs((rs) => [...rs, sub]);
         setMetricas((rs) => [...rs, emptyMetrica(sub.uid, "faisabilidad"), emptyMetrica(sub.uid, "proyecto")]);
+        setGestion((rs) => [...rs, ...(fases as AdminRow[])]);
         setSelectedUid(sub.uid);
         setAdding(false);
         setNewName("");
@@ -403,21 +414,34 @@ export function SubproyectosPanel({
             />
           </section>
 
-          {/* Section 4 */}
-          <section>
-            <h3 className="mb-1 text-base font-semibold text-[var(--text)]">Gestión del subproyecto</h3>
-            <p className="mb-3 text-sm text-[var(--text-muted)]">
-              Arrastrá las filas para reordenar. El enlace solo está activo cuando el tipo es «&nbsp;Documento&nbsp;».
-            </p>
-            <EditableTable
-              columns={gestionColumns}
-              rows={gestionRows}
-              showConfidencial
-              showPublicar
-              {...gestionHandlers}
-              addLabel="+ Agregar línea"
-              emptyLabel="Sin líneas de gestión."
-            />
+          {/* Section 4 : Gestión del subproyecto → Documentos + Fases */}
+          <section className="space-y-8">
+            <h3 className="text-base font-semibold text-[var(--text)]">Gestión del subproyecto</h3>
+
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-[var(--text)]">Documentos</h4>
+              <EditableTable
+                columns={documentosColumns}
+                rows={gestionDocs}
+                showConfidencial
+                showPublicar
+                {...gestionHandlers}
+                addLabel="+ Agregar documento"
+                emptyLabel="Sin documentos."
+              />
+            </div>
+
+            <div>
+              <h4 className="mb-1 text-sm font-semibold text-[var(--text)]">Fases</h4>
+              <p className="mb-2 text-sm text-[var(--text-muted)]">Estado y fechas (inicio / fin) por fase del proyecto.</p>
+              <EditableTable
+                columns={fasesColumns}
+                rows={gestionFases}
+                onCellCommit={gestionHandlers.onCellCommit}
+                hideUid
+                emptyLabel="Sin fases."
+              />
+            </div>
           </section>
         </div>
       )}

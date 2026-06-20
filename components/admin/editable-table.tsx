@@ -42,6 +42,7 @@ export interface AdminColumn {
   options?: SelectOption[]; // select / multiselect
   required?: boolean; // select : pas d'option « vide »
   isDisabled?: (row: AdminRow) => boolean;
+  readOnly?: boolean; // affiche la valeur sans édition (ex. nom de fase)
 }
 
 export interface AdminRow {
@@ -65,6 +66,7 @@ interface EditableTableProps {
   emptyLabel?: string;
   searchPlaceholder?: string;
   filters?: FilterDef[];
+  hideUid?: boolean; // masque la colonne UID (ex. liste de fases fixe)
 }
 
 export function EditableTable({
@@ -82,6 +84,7 @@ export function EditableTable({
   emptyLabel = "Sin registros.",
   searchPlaceholder = "Buscar…",
   filters,
+  hideUid = false,
 }: EditableTableProps) {
   const [query, setQuery] = useState("");
   const [filterValues, setFilterValues] = useState<Record<string, string>>({});
@@ -128,7 +131,7 @@ export function EditableTable({
     (showConfidencial ? 1 : 0) +
     columns.length +
     (showPublicar ? 1 : 0) +
-    1 +
+    (hideUid ? 0 : 1) +
     (onDelete ? 1 : 0);
 
   return (
@@ -179,9 +182,11 @@ export function EditableTable({
                   Publicar
                 </th>
               )}
-              <th scope="col" className="px-3 py-2">
-                UID
-              </th>
+              {!hideUid && (
+                <th scope="col" className="px-3 py-2">
+                  UID
+                </th>
+              )}
               {onDelete && (
                 <th scope="col" className="w-px px-2 py-2">
                   <span className="sr-only">Acciones</span>
@@ -257,7 +262,13 @@ export function EditableTable({
                   )}
 
                   {columns.map((col) =>
-                    col.type === "multiselect" ? (
+                    col.readOnly ? (
+                      <td key={col.key} className="align-middle">
+                        <span className="block px-3 py-2 text-sm font-medium text-[var(--text)]">
+                          {(row[col.key] as string) || "—"}
+                        </span>
+                      </td>
+                    ) : col.type === "multiselect" ? (
                       <td key={col.key} className="align-middle">
                         <MultiSelectCell row={row} column={col} onCommit={(vals) => onMultiCommit?.(row.uid, col.key, vals)} />
                       </td>
@@ -278,14 +289,16 @@ export function EditableTable({
                     </td>
                   )}
 
-                  <td className="whitespace-nowrap px-3 py-1.5 align-middle">
-                    <span className="inline-flex items-center gap-1">
-                      <code className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">
-                        {row.uid}
-                      </code>
-                      <CopyButton value={row.uid} label={`Copiar UID ${row.uid}`} />
-                    </span>
-                  </td>
+                  {!hideUid && (
+                    <td className="whitespace-nowrap px-3 py-1.5 align-middle">
+                      <span className="inline-flex items-center gap-1">
+                        <code className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">
+                          {row.uid}
+                        </code>
+                        <CopyButton value={row.uid} label={`Copiar UID ${row.uid}`} />
+                      </span>
+                    </td>
+                  )}
 
                   {onDelete && (
                     <td className="px-2 py-1.5 align-middle">

@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { TABLES, type TableConfig } from "@/lib/admin/config";
 import type { Row, SubproyectoRow } from "@/lib/admin/read";
+import { FASES } from "@/lib/constants";
 
 // ============================================================
 // Server Actions génériques (écriture admin, sans cache).
@@ -303,7 +304,7 @@ export async function updateMetrica(
  * UID auto-généré `SUB-ESC-NNN` (incrémental, par max+1).
  * Crée aussi les 2 lignes metricas (faisabilidad + proyecto) vides ; gestion_lineas démarre vide.
  */
-export async function addSchool(nombre: string): Promise<SubproyectoRow> {
+export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; fases: Row[] }> {
   assertAdmin();
   const sb = createServiceClient();
   const nom = (nombre ?? "").trim() || "Nueva escuela";
@@ -335,8 +336,24 @@ export async function addSchool(nombre: string): Promise<SubproyectoRow> {
   ]);
   if (mErr) throw new Error(mErr.message);
 
+  // Lignes de fase (etapa) pré-remplies, une par fase (ordre chronologique de FASES).
+  const subCode = uid.replace(/^SUB-/, "");
+  const faseRows = FASES.map((f, i) => ({
+    uid: `GEST-${subCode}-${f.code}`,
+    subproyecto_uid: uid,
+    titulo: f.nombre,
+    orden: i + 1,
+    tipo_linea: "etapa",
+    fase: f.code,
+  }));
+  const { data: faseData, error: fErr } = await sb
+    .from("peebcoolsf_gestion_lineas")
+    .insert(faseRows)
+    .select(TABLES.gestion.select);
+  if (fErr) throw new Error(fErr.message);
+
   revalidatePath("/admin");
-  return ins as unknown as SubproyectoRow;
+  return { sub: ins as unknown as SubproyectoRow, fases: (faseData ?? []) as unknown as Row[] };
 }
 
 /**
@@ -378,17 +395,19 @@ export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
 
   const { data: existing, error: readErr } = await sb
     .from("peebcoolsf_gestion_lineas")
-    .select("uid, orden")
+    .select("uid, orden, tipo_linea")
     .eq("subproyecto_uid", subproyectoUid);
   if (readErr) throw new Error(readErr.message);
-  const list = (existing ?? []) as unknown as { uid: string; orden: number }[];
+  const list = (existing ?? []) as unknown as { uid: string; orden: number; tipo_linea: string | null }[];
+  // Numéro/orden calculés sur les DOCUMENTS uniquement (les fases ont un UID non numéroté).
+  const docs = list.filter((r) => r.tipo_linea !== "etapa");
 
   const re = new RegExp(`^${escapeRe(prefix)}(\\d+)$`);
-  const maxN = list.reduce((a, r) => {
+  const maxN = docs.reduce((a, r) => {
     const m = re.exec(r.uid);
     return m ? Math.max(a, Number(m[1])) : a;
   }, 0);
-  const maxOrden = list.reduce((a, r) => Math.max(a, r.orden ?? 0), 0);
+  const maxOrden = docs.reduce((a, r) => Math.max(a, r.orden ?? 0), 0);
   const uid = prefix + String(maxN + 1).padStart(TABLES.gestion.uidPad, "0");
 
   const { data, error } = await sb
@@ -398,6 +417,7 @@ export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
       subproyecto_uid: subproyectoUid,
       titulo: "",
       orden: maxOrden + 1,
+      tipo_linea: "documento",
       confidencial: false,
       publicar: false,
     })

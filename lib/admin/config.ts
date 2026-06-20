@@ -131,13 +131,13 @@ export const TABLES: Record<string, TableConfig> = {
     table: "peebcoolsf_gestion_lineas",
     uidPrefix: "GEST-",
     uidPad: 4,
-    textFields: ["titulo", "tipo_linea", "componente", "url", "estado", "fecha", "fase"],
+    textFields: ["titulo", "tipo_linea", "componente", "url", "estado", "fecha", "fecha_inicio", "fecha_fin", "fase"],
     notNull: ["titulo"],
     dateFields: [],
     flagFields: ["confidencial", "publicar"],
     arrayFields: [],
     select:
-      "uid, subproyecto_uid, titulo, orden, tipo_linea, componente, url, estado, fecha, fase, confidencial, publicar",
+      "uid, subproyecto_uid, titulo, orden, tipo_linea, componente, url, estado, fecha, fecha_inicio, fecha_fin, fase, confidencial, publicar",
     defaults: { titulo: "", confidencial: false, publicar: false, orden: 0 },
     orderField: "orden",
     orderBy: [
