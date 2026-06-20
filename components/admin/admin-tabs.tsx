@@ -141,6 +141,7 @@ export function AdminTabs({
 
   const gpColumns: AdminColumn[] = [
     { key: "nombre_documento", label: "Documento", type: "text", placeholder: "Nombre del documento" },
+    { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
     { key: "url", label: "Enlace (URL)", type: "url", placeholder: "https://…" },
   ];
 

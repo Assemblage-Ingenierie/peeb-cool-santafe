@@ -12,6 +12,7 @@ import { COMPONENTES, FASES, ESTADOS, getTipologia, UI } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { DatosCard } from "./datos-card";
 import { useEscenarioToggle } from "./use-escenario";
+import { GlobalBlocks } from "./global-blocks";
 
 interface BottomBandProps {
   mode: "global" | "subproyectos";
@@ -108,17 +109,20 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
     };
   }, [scopeSubs, escenario, metBySub]);
 
-  // --- Mode « Proyecto global » : placeholders (à concevoir plus tard) ---------
+  // --- Mode « Proyecto global » : 3 blocs (Datos técnicos / Documentos / —) -----
   if (mode === "global") {
-    return (
-      <section className="grid gap-4 lg:grid-cols-3">
-        {["Datos", "Documentos", "Progreso"].map((t) => (
-          <BlockCard key={t} title={t}>
-            <Hint>Por definir</Hint>
-          </BlockCard>
-        ))}
-      </section>
-    );
+    if (!data) {
+      return (
+        <section className="grid gap-4 lg:grid-cols-3">
+          {["Datos técnicos", "Documentos", ""].map((label, i) => (
+            <BlockCard key={i} title={label}>
+              <Hint>Cargando…</Hint>
+            </BlockCard>
+          ))}
+        </section>
+      );
+    }
+    return <GlobalBlocks data={data} />;
   }
 
   // --- Mode « Subproyectos » --------------------------------------------------

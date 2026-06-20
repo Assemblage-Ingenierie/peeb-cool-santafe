@@ -66,6 +66,16 @@ export interface SnapshotDocumento {
   orden: number | null;
 }
 
+// Document de « Documentación de proyecto » (documentacion_gp) — bloc Documentos
+// du mode Proyecto global, groupé par composante (GP/EE/AyS/G).
+export interface SnapshotDocProyecto {
+  uid: string;
+  nombre: string;
+  url: string | null;
+  componente: string | null;
+  publicar: boolean;
+}
+
 export interface SnapshotEvento {
   uid: string;
   nombre: string;
@@ -86,6 +96,7 @@ export interface Snapshot {
   metricas: SnapshotMetrica[];
   fases: SnapshotFase[];
   documentos: SnapshotDocumento[];
+  docsProyecto: SnapshotDocProyecto[];
   eventos: SnapshotEvento[];
 }
 
@@ -117,6 +128,13 @@ type RawGestion = {
   tipo_linea: string | null;
   orden: number | null;
 };
+type RawDocGp = {
+  uid: string;
+  nombre_documento: string | null;
+  url: string | null;
+  componente: string | null;
+  publicar: boolean | null;
+};
 
 const SUB_COLS =
   "uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas";
@@ -124,12 +142,13 @@ const METRICA_COLS =
   "subproyecto_uid, escenario, demanda_kwh, demanda_despues_kwh, gei_antes_tco2, gei_despues_tco2, costo_ee_eur, costo_otras_eur, benef_personal, benef_personal_pct_muj, benef_usuarios, benef_usuarios_pct_muj, benef_indirectos, benef_indirectos_pct_muj";
 const GESTION_COLS =
   "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden";
+const DOCGP_COLS = "uid, nombre_documento, url, componente, publicar, orden";
 
 /** Construit le snapshot complet (un seul aller-retour groupé). */
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = createServiceClient();
 
-  const [subRes, metRes, gestRes, evtRes, eqRes, entRes] = await Promise.all([
+  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes] = await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
       .select(SUB_COLS)
@@ -155,10 +174,21 @@ export async function getSnapshot(): Promise<Snapshot> {
       .order("hora_inicio", { ascending: true, nullsFirst: false }),
     sb.from("peebcoolsf_equipo").select("uid, apellido, nombre"),
     sb.from("peebcoolsf_entidades").select("uid, nombre"),
+    sb
+      .from("peebcoolsf_documentacion_gp")
+      .select(DOCGP_COLS)
+      .order("orden", { ascending: true, nullsFirst: false })
+      .order("uid", { ascending: true }),
   ]);
 
   const firstError =
-    subRes.error || metRes.error || gestRes.error || evtRes.error || eqRes.error || entRes.error;
+    subRes.error ||
+    metRes.error ||
+    gestRes.error ||
+    evtRes.error ||
+    eqRes.error ||
+    entRes.error ||
+    docGpRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -215,12 +245,23 @@ export async function getSnapshot(): Promise<Snapshot> {
       orden: r.orden,
     }));
 
+  const docsProyecto: SnapshotDocProyecto[] = ((docGpRes.data ?? []) as unknown as RawDocGp[]).map(
+    (d) => ({
+      uid: d.uid,
+      nombre: d.nombre_documento ?? "",
+      url: d.url,
+      componente: d.componente,
+      publicar: !!d.publicar,
+    }),
+  );
+
   return {
     generatedAt: new Date().toISOString(),
     subproyectos: (subRes.data ?? []) as unknown as SnapshotSubproyecto[],
     metricas: (metRes.data ?? []) as unknown as SnapshotMetrica[],
     fases,
     documentos,
+    docsProyecto,
     eventos,
   };
 }
