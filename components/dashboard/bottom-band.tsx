@@ -263,7 +263,7 @@ function colorFase(estado: string | null): { bg: string; fg: string } {
 
 /** Fases dans l'ordre chronologique (FASES), empilées verticalement. */
 function ProgresoBlock({ fases }: { fases: SnapshotFase[] }) {
-  const ordered = FASES.map((f) => ({
+  const ordered = FASES.filter((f) => f.code !== "general").map((f) => ({
     code: f.code,
     nombre: f.nombre,
     estado: fases.find((x) => x.fase === f.code)?.estado ?? null,
