@@ -81,12 +81,6 @@ export const FASES: EnumOption[] = [
   { code: "general", nombre: "General" },
 ];
 
-// Tipo de línea (CDC §3.2) — pilote la règle « url active seulement si Documento ».
-export const TIPO_LINEA: EnumOption[] = [
-  { code: "documento", nombre: "Documento" },
-  { code: "etapa", nombre: "Etapa" },
-];
-
 // ============================================================
 // Tokens de surface (UI neutre). NE SONT PAS des couleurs de marque :
 // implémentation du « fond gris clair » et de la sidebar #30323e (CDC §2.1).

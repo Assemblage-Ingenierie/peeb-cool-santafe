@@ -79,23 +79,24 @@ Tant que les fichiers n'existent pas, afficher des **placeholders** avec le nom 
 - Événements calendrier : `EVT-0001`, …
 - Documentation GP : `GP-DOC-MANUAL`, `GP-DOC-PAC`, `GP-DOC-MV`, `GP-DOC-PRESUP`, `GP-DOC-INI`, `GP-DOC-PER1`, …
 - Formations : `CAP-EE-01`, `CAP-AYS-01`, `CAP-G-01`, … (documents) et `CAPEVT-…` (événements)
-- Gestion de sous-projet (lignes) : `GEST-<SUB>-<n>`, ex. `GEST-AIR-0001`.
+- Gestion de sous-projet : documents `GEST-<SUB>-NNNN` (ex. `GEST-AIR-0001`) ; fases `GEST-<SUB>-<code_fase>` (ex. `GEST-AIR-no_objecion_afd`).
+- Nouveaux sous-projets (écoles ajoutées) : `SUB-ESC-NNN`.
 
 ### 3.2 Tables de référence (énumérations)
 - `componentes` (GP, EE, AyS, G) — libellé + couleur (ou constante en code).
 - `tipologias` (A, H, E) — libellé + couleur.
-- `fases` (chronologiques) : `Estudios preliminares`, `Proyecto ejecutivo`, `Licitacion`, `Obra`, `General`.
-- `estados` : `En proceso` (jaune), `Terminado` (vert clair), + valeur vide autorisée.
-- `tipo_linea` : `Documento`, `Etapa`.
+- `fases` (chronologiques, **8**) : `Estudios preliminares`, `Anteproyecto`, `Proyecto ejecutivo`, `Redacción de pliegos`, `No objeción AFD`, `Licitación`, `Obra`, `General`.
+- `estados` : `En proceso` (jaune `#ffd966`), `Terminado` (vert clair `#b6d7a8`), + valeur vide autorisée.
+- `tipo_linea` : `Documento`, `Etapa` — distingue les deux sous-sections de la gestion de sous-projet (non exposé en dropdown dans l'UI).
 
 ### 3.3 Tables principales
 
 **`subproyectos`**
 - `uid` (PK métier), `nombre`, `tipologia` (A/H/E), `seccion` (regroupement : Aeropuertos / Hospitales / Escuelas), `orden`.
-- **Datos del edificio :** `direccion`, `lat`, `lng`, `superficie_m2`, (+ champs extensibles plus tard).
+- **Datos del edificio :** `direccion`, `lat`, `lng`, `superficie_m2`, `notas` (texte libre formaté — **gras** + couleur **rouge Assemblage** ; stocké en HTML restreint assaini), (+ champs extensibles plus tard).
 
 **`metricas`** (1 ligne par sous-projet et par **scénario**)
-- `subproyecto_uid` (FK), `escenario` ∈ {`faisabilidad`, `proyecto`}.
+- `subproyecto_uid` (FK), `escenario` ∈ {`faisabilidad`, `proyecto`} *(valeur technique conservée ; libellé affiché « **factibilidad** » dans l'UI)*.
 - Champs (tous nullables → « donnée manquante » = NULL, jamais 0) :
   - `demanda_kwh` (Consumos de energía final totales — Demanda teórica, kWh)
   - `demanda_despues_kwh`
@@ -111,7 +112,7 @@ Tant que les fichiers n'existent pas, afficher des **placeholders** avec le nom 
 - `uid`, `nombre`. (Liste gérable depuis la page Equipo : ajouter/supprimer.)
 
 **`eventos`** (Calendrier)
-- `uid`, `nombre`, `fecha`, `hora_inicio`, `hora_fin`, `participantes` (multi, réfs vers `equipo`), `componente` (dropdown), `modalidad` ∈ {`Presencial`, `Virtual`}, `lugar`, `url_conexion` (si virtuel). Apparaissent dans le dashboard (Agenda).
+- `uid`, `nombre`, `fecha`, `hora_inicio`, `hora_fin`, `participantes` (multi, réfs vers `equipo` **ou** `entidades` — dropdown avec recherche), `componente` (dropdown), `modalidad` ∈ {`Presencial`, `Virtual`}, `lugar`, `url_conexion` (si virtuel). Apparaissent dans le dashboard (Agenda).
 
 **`documentacion_gp`** (Gestion de proyecto → Documentation)
 - `uid`, `nombre_documento` (éditable), `url`. Lignes initiales : Manual Operativo, Plan de adquisiciones, Plan de M&V, Presupuesto, Informe de inicio, Informe periódico 1.
@@ -124,10 +125,9 @@ Tant que les fichiers n'existent pas, afficher des **placeholders** avec le nom 
 - Type `evento` : `uid`, `subseccion`, `componente`, `entidades` (multi, réfs vers `entidades`), `participantes` (multi, réfs vers `equipo`), `fecha_hora`, `documento_uid` (dropdown, relie à un document de la même section).
 - Seed : pour chaque sous-section, lignes `Formation 1`, `Formation 2`, `Formation 3` (titre éditable).
 
-**`gestion_lineas`** (Gestion de sous-projet — style Airtable)
-- `uid`, `subproyecto_uid` (FK), `titulo` (éditable), `orden` (drag & drop), `tipo_linea` (Documento/Etapa/vide), `componente` (dropdown avec pastille/vide), `url` (actif seulement si tipo=Documento ; **grisé/désactivé** si Etapa ou vide), `estado` (En proceso/Terminado/vide), `fecha`, `fase` (dropdown chronologique).
-- Seed par sous-projet : `Auditoria`, `Planos pdf`, `Proyecto ejecutivo`, `Pliego`.
-- Bouton **+** pour ajouter des lignes.
+**`gestion_lineas`** (Gestion de sous-projet) — colonnes : `uid`, `subproyecto_uid` (FK), `titulo`, `orden`, `tipo_linea`, `componente`, `url`, `estado`, `fecha`, `fecha_inicio`, `fecha_fin`, `fase`, `confidencial`, `publicar`. **Deux usages via `tipo_linea`**, présentés en deux sous-sections (voir §4.5) :
+- **Documentos** (`tipo_linea='documento'` ou vide) — style Airtable : `titulo`, `orden` (drag & drop), `componente` (pastille), `url`, `estado`, `fecha`, + `confidencial`/`publicar`. UID `GEST-<code_sub>-NNNN`. Bouton **+** pour ajouter. Seed par sous-projet : `Auditoria`, `Planos pdf`, `Proyecto ejecutivo`, `Pliego`.
+- **Fases** (`tipo_linea='etapa'`) — **liste fixe, 1 ligne par fase**, pré-remplie à la création du sous-projet (le nom de la fase devient `titulo`, en lecture seule). Champs éditables : `estado`, `fecha_inicio`, `fecha_fin`. UID stable `GEST-<code_sub>-<code_fase>`. Pas d'ajout/suppression/drag, non confidentiable.
 
 ### 3.4 Sécurité (RLS dès le départ)
 - Activer le **Row Level Security** sur toutes les tables (préfixées `peebcoolsf_`) dès le jour 1.
@@ -178,20 +178,22 @@ Chaque ligne éditable expose son **UID** (visible/copiable) pour référencemen
 - `documentacion_gp` (Documentation de projet)
 - `gestion_financiera`
 - `capacitaciones_documentos` et `capacitaciones_eventos`
-- `gestion_lineas` (lignes de gestion des sous-projets)
+- `gestion_lineas` (**uniquement les *Documentos*** ; les *Fases* ne sont pas confidentiables)
 - *(à étendre si d'autres tables portent des documents ; pas les tables de métriques/référence)*
 
+**Publication (`publicar`).** Les mêmes tables documentaires portent aussi un champ `publicar` (booléen, défaut `false`), **indépendant de `confidencial`** : il contrôle la visibilité sur les **pages publiques** (filtré à l'affichage, **pas** en RLS), alors que `confidencial` contrôle l'**accès** (RLS, Consultor exclu). Présenté comme un interrupteur neutre dans l'Admin (distinct de la checkbox rouge Confidencial).
+
 ### 4.5 Gestion de subproyectos (dans Admin)
-Regroupement :
+Sélecteur de sous-projet groupé par sección :
 - **Aeropuertos :** Aeropuerto Internacional de Rosario, Aeropuerto Sauce Viejo.
 - **Hospitales :** Hospital del Centenario de Rosario, Hospital J. M. Cullen de Santa Fe.
-- **Escuelas :** 5 sous-projets + possibilité d'**ajouter des écoles** (nouveaux sous-projets).
+- **Escuelas :** 5 sous-projets + bouton **« + Agregar escuela »** (UID auto `SUB-ESC-NNN`). Les **écoles** sont supprimables (bouton + confirmation) ; **pas** les aéroports/hôpitaux.
 
-Par sous-projet, sous-sections :
-- **Datos del edificio** (typologie avec pastille, adresse, coordonnées, surface, + extensible).
-- **Datos de la faisabilidad** (métriques scénario `faisabilidad` + bénéficiaires).
-- **Datos de proyecto** (métriques scénario `proyecto` ; sans bénéficiaires).
-- **Gestión del subproyecto** (table flexible, voir `gestion_lineas`).
+Par sous-projet, **4 sous-sections** :
+- **Datos del edificio** — édition *par champ* : `nombre`, typologie (pastille A/H/E), `direccion`, `lat`, `lng`, `superficie_m2`, `notas`. Unités affichées dans les libellés (kWh, tCO₂, €, m²).
+- **Datos de la factibilidad** — métriques scénario faisabilité + bénéficiaires (édition par champ ; NULL = « — », jamais 0).
+- **Datos de proyecto** — métriques scénario projet ; sans bénéficiaires.
+- **Gestión del subproyecto** — deux sous-sections (voir `gestion_lineas` §3.3) : **Documentos** (table flexible, drag & drop, +/suppression) et **Fases** (liste fixe pré-remplie, 1 ligne par fase : nom en lecture seule + `estado` + `fecha inicio` + `fecha fin`).
 
 ### 4.6 Gestion des rôles (Admin uniquement)
 - Lister les utilisateurs, assigner l'un des trois rôles : **Admin** / **Gestión** / **Consultor**.
