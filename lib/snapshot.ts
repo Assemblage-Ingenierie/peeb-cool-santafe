@@ -46,13 +46,24 @@ export interface SnapshotMetrica {
 
 // Étape (tipo_linea='etapa') d'un sous-projet. Sert à : (1) décider quel scénario
 // afficher par défaut + activer le toggle quand `proyecto_ejecutivo` est démarrée ;
-// (2) futur bloc « Progreso » (CDC §4.1).
+// (2) bloc « Progreso » (CDC §4.1).
 export interface SnapshotFase {
   subproyecto_uid: string;
   fase: string; // code (proyecto_ejecutivo, obra, …)
   estado: string | null; // en_proceso | terminado | null
   fecha_inicio: string | null;
   fecha_fin: string | null;
+}
+
+// Document (tipo_linea='documento' ou vide) d'un sous-projet — bloc « Documentos ».
+export interface SnapshotDocumento {
+  uid: string;
+  subproyecto_uid: string;
+  titulo: string;
+  url: string | null;
+  componente: string | null; // GP | EE | AyS | G | null
+  estado: string | null;
+  orden: number | null;
 }
 
 export interface SnapshotEvento {
@@ -74,6 +85,7 @@ export interface Snapshot {
   subproyectos: SnapshotSubproyecto[];
   metricas: SnapshotMetrica[];
   fases: SnapshotFase[];
+  documentos: SnapshotDocumento[];
   eventos: SnapshotEvento[];
 }
 
@@ -92,17 +104,32 @@ type RawEvento = {
   url_conexion: string | null;
   participantes: string[] | null;
 };
+type RawGestion = {
+  uid: string;
+  subproyecto_uid: string;
+  titulo: string | null;
+  url: string | null;
+  componente: string | null;
+  estado: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  fase: string | null;
+  tipo_linea: string | null;
+  orden: number | null;
+};
 
 const SUB_COLS =
   "uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas";
 const METRICA_COLS =
   "subproyecto_uid, escenario, demanda_kwh, demanda_despues_kwh, gei_antes_tco2, gei_despues_tco2, costo_ee_eur, costo_otras_eur, benef_personal, benef_personal_pct_muj, benef_usuarios, benef_usuarios_pct_muj, benef_indirectos, benef_indirectos_pct_muj";
+const GESTION_COLS =
+  "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden";
 
 /** Construit le snapshot complet (un seul aller-retour groupé). */
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = createServiceClient();
 
-  const [subRes, metRes, faseRes, evtRes, eqRes, entRes] = await Promise.all([
+  const [subRes, metRes, gestRes, evtRes, eqRes, entRes] = await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
       .select(SUB_COLS)
@@ -113,10 +140,12 @@ export async function getSnapshot(): Promise<Snapshot> {
       .select(METRICA_COLS)
       .order("subproyecto_uid", { ascending: true })
       .order("escenario", { ascending: true }),
+    // Toutes les lignes gestion_lineas (fases + documents) en une fois ; split en JS.
     sb
       .from("peebcoolsf_gestion_lineas")
-      .select("subproyecto_uid, fase, estado, fecha_inicio, fecha_fin")
-      .eq("tipo_linea", "etapa"),
+      .select(GESTION_COLS)
+      .order("orden", { ascending: true, nullsFirst: false })
+      .order("uid", { ascending: true }),
     sb
       .from("peebcoolsf_eventos")
       .select(
@@ -129,7 +158,7 @@ export async function getSnapshot(): Promise<Snapshot> {
   ]);
 
   const firstError =
-    subRes.error || metRes.error || faseRes.error || evtRes.error || eqRes.error || entRes.error;
+    subRes.error || metRes.error || gestRes.error || evtRes.error || eqRes.error || entRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -163,11 +192,35 @@ export async function getSnapshot(): Promise<Snapshot> {
     };
   });
 
+  // Split gestion_lineas : fases (etapa) vs documentos (documento ou vide).
+  const gestRows = (gestRes.data ?? []) as unknown as RawGestion[];
+  const fases: SnapshotFase[] = gestRows
+    .filter((r) => r.tipo_linea === "etapa")
+    .map((r) => ({
+      subproyecto_uid: r.subproyecto_uid,
+      fase: r.fase ?? "",
+      estado: r.estado,
+      fecha_inicio: r.fecha_inicio,
+      fecha_fin: r.fecha_fin,
+    }));
+  const documentos: SnapshotDocumento[] = gestRows
+    .filter((r) => r.tipo_linea !== "etapa")
+    .map((r) => ({
+      uid: r.uid,
+      subproyecto_uid: r.subproyecto_uid,
+      titulo: r.titulo ?? "",
+      url: r.url,
+      componente: r.componente,
+      estado: r.estado,
+      orden: r.orden,
+    }));
+
   return {
     generatedAt: new Date().toISOString(),
     subproyectos: (subRes.data ?? []) as unknown as SnapshotSubproyecto[],
     metricas: (metRes.data ?? []) as unknown as SnapshotMetrica[],
-    fases: (faseRes.data ?? []) as unknown as SnapshotFase[],
+    fases,
+    documentos,
     eventos,
   };
 }

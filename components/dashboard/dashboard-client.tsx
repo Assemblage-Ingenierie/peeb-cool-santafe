@@ -5,6 +5,7 @@ import { cn } from "@/lib/cn";
 import { useSnapshot } from "./use-snapshot";
 import { Agenda } from "./agenda";
 import { SeguimientoPanel } from "./seguimiento-panel";
+import { BottomBand } from "./bottom-band";
 
 type GestionMode = "global" | "subproyectos";
 
@@ -26,6 +27,12 @@ export function DashboardClient() {
   const loading = snap.status === "loading";
   const error = snap.status === "error" ? snap.message : null;
   const expanded = mode === "subproyectos";
+
+  // Choisir un groupe (typologie) efface la sélection d'un bâtiment, et inversement.
+  const handleTipo = (t: string) => {
+    setTipo(t);
+    setSelected(null);
+  };
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -83,7 +90,7 @@ export function DashboardClient() {
                 subproyectos={snap.status === "ready" ? snap.data.subproyectos : []}
                 expanded={expanded}
                 tipo={tipo}
-                onTipo={setTipo}
+                onTipo={handleTipo}
                 selected={selected}
                 onSelect={(uid) => setSelected((cur) => (cur === uid ? null : uid))}
               />
@@ -92,24 +99,13 @@ export function DashboardClient() {
         </div>
       </div>
 
-      {/* Bande du bas — emplacements réservés (neutres), pour les deux modes */}
-      <BottomBand />
+      {/* Bande du bas — Datos / Documentos / Progreso (actifs en mode Subproyectos) */}
+      <BottomBand
+        mode={mode}
+        data={snap.status === "ready" ? snap.data : null}
+        tipo={tipo}
+        selected={selected}
+      />
     </div>
-  );
-}
-
-function BottomBand() {
-  const blocks = ["Datos", "Documentos", "Progreso"];
-  return (
-    <section className="grid gap-4 sm:grid-cols-3">
-      {blocks.map((b) => (
-        <div key={b} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--text)]">{b}</h2>
-          <div className="mt-3 flex h-28 items-center justify-center rounded-md border border-dashed border-[var(--border)] text-xs text-[var(--text-muted)]">
-            Por definir
-          </div>
-        </div>
-      ))}
-    </section>
   );
 }
