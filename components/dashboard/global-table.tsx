@@ -9,30 +9,22 @@ import { cn } from "@/lib/cn";
 
 // ============================================================
 // Tableau « Resumen » (mode Proyecto global) — 9 sous-projets × groupes de
-// colonnes (CDC §4.1 / capture V2). Style sombre. 1er groupe = Progresión :
-// une colonne par fase, case colorée selon l'estado → jauge de progression.
-// Calculs dérivés (kWh/m², %, totaux) JAMAIS stockés : calculés ici.
+// colonnes (CDC §4.1 / capture V2). En-têtes SOMBRES, lignes de données BLANCHES.
+// Ordre : Datos del edificio (toujours 1er, non masquable) → Progresión (jauge
+// des fases, colonnes étroites + titres verticaux) → Consumos → GEI → Costos →
+// Beneficiarios. Calculs dérivés JAMAIS stockés : calculés ici.
 // ============================================================
 
-// Palette sombre (depuis les tokens UI — aucune couleur en dur).
-const BG = UI.sidebarBg; // corps
-const BG_HEAD = UI.text; // bandeau d'en-tête (plus foncé), opaque pour le sticky
-const TXT = UI.sidebarText;
-const TXT_MUTED = UI.sidebarTextMuted;
-const BORDER = UI.sidebarBorder;
+// En-têtes : palette sombre (tokens UI). Corps : surfaces claires (var CSS).
+const HEAD_GROUP_BG = UI.text; // bandeau de groupes (plus foncé), opaque pour le sticky
+const HEAD_COL_BG = UI.sidebarBg; // ligne des titres de colonnes
+const HEAD_TXT = UI.sidebarText;
+const HEAD_TXT_MUTED = UI.sidebarTextMuted;
+const HEAD_BORDER = UI.sidebarBorder;
 const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
 const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
 
-const FASE_ABBR: Record<string, string> = {
-  estudios_preliminares: "Est. prel.",
-  anteproyecto: "Antepr.",
-  proyecto_ejecutivo: "Proy. ej.",
-  redaccion_pliegos: "Pliegos",
-  no_objecion_afd: "No obj.",
-  licitacion: "Licit.",
-  obra: "Obra",
-  general: "Gral.",
-};
+const PROG_W = 14; // largeur des colonnes Progresión (~1/3 d'une colonne normale)
 
 const estadoLabel = (e: string | null) =>
   e === "terminado" ? "Terminado" : e === "en_proceso" ? "En proceso" : "Sin iniciar";
@@ -58,12 +50,7 @@ interface Grupo {
 }
 
 const csvNum = (v: number | null) => (v == null || Number.isNaN(v) ? "" : String(v));
-const numCol = (
-  key: string,
-  header: string,
-  get: (f: Fila) => number | null,
-  dec = 0,
-): Columna => ({
+const numCol = (key: string, header: string, get: (f: Fila) => number | null, dec = 0): Columna => ({
   key,
   header,
   align: "right",
@@ -77,33 +64,36 @@ const pctCol = (key: string, header: string, get: (f: Fila) => number | null): C
   display: (f) => fmtPct(get(f)),
   csv: (f) => csvNum(get(f)),
 });
-const txtCol = (
-  key: string,
-  header: string,
-  get: (f: Fila) => string,
-  minW?: string,
-): Columna => ({ key, header, align: "left", minW, display: (f) => get(f), csv: (f) => get(f) });
+const txtCol = (key: string, header: string, get: (f: Fila) => string, minW?: string): Columna => ({
+  key,
+  header,
+  align: "left",
+  minW,
+  display: (f) => get(f),
+  csv: (f) => get(f),
+});
 
 const dem = (f: Fila) => f.met?.demanda_kwh ?? null;
 const demDesp = (f: Fila) => f.met?.demanda_despues_kwh ?? null;
 
-const GRUPOS: Grupo[] = [
-  {
-    key: "edificio",
-    label: "Datos del edificio",
-    cols: [
-      txtCol("nombre", "Edificio", (f) => f.sub.nombre, "min-w-[200px]"),
-      {
-        key: "tipo",
-        header: "Tipo",
-        align: "left",
-        display: (f) => <TipoBadge code={f.sub.tipologia} />,
-        csv: (f) => getTipologia(f.sub.tipologia)?.nombre ?? f.sub.tipologia,
-      },
-      txtCol("direccion", "Dirección", (f) => f.sub.direccion ?? "—", "min-w-[180px]"),
-      numCol("sup", "Superficie (m²)", (f) => f.sub.superficie_m2, 0),
-    ],
-  },
+// Toujours en 1er, non masquable, sans adresse.
+const EDIFICIO: Grupo = {
+  key: "edificio",
+  label: "Datos del edificio",
+  cols: [
+    txtCol("nombre", "Edificio", (f) => f.sub.nombre, "min-w-[200px]"),
+    {
+      key: "tipo",
+      header: "Tipo",
+      align: "left",
+      display: (f) => <TipoBadge code={f.sub.tipologia} />,
+      csv: (f) => getTipologia(f.sub.tipologia)?.nombre ?? f.sub.tipologia,
+    },
+    numCol("sup", "Superficie (m²)", (f) => f.sub.superficie_m2, 0),
+  ],
+};
+
+const DATA_GROUPS: Grupo[] = [
   {
     key: "consumos",
     label: "Consumos de energía (demanda teórica)",
@@ -113,12 +103,7 @@ const GRUPOS: Grupo[] = [
       numCol("d_desp", "Después (kWh)", demDesp),
       numCol("d_desp_m2", "Después (kWh/m²)", (f) => porM2(demDesp(f), f.sub.superficie_m2), 1),
       numCol("ahorro", "Ahorro (kWh)", (f) => economiaKwh(dem(f), demDesp(f))),
-      numCol(
-        "ahorro_m2",
-        "Ahorro (kWh/m²)",
-        (f) => porM2(economiaKwh(dem(f), demDesp(f)), f.sub.superficie_m2),
-        1,
-      ),
+      numCol("ahorro_m2", "Ahorro (kWh/m²)", (f) => porM2(economiaKwh(dem(f), demDesp(f)), f.sub.superficie_m2), 1),
       pctCol("ahorro_pct", "Ahorro (%)", (f) => economiaPct(dem(f), demDesp(f))),
     ],
   },
@@ -160,7 +145,11 @@ const GRUPOS: Grupo[] = [
   },
 ];
 
-const TODOS = [{ key: "progresion", label: "Progresión" }, ...GRUPOS.map((g) => ({ key: g.key, label: g.label }))];
+// Masquables (Datos del edificio est toujours affiché) : Progresión + groupes de données.
+const TOGGLEABLE = [
+  { key: "progresion", label: "Progresión" },
+  ...DATA_GROUPS.map((g) => ({ key: g.key, label: g.label })),
+];
 
 function TipoBadge({ code }: { code: string }) {
   const tp = getTipologia(code);
@@ -176,9 +165,7 @@ function TipoBadge({ code }: { code: string }) {
 }
 
 function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows
-    .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-    .join("\r\n");
+  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -195,7 +182,7 @@ interface GlobalTableProps {
 }
 
 export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps) {
-  const [visible, setVisible] = useState<Set<string>>(() => new Set(TODOS.map((g) => g.key)));
+  const [visible, setVisible] = useState<Set<string>>(() => new Set(TOGGLEABLE.map((g) => g.key)));
 
   const filas = useMemo<Fila[]>(() => {
     const metMap = new Map<string, SnapshotMetrica>();
@@ -206,15 +193,11 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
       r[f.fase] = f.estado;
       faseMap.set(f.subproyecto_uid, r);
     }
-    return subproyectos.map((sub) => ({
-      sub,
-      met: metMap.get(sub.uid),
-      estados: faseMap.get(sub.uid) ?? {},
-    }));
+    return subproyectos.map((sub) => ({ sub, met: metMap.get(sub.uid), estados: faseMap.get(sub.uid) ?? {} }));
   }, [subproyectos, metricas, fases]);
 
-  const gruposVis = GRUPOS.filter((g) => visible.has(g.key));
   const progVis = visible.has("progresion");
+  const dataVis = DATA_GROUPS.filter((g) => visible.has(g.key));
 
   const toggle = (key: string) =>
     setVisible((prev) => {
@@ -226,16 +209,19 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
 
   const exportar = () => {
     const cols: { header: string; csv: (f: Fila) => string }[] = [];
-    if (progVis)
-      for (const fa of FASES)
-        cols.push({ header: fa.nombre, csv: (f) => estadoLabel(f.estados[fa.code] ?? null) });
-    for (const g of gruposVis)
-      for (const c of g.cols) cols.push({ header: `${g.label} — ${c.header}`, csv: c.csv });
+    for (const c of EDIFICIO.cols) cols.push({ header: `${EDIFICIO.label} — ${c.header}`, csv: c.csv });
+    if (progVis) for (const fa of FASES) cols.push({ header: fa.nombre, csv: (f) => estadoLabel(f.estados[fa.code] ?? null) });
+    for (const g of dataVis) for (const c of g.cols) cols.push({ header: `${g.label} — ${c.header}`, csv: c.csv });
     const rows = [cols.map((c) => c.header), ...filas.map((f) => cols.map((c) => c.csv(f)))];
     downloadCsv("proyecto-global.csv", rows);
   };
 
-  const thBase = "whitespace-nowrap border px-2 py-1.5 text-xs font-medium";
+  // Styles d'en-tête (sombres) et de corps (clairs).
+  const groupTh = "whitespace-nowrap border px-2 py-1.5 text-center text-xs font-semibold";
+  const colTh = "border px-2 py-1.5 text-xs font-medium align-bottom";
+  const headGroupStyle = { backgroundColor: HEAD_GROUP_BG, color: HEAD_TXT, borderColor: HEAD_BORDER };
+  const headColStyle = { backgroundColor: HEAD_COL_BG, color: HEAD_TXT_MUTED, borderColor: HEAD_BORDER };
+  const bodyTd = "whitespace-nowrap border border-[var(--border)] px-2 py-1.5";
 
   return (
     <section className="flex flex-col gap-2">
@@ -247,8 +233,11 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
             <summary className="cursor-pointer list-none rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text)]">
               Columnas ▾
             </summary>
-            <div className="absolute right-0 z-20 mt-1 w-60 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
-              {TODOS.map((g) => (
+            <div className="absolute right-0 z-20 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
+              <p className="px-2 pb-1 text-xs text-[var(--text-muted)]">
+                Datos del edificio siempre visible.
+              </p>
+              {TOGGLEABLE.map((g) => (
                 <label
                   key={g.key}
                   className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
@@ -274,54 +263,62 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
         </div>
       </div>
 
-      {/* Tableau (10 lignes ~ visibles, défilement + redimensionnable) */}
+      {/* Tableau : en-têtes sombres, lignes blanches, ~10 lignes + scroll + redimensionnable */}
       <div
-        className="resize-y overflow-auto rounded-lg"
-        style={{ backgroundColor: BG, maxHeight: 420, minHeight: 160 }}
+        className="resize-y overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+        style={{ maxHeight: 440, minHeight: 160 }}
       >
-        <table className="border-collapse text-xs" style={{ color: TXT }}>
+        <table className="border-collapse text-xs text-[var(--text)]">
           <thead className="sticky top-0 z-10">
             {/* Bandeau des groupes */}
             <tr>
+              <th colSpan={EDIFICIO.cols.length} className={groupTh} style={headGroupStyle}>
+                {EDIFICIO.label}
+              </th>
               {progVis && (
-                <th
-                  colSpan={FASES.length}
-                  className={cn(thBase, "text-center font-semibold")}
-                  style={{ backgroundColor: BG_HEAD, color: TXT, borderColor: BORDER }}
-                >
+                <th colSpan={FASES.length} className={groupTh} style={headGroupStyle}>
                   Progresión
                 </th>
               )}
-              {gruposVis.map((g) => (
-                <th
-                  key={g.key}
-                  colSpan={g.cols.length}
-                  className={cn(thBase, "text-center font-semibold")}
-                  style={{ backgroundColor: BG_HEAD, color: TXT, borderColor: BORDER }}
-                >
+              {dataVis.map((g) => (
+                <th key={g.key} colSpan={g.cols.length} className={groupTh} style={headGroupStyle}>
                   {g.label}
                 </th>
               ))}
             </tr>
             {/* En-têtes de colonnes */}
             <tr>
+              {EDIFICIO.cols.map((c) => (
+                <th
+                  key={c.key}
+                  className={cn(colTh, c.minW, c.align === "right" ? "text-right" : "text-left")}
+                  style={headColStyle}
+                >
+                  {c.header}
+                </th>
+              ))}
               {progVis &&
                 FASES.map((fa) => (
                   <th
                     key={fa.code}
                     title={fa.nombre}
-                    className={cn(thBase, "min-w-[42px] text-center")}
-                    style={{ backgroundColor: BG, color: TXT_MUTED, borderColor: BORDER }}
+                    className="border px-0 py-1 text-center align-bottom"
+                    style={{ ...headColStyle, width: PROG_W, minWidth: PROG_W }}
                   >
-                    {FASE_ABBR[fa.code] ?? fa.nombre}
+                    <span
+                      className="mx-auto inline-block text-[11px] font-medium leading-none"
+                      style={{ writingMode: "vertical-rl" }}
+                    >
+                      {fa.nombre}
+                    </span>
                   </th>
                 ))}
-              {gruposVis.flatMap((g) =>
+              {dataVis.flatMap((g) =>
                 g.cols.map((c) => (
                   <th
                     key={c.key}
-                    className={cn(thBase, c.minW, c.align === "right" ? "text-right" : "text-left")}
-                    style={{ backgroundColor: BG, color: TXT_MUTED, borderColor: BORDER }}
+                    className={cn(colTh, c.minW, c.align === "right" ? "text-right" : "text-left")}
+                    style={headColStyle}
                   >
                     {c.header}
                   </th>
@@ -331,31 +328,28 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
           </thead>
           <tbody>
             {filas.map((f) => (
-              <tr key={f.sub.uid}>
+              <tr key={f.sub.uid} className="hover:bg-[var(--app-bg)]">
+                {EDIFICIO.cols.map((c) => (
+                  <td key={c.key} className={cn(bodyTd, c.align === "right" ? "text-right" : "text-left")}>
+                    {c.display(f)}
+                  </td>
+                ))}
                 {progVis &&
                   FASES.map((fa) => {
                     const est = f.estados[fa.code] ?? null;
-                    const bg =
-                      est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : "transparent";
+                    const bg = est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : undefined;
                     return (
                       <td
                         key={fa.code}
                         title={`${fa.nombre}: ${estadoLabel(est)}`}
-                        className="border"
-                        style={{ backgroundColor: bg, borderColor: BORDER, minWidth: 42 }}
+                        className="border border-[var(--border)]"
+                        style={{ width: PROG_W, minWidth: PROG_W, backgroundColor: bg }}
                       />
                     );
                   })}
-                {gruposVis.flatMap((g) =>
+                {dataVis.flatMap((g) =>
                   g.cols.map((c) => (
-                    <td
-                      key={c.key}
-                      className={cn(
-                        "whitespace-nowrap border px-2 py-1.5",
-                        c.align === "right" ? "text-right" : "text-left",
-                      )}
-                      style={{ borderColor: BORDER }}
-                    >
+                    <td key={c.key} className={cn(bodyTd, c.align === "right" ? "text-right" : "text-left")}>
                       {c.display(f)}
                     </td>
                   )),
