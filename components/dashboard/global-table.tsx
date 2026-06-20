@@ -25,6 +25,7 @@ const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8"
 const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
 
 const PROG_W = 14; // largeur des colonnes Progresión (~1/3 d'une colonne normale)
+const PROG_FASES = FASES.filter((f) => f.code !== "general"); // « General » exclu de la jauge
 
 const estadoLabel = (e: string | null) =>
   e === "terminado" ? "Terminado" : e === "en_proceso" ? "En proceso" : "Sin iniciar";
@@ -210,7 +211,7 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
   const exportar = () => {
     const cols: { header: string; csv: (f: Fila) => string }[] = [];
     for (const c of EDIFICIO.cols) cols.push({ header: `${EDIFICIO.label} — ${c.header}`, csv: c.csv });
-    if (progVis) for (const fa of FASES) cols.push({ header: fa.nombre, csv: (f) => estadoLabel(f.estados[fa.code] ?? null) });
+    if (progVis) for (const fa of PROG_FASES) cols.push({ header: fa.nombre, csv: (f) => estadoLabel(f.estados[fa.code] ?? null) });
     for (const g of dataVis) for (const c of g.cols) cols.push({ header: `${g.label} — ${c.header}`, csv: c.csv });
     const rows = [cols.map((c) => c.header), ...filas.map((f) => cols.map((c) => c.csv(f)))];
     downloadCsv("proyecto-global.csv", rows);
@@ -276,7 +277,7 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
                 {EDIFICIO.label}
               </th>
               {progVis && (
-                <th colSpan={FASES.length} className={groupTh} style={headGroupStyle}>
+                <th colSpan={PROG_FASES.length} className={groupTh} style={headGroupStyle}>
                   Progresión
                 </th>
               )}
@@ -298,7 +299,7 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
                 </th>
               ))}
               {progVis &&
-                FASES.map((fa) => (
+                PROG_FASES.map((fa) => (
                   <th
                     key={fa.code}
                     title={fa.nombre}
@@ -335,7 +336,7 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
                   </td>
                 ))}
                 {progVis &&
-                  FASES.map((fa) => {
+                  PROG_FASES.map((fa) => {
                     const est = f.estados[fa.code] ?? null;
                     const bg = est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : undefined;
                     return (
