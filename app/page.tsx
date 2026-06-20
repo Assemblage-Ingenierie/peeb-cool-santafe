@@ -1,10 +1,7 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { DashboardClient } from "@/components/dashboard/dashboard-client";
 
+// Inicio (Dashboard) — CDC §4.1. Coquille serveur ; tout l'interactif
+// (lecture /api/snapshot, Agenda, Gestión, sélection) vit dans DashboardClient.
 export default function InicioPage() {
-  return (
-    <PagePlaceholder
-      title="Inicio"
-      description="Panel de seguimiento del proyecto PEEB Cool — Santa Fe."
-    />
-  );
+  return <DashboardClient />;
 }
