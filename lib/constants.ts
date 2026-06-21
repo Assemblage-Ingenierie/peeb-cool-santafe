@@ -92,8 +92,8 @@ export const MEDIDAS: Medida[] = [
   { code: "luminarias",    nombre: "Luminarias",         componente: "EE",  color: MED_EE,    tieneKwh: true },
   { code: "fotovoltaicos", nombre: "Fotovoltaicos",      componente: "EE",  color: MED_SOLAR, tieneKwh: true },
   { code: "solar_termica", nombre: "Solar térmica",      componente: "EE",  color: MED_SOLAR, tieneKwh: true },
-  { code: "genero",        nombre: "Género",             componente: "G",   color: MED_G,     tieneKwh: true,  letra: "G" },
-  { code: "otras",         nombre: "Otras medidas",      componente: null,  color: MED_OTRAS, tieneKwh: true },
+  { code: "genero",        nombre: "Género",             componente: "G",   color: MED_G,     tieneKwh: false, letra: "G" },
+  { code: "otras",         nombre: "Otras medidas",      componente: null,  color: MED_OTRAS, tieneKwh: false },
   { code: "ays",           nombre: "Ambiental y social", componente: "AyS", color: MED_AYS,   tieneKwh: false, letra: "AyS" },
 ];
 

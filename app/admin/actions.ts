@@ -6,7 +6,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { TABLES, type TableConfig } from "@/lib/admin/config";
 import type { Row, SubproyectoRow } from "@/lib/admin/read";
-import { FASES } from "@/lib/constants";
+import { FASES, getMedida } from "@/lib/constants";
 
 // ============================================================
 // Server Actions génériques (écriture admin, sans cache).
@@ -329,7 +329,7 @@ export async function updateMedida(
     const t = (value ?? "").trim();
     patch = { texto: t === "" ? null : t };
   } else if (field === "kwh_anual") {
-    if (medida === "ays") throw new Error("La medida AyS no lleva kWh");
+    if (getMedida(medida)?.tieneKwh === false) throw new Error("Esta medida no lleva kWh");
     patch = { kwh_anual: parseNullableNumber(value) };
   } else {
     throw new Error(`Campo no editable: ${field}`);
