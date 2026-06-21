@@ -2,7 +2,7 @@
 
 import { MEDIDAS, type Medida } from "@/lib/constants";
 import { MedidaIcon } from "@/components/medida-icons";
-import { fmtNumero } from "@/lib/format";
+import { fmtNumero, GUION } from "@/lib/format";
 import type { SnapshotMedida } from "@/lib/snapshot";
 
 // ============================================================
@@ -68,7 +68,7 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
                     <span className="text-sm font-medium text-[var(--text)]">{meta.nombre}</span>
                     {meta.tieneKwh ? (
                       <span className="shrink-0 whitespace-nowrap text-xs text-[var(--text-muted)]">
-                        {fmtNumero(row.kwh_anual)} kWh/año
+                        {row.kwh_anual == null ? GUION : `${fmtNumero(row.kwh_anual)} kWh/año`}
                       </span>
                     ) : null}
                   </div>
