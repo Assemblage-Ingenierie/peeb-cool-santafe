@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { Snapshot, SnapshotMetrica, SnapshotDocProyecto } from "@/lib/snapshot";
 import { COMPONENTES } from "@/lib/constants";
 import { economiaKwh, economiaPct, suma } from "@/lib/calc";
-import { fmtNumero, fmtPct } from "@/lib/format";
+import { fmtNumero } from "@/lib/format";
+import { ClipboardIcon, CheckIcon } from "@/components/icons";
 
 // Blocs du bas en mode « Proyecto global » (CDC §4.1 / capture V2) :
 // Datos técnicos (totaux calculés sur les 9 sous-projets) · Documentos
@@ -65,29 +66,38 @@ export function GlobalBlocks({ data }: { data: Snapshot }) {
     [data.docsProyecto],
   );
 
-  const kpis: { label: string; value: string }[] = [
-    { label: "Superficie total", value: `${fmtNumero(t.superficie)} m²` },
-    { label: "Demanda actual", value: `${fmtNumero(t.demanda)} kWh` },
-    { label: "Demanda proyectada", value: `${fmtNumero(t.despues)} kWh` },
-    { label: "Ahorro de energía", value: `${fmtNumero(t.ahorro)} kWh` },
-    { label: "Ahorro de energía (%)", value: fmtPct(t.ahorroPct) },
-    { label: "Emisiones de GEI iniciales", value: `${fmtNumero(t.geiAntes, 1)} tCO₂` },
-    { label: "Reducción de GEI", value: `${fmtNumero(t.geiRed, 1)} tCO₂` },
-    { label: "Costo de inversión total", value: `${fmtNumero(t.costoTotal)} €` },
-    { label: "Beneficiarios — Personal", value: fmtNumero(t.personal) },
-    { label: "Beneficiarios — Usuarios", value: fmtNumero(t.usuarios) },
-    { label: "Beneficiarios — Población cubierta", value: fmtNumero(t.indirectos) },
+  const datos: { label: string; value: number | null; unit: string }[] = [
+    { label: "Superficie total", value: t.superficie, unit: "m²" },
+    { label: "Demanda actual", value: t.demanda, unit: "kWh" },
+    { label: "Demanda proyectada", value: t.despues, unit: "kWh" },
+    { label: "Ahorro de energía", value: t.ahorro, unit: "kWh" },
+    { label: "Ahorro de energía (%)", value: t.ahorroPct, unit: "%" },
+    { label: "Emisiones de GEI iniciales", value: t.geiAntes, unit: "tCO₂" },
+    { label: "Reducción de GEI", value: t.geiRed, unit: "tCO₂" },
+    { label: "Costo de inversión total", value: t.costoTotal, unit: "€" },
+    { label: "Beneficiarios — Personal", value: t.personal, unit: "" },
+    { label: "Beneficiarios — Usuarios", value: t.usuarios, unit: "" },
+    { label: "Beneficiarios — Población cubierta", value: t.indirectos, unit: "" },
   ];
+  const dec = (u: string) => (u === "tCO₂" || u === "%" ? 1 : 0);
+  const fmtDato = (r: { value: number | null; unit: string }) =>
+    r.value == null ? fmtNumero(null) : `${fmtNumero(r.value, dec(r.unit))}${r.unit ? " " + r.unit : ""}`;
+  // TSV (Dato / Valor / Unidad) — se pega como tabla en Excel.
+  const datosTSV =
+    "Dato\tValor\tUnidad\n" +
+    datos
+      .map((r) => `${r.label}\t${r.value == null ? "" : fmtNumero(r.value, dec(r.unit))}\t${r.unit}`)
+      .join("\n");
 
   return (
     <section className="grid gap-4 lg:grid-cols-3">
       {/* Datos técnicos — totaux du projet */}
-      <BlockCard title="Datos técnicos">
-        <dl className="flex flex-col gap-1.5">
-          {kpis.map((k) => (
-            <div key={k.label} className="flex items-baseline justify-between gap-3">
-              <dt className="text-xs text-[var(--text-muted)]">{k.label}</dt>
-              <dd className="whitespace-nowrap text-sm font-semibold text-[var(--text)]">{k.value}</dd>
+      <BlockCard title="Datos técnicos" action={<CopyButton text={datosTSV} />}>
+        <dl className="divide-y divide-[var(--border)]">
+          {datos.map((r) => (
+            <div key={r.label} className="flex items-baseline justify-between gap-3 py-1.5">
+              <dt className="text-xs text-[var(--text-muted)]">{r.label}</dt>
+              <dd className="whitespace-nowrap text-sm font-semibold text-[var(--text)]">{fmtDato(r)}</dd>
             </div>
           ))}
         </dl>
@@ -131,11 +141,48 @@ export function GlobalBlocks({ data }: { data: Snapshot }) {
   );
 }
 
-function BlockCard({ title, children }: { title: string; children: ReactNode }) {
+function BlockCard({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
+        {action}
+      </div>
       <div className="mt-3">{children}</div>
     </div>
+  );
+}
+
+/** Bouton « Copiar » : copie un TSV dans le presse-papiers (collage direct en Excel). */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const cb = navigator.clipboard;
+        if (!cb) return;
+        cb.writeText(text).then(
+          () => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          },
+          () => {},
+        );
+      }}
+      title="Copiar como tabla (pegar en Excel)"
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-muted)] transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--text)]"
+    >
+      {copied ? <CheckIcon className="h-3.5 w-3.5" /> : <ClipboardIcon className="h-3.5 w-3.5" />}
+      {copied ? "Copiado" : "Copiar"}
+    </button>
   );
 }

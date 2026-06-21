@@ -59,9 +59,9 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
       {grupos.map((g) => (
         <div key={g.titulo} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
           <h2 className="text-sm font-semibold text-[var(--text)]">{g.titulo}</h2>
-          <ul className="mt-3 flex flex-col gap-3">
+          <ul className="mt-2 divide-y divide-[var(--border)]">
             {g.items.map(({ meta, row }) => (
-              <li key={meta.code} className="flex items-start gap-2.5">
+              <li key={meta.code} className="flex items-start gap-2.5 py-2.5 first:pt-1">
                 <MedidaIcon code={meta.code} size={22} className="mt-0.5 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline justify-between gap-3">
