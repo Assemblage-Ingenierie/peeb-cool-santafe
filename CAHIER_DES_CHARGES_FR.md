@@ -146,38 +146,47 @@ Tant que les fichiers n'existent pas, afficher des **placeholders** avec le nom 
 ## 4. Pages
 
 ### 4.1 Inicio (Dashboard) — page d'entrée
-Layout selon la capture :
-- **Filtres** par composante (GP/EE/AyS/G) en haut à droite.
-- **Agenda** : cartes des prochains événements (nom, date/heure, entités/participants, lieu), avec la couleur de la composante.
-- **Sous-projets** : sélecteur latéral (Todos / Aeropuertos / Hospitales / Escuelas) + liste des sous-projets.
-- **Tableau central** : lignes par sous-projet (placeholder pour l'instant).
-- **Carte** OpenStreetMap intégrée (encart de droite).
-- **Zone basse** (fond foncé) : change selon le sous-projet et/ou le filtre sélectionné. Blocs **Datos** (Datos de eficiencia energética — à définir ; Datos económicos — à définir), **Documentos** (A/B/C/D — à définir), **Progreso** (à définir). *Contenu détaillé en 2ᵉ phase.*
+Lecture via l'endpoint unique **`/api/snapshot`** (cache SWR, §6). Une ligne **« Gestión »** bascule entre deux modes : **Proyecto global** (par défaut) et **Subproyectos** (panneau dépliable).
 
-Permet un suivi **global ou par sous-projet**, dans les deux cas **filtrable par composante**.
+**Toujours visible :**
+- **Filtres** par composante (GP/EE/AyS/G) dans le header (haut à droite). *Effet de filtrage à câbler ultérieurement (boutons inertes pour l'instant).*
+- **Agenda** : bande **scrollable horizontalement** des événements (passés **estompés** ; calée par défaut sur le **prochain à venir** ; clic sur le libellé « Agenda » réinitialise). Cartes colorées par composante ; événements sans nom ignorés.
+
+**Mode « Proyecto global » :**
+- **Grand tableau « Resumen »** (en-têtes sombres / lignes blanches) sur les 9 sous-projets. Groupes de colonnes : **Datos del edificio** (toujours 1er, non masquable, sans adresse) · **Progresión** (une colonne étroite par fase, hors « General » ; case colorée selon l'estado → **jauge**) · **Consumos** · **GEI** · **Costos** · **Beneficiarios** (calculs dérivés à l'affichage). Menu **« Columnas »** (cases : afficher/masquer les groupes) + **export CSV** ; ~10 lignes, défilement + redimensionnable.
+- Sous le tableau, 3 blocs : **Datos técnicos** (totaux du projet, calculés sur les 9 sous-projets) · **Documentos** (sections **EE / AyS / G** depuis « Documentación de proyecto ») · 3ᵉ bloc (sans titre, à définir).
+
+**Mode « Subproyectos » :**
+- Sélecteur **Todos / Aeropuertos / Hospitales / Escuelas** + **tableau** des sous-projets + **carte de sélection** (clic = sélectionner ; **pas** de card de données — réservée à la page Mapa). Zoom carte = **Ctrl + molette**.
+- Sous le tableau, blocs **Datos** (consommations avant/après kWh+kWh/m², réduction kWh+**%** ; **toggle factibilidad/proyecto** ; en haut à droite, **logos des mesures cochées** — voir §4.5) · **Documentos** (gestion du sous-projet, groupés par composante) · **Progreso** (fases colorées par estado, hors « General »). Puis blocs **Medidas EE / Medidas género / Otras medidas / Especificidades AyS** (reprennent les mesures du §4.5).
+- En vue **groupe** (une typologie sélectionnée, sans bâtiment) : **Datos = totaux du groupe** ; Documentos/Progreso désactivés.
+
+Permet un suivi **global ou par sous-projet**.
 
 ### 4.2 Mapa
-- Carte **OpenStreetMap** (tuiles directement depuis OSM, sans passer par l'egress propre).
+- Carte **OpenStreetMap** (tuiles directement depuis OSM, sans egress propre). **Vue par défaut = Province de Santa Fe** (sur toute sa hauteur) ; zoom libre à la molette.
 - Marqueurs aux coordonnées de chaque sous-projet, **couleur = typologie** (A/H/E).
-- Au clic sur un point → **card** avec : consommations théoriques avant et après (kWh et kWh/m²), réduction (kWh et **%**). La **réduction en %** est l'information mise en valeur (resaltée).
+- **Filtre par typologie** (Todos / Aeropuertos / Hospitales / Escuelas) + case **« Mostrar % de reducción »** (affiche le % de réduction en **étiquette permanente** à côté de chaque point).
+- Au clic sur un point → **card** : nom, **adresse**, **superficie (m²)**, consommations théoriques avant/après (kWh et kWh/m²), réduction (kWh et **%** — le % **resalté**), **toggle factibilidad/proyecto** (désactivé tant que la fase « Proyecto ejecutivo » du sous-projet n'est pas démarrée).
 
 ### 4.3 Calendario
-- Agenda type Google Calendar : créer des événements avec date, horaire, participants, thématique (dropdown = composantes), nom, modalité présentiel/virtuel + URL de connexion. Les événements alimentent l'Agenda du dashboard.
+- Agenda type Google Calendar : créer des événements avec date, horaire, participants, thématique (dropdown = composantes), nom, modalité présentiel/virtuel + URL de connexion, case **Formación** + champ **URL documento**. Les événements alimentent l'Agenda du dashboard.
+- *(Les **formations** — anciennement une sous-section « eventos » de Capacitaciones, supprimée — se créent désormais ici via la case **Formación**.)*
 
 ### 4.4 Admin (Admin uniquement) — base de données vivante
 Onglets :
 1. **Gestion de proyecto** → sous-sections **Documentation de projet** et **Gestion financière**.
 2. **Calendario** (gestion des événements).
 3. **Equipo** (CRUD personnes + gestion des entités).
-4. **Capacitaciones** (EE / AyS / G ; ajouter documents et événements).
+4. **Capacitaciones** (EE / AyS / G ; **documents** uniquement — les formations sont désormais des événements du Calendario, §4.3).
 5. **Gestion de subproyectos** (voir §4.5).
 
-Chaque ligne éditable expose son **UID** (visible/copiable) pour référencement dans les prompts.
+Chaque ligne éditable expose son **UID** (discret, **en début de ligne**, **sans bouton copier** — référence possible dans les prompts, mais minime ; peut ne jamais servir).
 
 **Confidentialité par ligne.** Sur les tables documentaires/informationnelles, chaque ligne commence par une **checkbox rouge** « Confidencial » (champ `confidencial`, défaut `false`). Cochée, la ligne devient invisible pour les **Consultor** (filtrée par RLS) ; Admin et Gestión la voient toujours. Tables concernées :
-- `documentacion_gp` (Documentation de projet)
+- `documentacion_gp` (Documentation de projet ; porte aussi un champ **`componente`** GP/EE/AyS/G, utilisé par le bloc Documentos du dashboard global — §4.1)
 - `gestion_financiera`
-- `capacitaciones_documentos` et `capacitaciones_eventos`
+- `capacitaciones_documentos` *(la table `capacitaciones_eventos` a été **supprimée** — formations = événements du Calendario)*
 - `gestion_lineas` (**uniquement les *Documentos*** ; les *Fases* ne sont pas confidentiables)
 - *(à étendre si d'autres tables portent des documents ; pas les tables de métriques/référence)*
 
@@ -192,7 +201,7 @@ Sélecteur de sous-projet groupé par sección :
 Par sous-projet, **4 sous-sections** :
 - **Datos del edificio** — édition *par champ* : `nombre`, typologie (pastille A/H/E), `direccion`, `lat`, `lng`, `superficie_m2`, `notas`. Unités affichées dans les libellés (kWh, tCO₂, €, m²).
 - **Datos de la factibilidad** — métriques scénario faisabilité + bénéficiaires (édition par champ ; NULL = « — », jamais 0).
-- **Datos de proyecto** — métriques scénario projet ; sans bénéficiaires.
+- **Datos de proyecto** — métriques scénario projet (sans bénéficiaires) **+ Mesures du projet** : liste fixe de **9 mesures** (table `medidas`, pré-remplie par sous-projet) — 6 EE (*Aislación, Carpinterías, HVAC, Luminarias, Fotovoltaicos, Solar térmica*), *Género* (G), *Otras medidas* (sin componente), *AyS*. Chaque mesure : **case à cocher** (`activa`) + **texte libre** (`texto`) + **kWh/an économisés** (`kwh_anual`, **sauf AyS**). Logos : 4 EE **jaunes**, Fotovoltaicos/Solar térmica **bleus**, Género **violet**, Otras **bâtiment gris**, AyS **vert**.
 - **Gestión del subproyecto** — deux sous-sections (voir `gestion_lineas` §3.3) : **Documentos** (table flexible, drag & drop, +/suppression) et **Fases** (liste fixe pré-remplie, 1 ligne par fase : nom en lecture seule + `estado` + `fecha inicio` + `fecha fin`).
 
 ### 4.6 Gestion des rôles (Admin uniquement)
