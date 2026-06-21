@@ -106,6 +106,7 @@ export function DashboardClient() {
           subproyectos={snap.data.subproyectos}
           metricas={snap.data.metricas}
           fases={snap.data.fases}
+          medidas={snap.data.medidas}
         />
       )}
 

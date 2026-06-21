@@ -1,31 +1,44 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase } from "@/lib/snapshot";
-import { FASES, ESTADOS, getTipologia, UI } from "@/lib/constants";
+import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase, SnapshotMedida } from "@/lib/snapshot";
+import { FASES, ESTADOS, MEDIDAS, getTipologia, UI } from "@/lib/constants";
+import { MedidaIcon } from "@/components/medida-icons";
 import { economiaKwh, economiaPct, porM2, suma } from "@/lib/calc";
 import { fmtNumero, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
 // ============================================================
 // Tableau « Resumen » (mode Proyecto global) — 9 sous-projets × groupes de
-// colonnes (CDC §4.1 / capture V2). En-têtes SOMBRES, lignes de données BLANCHES.
-// Ordre : Datos del edificio (toujours 1er, non masquable) → Progresión (jauge
-// des fases, colonnes étroites + titres verticaux) → Consumos → GEI → Costos →
-// Beneficiarios. Calculs dérivés JAMAIS stockés : calculés ici.
+// colonnes (CDC §4.1). En-têtes SOMBRES, lignes BLANCHES. Ordre : Tipo (1ʳᵉ col,
+// lettre A/H/E) → Datos del edificio → Progresión (initiales + légende) →
+// Medidas (logos allumés si activa) → Consumos → GEI → Costos → Beneficiarios.
+// Clic sur un en-tête = tri croissant/décroissant. Calculs dérivés calculés ici.
 // ============================================================
 
-// En-têtes : palette sombre (tokens UI). Corps : surfaces claires (var CSS).
-const HEAD_GROUP_BG = UI.text; // bandeau de groupes (plus foncé), opaque pour le sticky
-const HEAD_COL_BG = UI.sidebarBg; // ligne des titres de colonnes
+const HEAD_GROUP_BG = UI.text;
+const HEAD_COL_BG = UI.sidebarBg;
 const HEAD_TXT = UI.sidebarText;
 const HEAD_TXT_MUTED = UI.sidebarTextMuted;
 const HEAD_BORDER = UI.sidebarBorder;
 const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
 const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
+const MED_OFF = "#c7ccd3"; // mesure inactive : logo gris clair
 
-const PROG_W = 14; // largeur des colonnes Progresión (~1/3 d'une colonne normale)
-const PROG_FASES = FASES.filter((f) => f.code !== "general"); // « General » exclu de la jauge
+const PROG_W = 26; // colonnes Progresión (initiales horizontales)
+const MED_W = 30; // colonnes Medidas (logos)
+const PROG_FASES = FASES.filter((f) => f.code !== "general");
+
+// Initiales des fases (en-tête compact + légende sous le tableau).
+const FASE_INIT: Record<string, string> = {
+  estudios_preliminares: "EP",
+  anteproyecto: "AP",
+  proyecto_ejecutivo: "PE",
+  redaccion_pliegos: "PL",
+  no_objecion_afd: "NO",
+  licitacion: "LI",
+  obra: "OB",
+};
 
 const estadoLabel = (e: string | null) =>
   e === "terminado" ? "Terminado" : e === "en_proceso" ? "En proceso" : "Sin iniciar";
@@ -34,8 +47,10 @@ interface Fila {
   sub: SnapshotSubproyecto;
   met: SnapshotMetrica | undefined; // escenario faisabilidad (le seul rempli)
   estados: Record<string, string | null>; // fase code → estado
+  medidas: Set<string>; // codes des mesures actives
 }
 
+type SortVal = number | string | null;
 interface Columna {
   key: string;
   header: string;
@@ -43,6 +58,7 @@ interface Columna {
   minW?: string;
   display: (f: Fila) => ReactNode;
   csv: (f: Fila) => string;
+  sortVal: (f: Fila) => SortVal;
 }
 interface Grupo {
   key: string;
@@ -57,6 +73,7 @@ const numCol = (key: string, header: string, get: (f: Fila) => number | null, de
   align: "right",
   display: (f) => fmtNumero(get(f), dec),
   csv: (f) => csvNum(get(f)),
+  sortVal: (f) => get(f),
 });
 const pctCol = (key: string, header: string, get: (f: Fila) => number | null): Columna => ({
   key,
@@ -64,6 +81,7 @@ const pctCol = (key: string, header: string, get: (f: Fila) => number | null): C
   align: "right",
   display: (f) => fmtPct(get(f)),
   csv: (f) => csvNum(get(f)),
+  sortVal: (f) => get(f),
 });
 const txtCol = (key: string, header: string, get: (f: Fila) => string, minW?: string): Columna => ({
   key,
@@ -72,24 +90,26 @@ const txtCol = (key: string, header: string, get: (f: Fila) => string, minW?: st
   minW,
   display: (f) => get(f),
   csv: (f) => get(f),
+  sortVal: (f) => get(f),
 });
 
 const dem = (f: Fila) => f.met?.demanda_kwh ?? null;
 const demDesp = (f: Fila) => f.met?.demanda_despues_kwh ?? null;
 
-// Toujours en 1er, non masquable, sans adresse.
+// Tipo en 1ʳᵉ colonne (lettre A/H/E), puis Edificio, puis Superficie.
 const EDIFICIO: Grupo = {
   key: "edificio",
   label: "Datos del edificio",
   cols: [
-    txtCol("nombre", "Edificio", (f) => f.sub.nombre, "min-w-[200px]"),
     {
       key: "tipo",
       header: "Tipo",
       align: "left",
       display: (f) => <TipoBadge code={f.sub.tipologia} />,
       csv: (f) => getTipologia(f.sub.tipologia)?.nombre ?? f.sub.tipologia,
+      sortVal: (f) => f.sub.tipologia,
     },
+    txtCol("nombre", "Edificio", (f) => f.sub.nombre, "min-w-[200px]"),
     numCol("sup", "Superficie (m²)", (f) => f.sub.superficie_m2, 0),
   ],
 };
@@ -146,21 +166,28 @@ const DATA_GROUPS: Grupo[] = [
   },
 ];
 
-// Masquables (Datos del edificio est toujours affiché) : Progresión + groupes de données.
+// Masquables (Datos del edificio toujours affiché) : Progresión + Medidas + groupes de données.
 const TOGGLEABLE = [
   { key: "progresion", label: "Progresión" },
+  { key: "medidas", label: "Medidas" },
   ...DATA_GROUPS.map((g) => ({ key: g.key, label: g.label })),
 ];
+
+// Lookup des colonnes triables (edificio + données).
+const SORT_COLS = new Map<string, Columna>();
+for (const c of EDIFICIO.cols) SORT_COLS.set(c.key, c);
+for (const g of DATA_GROUPS) for (const c of g.cols) SORT_COLS.set(c.key, c);
 
 function TipoBadge({ code }: { code: string }) {
   const tp = getTipologia(code);
   if (!tp) return <span>{code}</span>;
   return (
     <span
-      className="inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-bold"
+      className="inline-block w-5 rounded text-center text-[11px] font-bold leading-5"
       style={{ backgroundColor: tp.color, color: tp.onColor }}
+      title={tp.nombre}
     >
-      {tp.nombre}
+      {tp.code}
     </span>
   );
 }
@@ -180,10 +207,14 @@ interface GlobalTableProps {
   subproyectos: SnapshotSubproyecto[];
   metricas: SnapshotMetrica[];
   fases: SnapshotFase[];
+  medidas: SnapshotMedida[];
 }
 
-export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps) {
+type Sort = { key: string; dir: "asc" | "desc" } | null;
+
+export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTableProps) {
   const [visible, setVisible] = useState<Set<string>>(() => new Set(TOGGLEABLE.map((g) => g.key)));
+  const [sort, setSort] = useState<Sort>(null);
 
   const filas = useMemo<Fila[]>(() => {
     const metMap = new Map<string, SnapshotMetrica>();
@@ -194,10 +225,39 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
       r[f.fase] = f.estado;
       faseMap.set(f.subproyecto_uid, r);
     }
-    return subproyectos.map((sub) => ({ sub, met: metMap.get(sub.uid), estados: faseMap.get(sub.uid) ?? {} }));
-  }, [subproyectos, metricas, fases]);
+    const medMap = new Map<string, Set<string>>();
+    for (const m of medidas) {
+      if (!m.activa) continue;
+      const s = medMap.get(m.subproyecto_uid) ?? new Set<string>();
+      s.add(m.medida);
+      medMap.set(m.subproyecto_uid, s);
+    }
+    return subproyectos.map((sub) => ({
+      sub,
+      met: metMap.get(sub.uid),
+      estados: faseMap.get(sub.uid) ?? {},
+      medidas: medMap.get(sub.uid) ?? new Set<string>(),
+    }));
+  }, [subproyectos, metricas, fases, medidas]);
+
+  const sortedFilas = useMemo(() => {
+    if (!sort) return filas;
+    const col = SORT_COLS.get(sort.key);
+    if (!col) return filas;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    return [...filas].sort((a, b) => {
+      const va = col.sortVal(a);
+      const vb = col.sortVal(b);
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1; // valeurs manquantes en dernier
+      if (vb == null) return -1;
+      if (typeof va === "number" && typeof vb === "number") return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), "es", { numeric: true }) * dir;
+    });
+  }, [filas, sort]);
 
   const progVis = visible.has("progresion");
+  const medVis = visible.has("medidas");
   const dataVis = DATA_GROUPS.filter((g) => visible.has(g.key));
 
   const toggle = (key: string) =>
@@ -208,12 +268,16 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
       return next;
     });
 
+  const onSort = (key: string) =>
+    setSort((p) => (p?.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+
   const exportar = () => {
     const cols: { header: string; csv: (f: Fila) => string }[] = [];
     for (const c of EDIFICIO.cols) cols.push({ header: `${EDIFICIO.label} — ${c.header}`, csv: c.csv });
     if (progVis) for (const fa of PROG_FASES) cols.push({ header: fa.nombre, csv: (f) => estadoLabel(f.estados[fa.code] ?? null) });
+    if (medVis) for (const m of MEDIDAS) cols.push({ header: `Medidas — ${m.nombre}`, csv: (f) => (f.medidas.has(m.code) ? "Sí" : "") });
     for (const g of dataVis) for (const c of g.cols) cols.push({ header: `${g.label} — ${c.header}`, csv: c.csv });
-    const rows = [cols.map((c) => c.header), ...filas.map((f) => cols.map((c) => c.csv(f)))];
+    const rows = [cols.map((c) => c.header), ...sortedFilas.map((f) => cols.map((c) => c.csv(f)))];
     downloadCsv("proyecto-global.csv", rows);
   };
 
@@ -223,6 +287,23 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
   const headGroupStyle = { backgroundColor: HEAD_GROUP_BG, color: HEAD_TXT, borderColor: HEAD_BORDER };
   const headColStyle = { backgroundColor: HEAD_COL_BG, color: HEAD_TXT_MUTED, borderColor: HEAD_BORDER };
   const bodyTd = "whitespace-nowrap border border-[var(--border)] px-2 py-1.5";
+
+  // En-tête de colonne triable (clic = croissant/décroissant).
+  const SortTh = ({ c }: { c: Columna }) => {
+    const active = sort?.key === c.key;
+    return (
+      <th
+        className={cn(colTh, c.minW, c.align === "right" ? "text-right" : "text-left", "cursor-pointer select-none")}
+        style={headColStyle}
+        onClick={() => onSort(c.key)}
+        aria-sort={active ? (sort!.dir === "asc" ? "ascending" : "descending") : "none"}
+        title="Ordenar"
+      >
+        {c.header}
+        {active ? (sort!.dir === "asc" ? " ▲" : " ▼") : ""}
+      </th>
+    );
+  };
 
   return (
     <section className="flex flex-col gap-2">
@@ -235,9 +316,7 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
               Columnas ▾
             </summary>
             <div className="absolute right-0 z-20 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2 shadow-lg">
-              <p className="px-2 pb-1 text-xs text-[var(--text-muted)]">
-                Datos del edificio siempre visible.
-              </p>
+              <p className="px-2 pb-1 text-xs text-[var(--text-muted)]">Datos del edificio siempre visible.</p>
               {TOGGLEABLE.map((g) => (
                 <label
                   key={g.key}
@@ -281,6 +360,11 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
                   Progresión
                 </th>
               )}
+              {medVis && (
+                <th colSpan={MEDIDAS.length} className={groupTh} style={headGroupStyle}>
+                  Medidas
+                </th>
+              )}
               {dataVis.map((g) => (
                 <th key={g.key} colSpan={g.cols.length} className={groupTh} style={headGroupStyle}>
                   {g.label}
@@ -290,45 +374,37 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
             {/* En-têtes de colonnes */}
             <tr>
               {EDIFICIO.cols.map((c) => (
-                <th
-                  key={c.key}
-                  className={cn(colTh, c.minW, c.align === "right" ? "text-right" : "text-left")}
-                  style={headColStyle}
-                >
-                  {c.header}
-                </th>
+                <SortTh key={c.key} c={c} />
               ))}
               {progVis &&
                 PROG_FASES.map((fa) => (
                   <th
                     key={fa.code}
                     title={fa.nombre}
-                    className="border px-0 py-1 text-center align-bottom"
+                    className="border px-1 py-1.5 text-center align-bottom text-[11px] font-medium"
                     style={{ ...headColStyle, width: PROG_W, minWidth: PROG_W }}
                   >
-                    <span
-                      className="mx-auto inline-block text-[11px] font-medium leading-none"
-                      style={{ writingMode: "vertical-rl" }}
-                    >
-                      {fa.nombre}
+                    {FASE_INIT[fa.code] ?? fa.nombre}
+                  </th>
+                ))}
+              {medVis &&
+                MEDIDAS.map((m) => (
+                  <th
+                    key={m.code}
+                    title={m.nombre}
+                    className="border px-0.5 py-1 text-center align-bottom"
+                    style={{ ...headColStyle, width: MED_W, minWidth: MED_W }}
+                  >
+                    <span className="inline-flex">
+                      <MedidaIcon code={m.code} size={16} />
                     </span>
                   </th>
                 ))}
-              {dataVis.flatMap((g) =>
-                g.cols.map((c) => (
-                  <th
-                    key={c.key}
-                    className={cn(colTh, c.minW, c.align === "right" ? "text-right" : "text-left")}
-                    style={headColStyle}
-                  >
-                    {c.header}
-                  </th>
-                )),
-              )}
+              {dataVis.flatMap((g) => g.cols.map((c) => <SortTh key={c.key} c={c} />))}
             </tr>
           </thead>
           <tbody>
-            {filas.map((f) => (
+            {sortedFilas.map((f) => (
               <tr key={f.sub.uid} className="hover:bg-[var(--app-bg)]">
                 {EDIFICIO.cols.map((c) => (
                   <td key={c.key} className={cn(bodyTd, c.align === "right" ? "text-right" : "text-left")}>
@@ -348,6 +424,22 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
                       />
                     );
                   })}
+                {medVis &&
+                  MEDIDAS.map((m) => {
+                    const on = f.medidas.has(m.code);
+                    return (
+                      <td
+                        key={m.code}
+                        title={`${m.nombre}: ${on ? "Sí" : "No"}`}
+                        className="border border-[var(--border)] text-center align-middle"
+                        style={{ width: MED_W, minWidth: MED_W }}
+                      >
+                        <span className="inline-flex">
+                          <MedidaIcon code={m.code} size={16} color={on ? undefined : MED_OFF} />
+                        </span>
+                      </td>
+                    );
+                  })}
                 {dataVis.flatMap((g) =>
                   g.cols.map((c) => (
                     <td key={c.key} className={cn(bodyTd, c.align === "right" ? "text-right" : "text-left")}>
@@ -360,6 +452,14 @@ export function GlobalTable({ subproyectos, metricas, fases }: GlobalTableProps)
           </tbody>
         </table>
       </div>
+
+      {/* Légende Progresión */}
+      {progVis && (
+        <p className="text-xs text-[var(--text-muted)]">
+          <span className="font-medium">Progresión :</span>{" "}
+          {PROG_FASES.map((fa) => `${FASE_INIT[fa.code]} = ${fa.nombre}`).join("  ·  ")}
+        </p>
+      )}
     </section>
   );
 }
