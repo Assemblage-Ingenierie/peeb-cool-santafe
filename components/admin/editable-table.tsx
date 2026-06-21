@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import { TrashIcon, SearchIcon } from "@/components/icons";
-import { CopyButton } from "./copy-button";
 
 // ============================================================
 // Tableau éditable réutilisable (style Airtable).
@@ -168,6 +167,11 @@ export function EditableTable({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--app-bg)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              {!hideUid && (
+                <th scope="col" className="w-px whitespace-nowrap px-3 py-2 font-medium normal-case">
+                  UID
+                </th>
+              )}
               {reorderable && (
                 <th scope="col" className="w-px px-1 py-2" title="Arrastrar para reordenar">
                   <span className="sr-only">Orden</span>
@@ -186,11 +190,6 @@ export function EditableTable({
               {showPublicar && (
                 <th scope="col" className="w-px whitespace-nowrap px-3 py-2" title="Publicar — visible en las páginas públicas (no afecta el acceso)">
                   Publicar
-                </th>
-              )}
-              {!hideUid && (
-                <th scope="col" className="px-3 py-2">
-                  UID
                 </th>
               )}
               {onDelete && (
@@ -233,6 +232,11 @@ export function EditableTable({
                     canReorder && overUid === row.uid && dragUid !== row.uid && "border-t-2 border-t-[var(--focus)]",
                   )}
                 >
+                  {!hideUid && (
+                    <td className="whitespace-nowrap px-3 py-1.5 align-middle">
+                      <span className="text-xs text-[var(--text-muted)]">{row.uid}</span>
+                    </td>
+                  )}
                   {reorderable && (
                     <td className="px-1 py-1.5 align-middle">
                       <span
@@ -292,17 +296,6 @@ export function EditableTable({
                   {showPublicar && (
                     <td className="px-3 py-1.5 align-middle">
                       <PublishToggle on={Boolean(row.publicar)} uid={row.uid} onToggle={(v) => onToggleFlag?.(row.uid, "publicar", v)} />
-                    </td>
-                  )}
-
-                  {!hideUid && (
-                    <td className="whitespace-nowrap px-3 py-1.5 align-middle">
-                      <span className="inline-flex items-center gap-1">
-                        <code className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">
-                          {row.uid}
-                        </code>
-                        <CopyButton value={row.uid} label={`Copiar UID ${row.uid}`} />
-                      </span>
                     </td>
                   )}
 
