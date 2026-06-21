@@ -96,24 +96,25 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
               <article
                 key={e.uid}
                 className={cn(
-                  "min-w-[200px] max-w-[220px] shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 transition-opacity",
+                  "min-w-[200px] max-w-[220px] shrink-0 rounded-md p-3 transition-opacity",
                   past && "opacity-50",
+                  !comp && "border border-[var(--border)] bg-[var(--surface)]",
                 )}
-                style={{ borderLeftWidth: 4, borderLeftColor: comp?.color ?? "var(--border)" }}
+                style={comp ? { backgroundColor: comp.color, color: comp.onColor } : undefined}
               >
-                <h3 className="truncate text-sm font-semibold text-[var(--text)]" title={e.nombre}>
+                <h3 className={cn("truncate text-sm font-semibold", !comp && "text-[var(--text)]")} title={e.nombre}>
                   {e.nombre}
                 </h3>
-                <p className="mt-1 text-xs text-[var(--text-muted)]">
+                <p className={cn("mt-1 text-xs", comp ? "opacity-80" : "text-[var(--text-muted)]")}>
                   {fmtFechaHora(e.fecha, e.hora_inicio)}
                 </p>
                 {e.participantesLabels.length > 0 && (
-                  <p className="mt-1 line-clamp-2 text-xs text-[var(--text-muted)]">
+                  <p className={cn("mt-1 line-clamp-2 text-xs", comp ? "opacity-80" : "text-[var(--text-muted)]")}>
                     {e.participantesLabels.join(", ")}
                   </p>
                 )}
                 {e.lugar && (
-                  <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={e.lugar}>
+                  <p className={cn("mt-1 truncate text-xs", comp ? "opacity-80" : "text-[var(--text-muted)]")} title={e.lugar}>
                     {e.lugar}
                   </p>
                 )}
