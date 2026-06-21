@@ -67,7 +67,7 @@ function useAdminTable(tableKey: string, initial: AdminRow[]) {
       setRows((rs) => rs.map((r) => (r.uid === uid ? { ...r, [key]: values } : r)));
       run(() => setArrayField(tableKey, uid, key, values));
     },
-    onToggleFlag: (uid: string, flag: "confidencial" | "publicar", value: boolean) => {
+    onToggleFlag: (uid: string, flag: string, value: boolean) => {
       setRows((rs) => rs.map((r) => (r.uid === uid ? { ...r, [flag]: value } : r)));
       run(() => setFlag(tableKey, uid, flag, value));
     },
@@ -99,7 +99,6 @@ export function AdminTabs({
   entidades,
   eventos,
   capdoc,
-  capevt,
   subproyectos,
   metricas,
   gestion,
@@ -109,7 +108,6 @@ export function AdminTabs({
   entidades: AdminRow[];
   eventos: AdminRow[];
   capdoc: AdminRow[];
-  capevt: AdminRow[];
   subproyectos: SubproyectoRow[];
   metricas: MetricaRow[];
   gestion: AdminRow[];
@@ -121,7 +119,6 @@ export function AdminTabs({
   const entidadesT = useAdminTable("entidades", entidades);
   const eventosT = useAdminTable("eventos", eventos);
   const capdocT = useAdminTable("capdoc", capdoc);
-  const capevtT = useAdminTable("capevt", capevt);
 
   // Options dynamiques (dépendent des données vivantes)
   const entidadOptions: SelectOption[] = entidadesT.rows.map((e) => ({
@@ -170,6 +167,8 @@ export function AdminTabs({
     { key: "lugar", label: "Lugar", type: "text", placeholder: "Lugar" },
     { key: "url_conexion", label: "Enlace", type: "url", placeholder: "https://…" },
     { key: "participantes", label: "Participantes", type: "multiselect", options: eventoParticipanteOptions, placeholder: "—" },
+    { key: "formacion", label: "Formación", type: "checkbox" },
+    { key: "url_documento", label: "URL documento", type: "url", placeholder: "https://…" },
   ];
 
   const equipoFilters: FilterDef[] = [
@@ -180,21 +179,10 @@ export function AdminTabs({
     { key: "componente", label: "Componente", options: COMPONENTE_OPTIONS },
   ];
 
-  const documentoOptions: SelectOption[] = capdocT.rows.map((d) => ({
-    value: d.uid,
-    label: `${String(d.subseccion ?? "")} — ${String(d.titulo ?? "") || d.uid}`,
-  }));
   const capdocColumns: AdminColumn[] = [
     { key: "titulo", label: "Título", type: "text", placeholder: "Título" },
     { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
     { key: "url", label: "Enlace (URL)", type: "url", placeholder: "https://…" },
-  ];
-  const capevtColumns: AdminColumn[] = [
-    { key: "componente", label: "Componente", type: "select", options: COMPONENTE_OPTIONS, placeholder: "—" },
-    { key: "documento_uid", label: "Documento", type: "select", options: documentoOptions, placeholder: "—" },
-    { key: "fecha_hora", label: "Fecha y hora", type: "datetime" },
-    { key: "entidades", label: "Entidades", type: "multiselect", options: entidadOptions, placeholder: "—" },
-    { key: "participantes", label: "Participantes", type: "multiselect", options: participanteOptions, placeholder: "—" },
   ];
   const capFilters: FilterDef[] = [{ key: "componente", label: "Componente", options: COMPONENTE_OPTIONS }];
 
@@ -328,28 +316,6 @@ export function AdminTabs({
                     filters={capFilters}
                     addLabel="+ Agregar documento"
                     emptyLabel="Sin documentos."
-                  />
-                </div>
-              ))}
-            </section>
-            <section>
-              <h2 className="text-base font-semibold text-[var(--text)]">Eventos</h2>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">
-                Formaciones realizadas o previstas, divididas por subsección.
-              </p>
-              {SUBSECCIONES.map((sub) => (
-                <div key={sub.code} className="mt-5">
-                  <SubseccionHeading code={sub.code} nombre={sub.nombre} color={sub.color} onColor={sub.onColor} />
-                  <EditableTable
-                    columns={capevtColumns}
-                    rows={capevtT.rows.filter((r) => r.subseccion === sub.code)}
-                    showConfidencial
-                    showPublicar
-                    {...capevtT.handlers}
-                    onAdd={() => capevtT.add({ subseccion: sub.code })}
-                    filters={capFilters}
-                    addLabel="+ Agregar evento"
-                    emptyLabel="Sin eventos."
                   />
                 </div>
               ))}

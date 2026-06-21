@@ -158,8 +158,8 @@ export async function setArrayField(
 
 /**
  * Supprime une ligne et nettoie les références orphelines :
- * - persona (equipo) → retirée de eventos.participantes[] et capevt.participantes[] ;
- * - entidad → equipo.entidad_uid mis à NULL (lève le blocage FK) + retirée de capevt.entidades[].
+ * - persona (equipo) → retirée de eventos.participantes[] ;
+ * - entidad → equipo.entidad_uid mis à NULL (lève le blocage FK) + retirée de eventos.participantes[].
  */
 export async function deleteRow(tableKey: string, uid: string): Promise<void> {
   assertAdmin();
@@ -175,7 +175,6 @@ export async function deleteRow(tableKey: string, uid: string): Promise<void> {
   // Persona : ses participations sont des text[] (pas de FK) → nettoyer après le delete.
   if (tableKey === "equipo") {
     await removeFromArray(sb, "peebcoolsf_eventos", "participantes", uid);
-    await removeFromArray(sb, "peebcoolsf_capacitaciones_eventos", "participantes", uid);
   }
 
   revalidatePath("/admin");
@@ -205,7 +204,6 @@ async function detachEntidad(sb: SupabaseClient, entidadUid: string): Promise<vo
     .update({ entidad_uid: null })
     .eq("entidad_uid", entidadUid);
   if (error) throw new Error(error.message);
-  await removeFromArray(sb, "peebcoolsf_capacitaciones_eventos", "entidades", entidadUid);
   // Une entidad peut être participante d'un evento (Calendario) → la retirer aussi.
   await removeFromArray(sb, "peebcoolsf_eventos", "participantes", entidadUid);
 }

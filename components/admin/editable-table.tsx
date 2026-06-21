@@ -16,7 +16,7 @@ import { TrashIcon, SearchIcon } from "@/components/icons";
 // Aucune couleur en dur : tokens lib/constants.ts (sauf couleurs passées en options).
 // ============================================================
 
-export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "datetime" | "multiselect";
+export type AdminColumnType = "text" | "url" | "select" | "date" | "time" | "datetime" | "multiselect" | "checkbox";
 
 export interface SelectOption {
   value: string;
@@ -56,7 +56,7 @@ interface EditableTableProps {
   showPublicar?: boolean;
   onCellCommit?: (uid: string, key: string, value: string) => void;
   onMultiCommit?: (uid: string, key: string, values: string[]) => void;
-  onToggleFlag?: (uid: string, flag: "confidencial" | "publicar", value: boolean) => void;
+  onToggleFlag?: (uid: string, flag: string, value: boolean) => void;
   onDelete?: (uid: string) => void;
   onAdd?: () => void;
   /** Active le drag & drop : reçoit l'ordre des UID après déplacement. */
@@ -285,6 +285,17 @@ export function EditableTable({
                     ) : col.type === "select" ? (
                       <td key={col.key} className="align-middle">
                         <SelectCell row={row} column={col} onCommit={(v) => onCellCommit?.(row.uid, col.key, v)} />
+                      </td>
+                    ) : col.type === "checkbox" ? (
+                      <td key={col.key} className="px-3 py-1.5 text-center align-middle">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(row[col.key])}
+                          onChange={(e) => onToggleFlag?.(row.uid, col.key, e.target.checked)}
+                          aria-label={`${col.label} — ${row.uid}`}
+                          className="h-4 w-4 cursor-pointer"
+                          style={{ accentColor: "var(--accent)" }}
+                        />
                       </td>
                     ) : (
                       <td key={col.key} className="align-middle">

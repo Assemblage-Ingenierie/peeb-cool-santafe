@@ -73,14 +73,14 @@ export const TABLES: Record<string, TableConfig> = {
     table: "peebcoolsf_eventos",
     uidPrefix: "EVT-",
     uidPad: 4,
-    textFields: ["nombre", "fecha", "hora_inicio", "hora_fin", "componente", "modalidad", "lugar", "url_conexion"],
+    textFields: ["nombre", "fecha", "hora_inicio", "hora_fin", "componente", "modalidad", "lugar", "url_conexion", "url_documento"],
     notNull: ["nombre", "fecha"],
     dateFields: ["fecha"],
-    flagFields: [],
+    flagFields: ["formacion"],
     arrayFields: ["participantes"],
     select:
-      "uid, nombre, fecha, hora_inicio, hora_fin, participantes, componente, modalidad, lugar, url_conexion",
-    defaults: { nombre: "", participantes: [] },
+      "uid, nombre, fecha, hora_inicio, hora_fin, participantes, componente, modalidad, lugar, url_conexion, url_documento, formacion",
+    defaults: { nombre: "", participantes: [], formacion: false },
     todayField: "fecha",
     orderBy: [
       { col: "fecha", ascending: true },
@@ -102,24 +102,6 @@ export const TABLES: Record<string, TableConfig> = {
     orderBy: [
       { col: "subseccion", ascending: true },
       { col: "orden", ascending: true, nullsFirst: false },
-      { col: "uid", ascending: true },
-    ],
-  },
-
-  capevt: {
-    table: "peebcoolsf_capacitaciones_eventos",
-    uidPrefix: "CAPEVT-",
-    uidPad: 4,
-    textFields: ["subseccion", "componente", "fecha_hora", "documento_uid"],
-    notNull: ["subseccion"],
-    dateFields: [],
-    flagFields: ["confidencial", "publicar"],
-    arrayFields: ["entidades", "participantes"],
-    select:
-      "uid, subseccion, componente, entidades, participantes, fecha_hora, documento_uid, confidencial, publicar",
-    defaults: { subseccion: "EE", entidades: [], participantes: [], confidencial: false, publicar: false },
-    orderBy: [
-      { col: "subseccion", ascending: true },
       { col: "uid", ascending: true },
     ],
   },
