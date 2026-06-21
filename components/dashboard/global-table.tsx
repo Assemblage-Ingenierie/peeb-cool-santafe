@@ -192,17 +192,6 @@ function TipoBadge({ code }: { code: string }) {
   );
 }
 
-function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 interface GlobalTableProps {
   subproyectos: SnapshotSubproyecto[];
   metricas: SnapshotMetrica[];
@@ -271,16 +260,6 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
   const onSort = (key: string) =>
     setSort((p) => (p?.key === key ? { key, dir: p.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
 
-  const exportar = () => {
-    const cols: { header: string; csv: (f: Fila) => string }[] = [];
-    for (const c of EDIFICIO.cols) cols.push({ header: `${EDIFICIO.label} — ${c.header}`, csv: c.csv });
-    if (progVis) for (const fa of PROG_FASES) cols.push({ header: fa.nombre, csv: (f) => estadoLabel(f.estados[fa.code] ?? null) });
-    if (medVis) for (const m of MEDIDAS) cols.push({ header: `Medidas — ${m.nombre}`, csv: (f) => (f.medidas.has(m.code) ? "Sí" : "") });
-    for (const g of dataVis) for (const c of g.cols) cols.push({ header: `${g.label} — ${c.header}`, csv: c.csv });
-    const rows = [cols.map((c) => c.header), ...sortedFilas.map((f) => cols.map((c) => c.csv(f)))];
-    downloadCsv("proyecto-global.csv", rows);
-  };
-
   // Styles d'en-tête (sombres) et de corps (clairs).
   const groupTh = "whitespace-nowrap border px-2 py-1.5 text-center text-xs font-semibold";
   const colTh = "border px-2 py-1.5 text-xs font-medium align-bottom";
@@ -333,13 +312,12 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
               ))}
             </div>
           </details>
-          <button
-            type="button"
-            onClick={exportar}
+          <a
+            href="/api/export-resumen"
             className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
           >
-            Exportar CSV
-          </button>
+            Exportar Excel
+          </a>
         </div>
       </div>
 
