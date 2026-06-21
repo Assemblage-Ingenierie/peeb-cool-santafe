@@ -54,6 +54,17 @@ export function GlobalBlocks({ data }: { data: Snapshot }) {
     };
   }, [fai, data.subproyectos]);
 
+  // Documents en lignes (ordre composante EE/AyS/G), avec couleur de liseré.
+  const docRows = useMemo(
+    () =>
+      DOC_SECCIONES.flatMap((c) =>
+        data.docsProyecto
+          .filter((d) => d.componente === c.code)
+          .map((d) => ({ ...d, color: c.color })),
+      ),
+    [data.docsProyecto],
+  );
+
   const kpis: { label: string; value: string }[] = [
     { label: "Superficie total", value: `${fmtNumero(t.superficie)} m²` },
     { label: "Demanda actual", value: `${fmtNumero(t.demanda)} kWh` },
@@ -84,43 +95,30 @@ export function GlobalBlocks({ data }: { data: Snapshot }) {
 
       {/* Documentos — sections EE / AyS / G */}
       <BlockCard title="Documentos">
-        <div className="flex flex-col gap-3">
-          {DOC_SECCIONES.map((c) => {
-            const docs = data.docsProyecto.filter((d) => d.componente === c.code);
-            return (
-              <div key={c.code}>
-                <h3 className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }} aria-hidden="true" />
-                  {c.nombre}
-                </h3>
-                {docs.length === 0 ? (
-                  <p className="text-xs text-[var(--text-muted)]">Sin documentos.</p>
+        {docRows.length === 0 ? (
+          <p className="text-xs text-[var(--text-muted)]">Sin documentos.</p>
+        ) : (
+          <ul className="divide-y divide-[var(--border)]">
+            {docRows.map((d) => (
+              <li key={d.uid} style={{ borderLeft: `4px solid ${d.color}` }}>
+                {d.url ? (
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block py-2 pl-3 pr-2 text-sm text-[var(--focus)] underline-offset-2 transition-colors hover:bg-[var(--app-bg)] hover:underline"
+                  >
+                    {d.nombre}
+                  </a>
                 ) : (
-                  <ul className="flex flex-col gap-0.5">
-                    {docs.map((d) => (
-                      <li key={d.uid}>
-                        {d.url ? (
-                          <a
-                            href={d.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-[var(--focus)] underline-offset-2 hover:underline"
-                          >
-                            {d.nombre}
-                          </a>
-                        ) : (
-                          <span className="text-sm text-[var(--text-muted)]" title="Sin enlace">
-                            {d.nombre}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+                  <span className="block py-2 pl-3 pr-2 text-sm text-[var(--text-muted)]" title="Sin enlace">
+                    {d.nombre}
+                  </span>
                 )}
-              </div>
-            );
-          })}
-        </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </BlockCard>
 
       {/* 3ᵉ bloc — sans titre pour le moment */}

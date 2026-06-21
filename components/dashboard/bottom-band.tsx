@@ -236,55 +236,40 @@ function Hint({ children }: { children: ReactNode }) {
   );
 }
 
-/** Documents groupés par composante ; cliquables si un lien existe. */
+/** Documents en lignes : séparateurs gris clair + liseré couleur de composante à gauche. */
 function DocumentosBlock({ docs }: { docs: SnapshotDocumento[] }) {
   if (docs.length === 0) return <Hint>Sin documentos.</Hint>;
 
-  const grupos: { label: string; color: string; items: SnapshotDocumento[] }[] = [];
-  for (const c of COMPONENTES) {
-    const items = docs.filter((d) => d.componente === c.code);
-    if (items.length) grupos.push({ label: c.nombre, color: c.color, items });
-  }
-  const sinComp = docs.filter(
-    (d) => !d.componente || !COMPONENTES.some((c) => c.code === d.componente),
-  );
-  if (sinComp.length) grupos.push({ label: "Sin componente", color: UI.border, items: sinComp });
+  const colorOf = (code: string | null) =>
+    COMPONENTES.find((c) => c.code === code)?.color ?? UI.border;
+  const rank = (code: string | null) => {
+    const i = COMPONENTES.findIndex((c) => c.code === code);
+    return i === -1 ? COMPONENTES.length : i;
+  };
+  // Tri par composante (GP/EE/AyS/G puis sans composante) ; ordre `orden` préservé dans chaque groupe.
+  const ordered = [...docs].sort((a, b) => rank(a.componente) - rank(b.componente));
 
   return (
-    <div className="flex flex-col gap-3">
-      {grupos.map((g) => (
-        <div key={g.label}>
-          <h3 className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: g.color }}
-              aria-hidden="true"
-            />
-            {g.label}
-          </h3>
-          <ul className="flex flex-col gap-0.5">
-            {g.items.map((d) =>
-              d.url ? (
-                <li key={d.uid}>
-                  <a
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-[var(--focus)] underline-offset-2 hover:underline"
-                  >
-                    {d.titulo}
-                  </a>
-                </li>
-              ) : (
-                <li key={d.uid} className="text-sm text-[var(--text-muted)]" title="Sin enlace">
-                  {d.titulo}
-                </li>
-              ),
-            )}
-          </ul>
-        </div>
+    <ul className="divide-y divide-[var(--border)]">
+      {ordered.map((d) => (
+        <li key={d.uid} style={{ borderLeft: `4px solid ${colorOf(d.componente)}` }}>
+          {d.url ? (
+            <a
+              href={d.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block py-2 pl-3 pr-2 text-sm text-[var(--focus)] underline-offset-2 transition-colors hover:bg-[var(--app-bg)] hover:underline"
+            >
+              {d.titulo}
+            </a>
+          ) : (
+            <span className="block py-2 pl-3 pr-2 text-sm text-[var(--text-muted)]" title="Sin enlace">
+              {d.titulo}
+            </span>
+          )}
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
