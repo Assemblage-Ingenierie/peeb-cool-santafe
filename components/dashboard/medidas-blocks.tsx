@@ -72,7 +72,19 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
                       </span>
                     ) : null}
                   </div>
-                  {row.texto ? <p className="mt-0.5 text-sm text-[var(--text-muted)]">{row.texto}</p> : null}
+                  {row.texto ? (
+                    <div className="mt-0.5 space-y-0.5 text-sm text-[var(--text-muted)]">
+                      {row.texto
+                        .split(/\s*[;\n]+\s*/)
+                        .map((s) => s.trim())
+                        .filter(Boolean)
+                        .map((linea, idx) => (
+                          <span key={idx} className="block">
+                            {linea}
+                          </span>
+                        ))}
+                    </div>
+                  ) : null}
                 </div>
               </li>
             ))}
