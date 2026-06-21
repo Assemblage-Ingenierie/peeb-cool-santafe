@@ -7,9 +7,11 @@ import { COMPONENTES, TIPOLOGIAS, ESTADOS, getTipologia } from "@/lib/constants"
 import { TrashIcon } from "@/components/icons";
 import { EditableTable, type AdminColumn, type AdminRow, type SelectOption } from "./editable-table";
 import { FieldEditor, type FieldDef } from "./field-editor";
+import { MedidasEditor } from "./medidas-editor";
 import {
   updateSubproyecto,
   updateMetrica,
+  updateMedida,
   addSchool,
   deleteSubproyecto,
   addGestionLinea,
@@ -18,7 +20,7 @@ import {
   setFlag,
   deleteRow,
 } from "@/app/admin/actions";
-import type { SubproyectoRow, MetricaRow, Escenario } from "@/lib/admin/read";
+import type { SubproyectoRow, MetricaRow, MedidaRow, Escenario } from "@/lib/admin/read";
 
 // ============================================================
 // Gestión de subproyectos (CDC §4.5) : sélecteur (groupé par sección) + 4 sections.
@@ -116,14 +118,17 @@ export function SubproyectosPanel({
   subproyectos: initialSubs,
   metricas: initialMetricas,
   gestionLineas: initialGestion,
+  medidas: initialMedidas,
 }: {
   subproyectos: SubproyectoRow[];
   metricas: MetricaRow[];
   gestionLineas: AdminRow[];
+  medidas: MedidaRow[];
 }) {
   const [subs, setSubs] = useState<SubproyectoRow[]>(initialSubs);
   const [metricas, setMetricas] = useState<MetricaRow[]>(initialMetricas);
   const [gestion, setGestion] = useState<AdminRow[]>(initialGestion);
+  const [medidas, setMedidas] = useState<MedidaRow[]>(initialMedidas);
   const [selectedUid, setSelectedUid] = useState<string | null>(initialSubs[0]?.uid ?? null);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -180,13 +185,39 @@ export function SubproyectosPanel({
     run(() => updateMetrica(selectedUid, escenario, key, value));
   };
 
+  // --- Section 3 : mesures du projet (table medidas) ---
+  const medidasOfSelected = useMemo(
+    () => medidas.filter((m) => m.subproyecto_uid === selectedUid),
+    [medidas, selectedUid],
+  );
+  const setMedidaLocal = (medida: string, patch: Partial<MedidaRow>) =>
+    setMedidas((rs) =>
+      rs.map((r) => (r.subproyecto_uid === selectedUid && r.medida === medida ? { ...r, ...patch } : r)),
+    );
+  const onMedidaToggle = (medida: string, activa: boolean) => {
+    if (!selectedUid) return;
+    setMedidaLocal(medida, { activa });
+    run(() => updateMedida(selectedUid, medida, "activa", activa ? "true" : "false"));
+  };
+  const onMedidaText = (medida: string, texto: string) => {
+    if (!selectedUid) return;
+    setMedidaLocal(medida, { texto: texto.trim() === "" ? null : texto });
+    run(() => updateMedida(selectedUid, medida, "texto", texto));
+  };
+  const onMedidaKwh = (medida: string, value: string) => {
+    if (!selectedUid) return;
+    const n = value.trim() === "" ? null : Number(value.replace(",", "."));
+    setMedidaLocal(medida, { kwh_anual: n === null || Number.isNaN(n) ? null : n });
+    run(() => updateMedida(selectedUid, medida, "kwh_anual", value));
+  };
+
   // --- Section 4 : gestion_lineas ---
   const gestionHandlers = {
     onCellCommit: (uid: string, key: string, value: string) => {
       setGestion((rs) => rs.map((r) => (r.uid === uid ? { ...r, [key]: value } : r)));
       run(() => updateField("gestion", uid, key, value));
     },
-    onToggleFlag: (uid: string, flag: "confidencial" | "publicar", value: boolean) => {
+    onToggleFlag: (uid: string, flag: string, value: boolean) => {
       setGestion((rs) => rs.map((r) => (r.uid === uid ? { ...r, [flag]: value } : r)));
       run(() => setFlag("gestion", uid, flag, value));
     },
@@ -411,6 +442,18 @@ export function SubproyectosPanel({
               fields={ENERGIA_FIELDS}
               values={(proy ?? {}) as unknown as Record<string, unknown>}
               onCommit={onMetricaField("proyecto")}
+            />
+
+            <h4 className="mb-1 mt-6 text-sm font-semibold text-[var(--text)]">Medidas del proyecto</h4>
+            <p className="mb-3 text-sm text-[var(--text-muted)]">
+              Marcá las medidas aplicadas. Texto libre + ahorro kWh/año (vacío = «&nbsp;—&nbsp;», nunca 0).
+            </p>
+            <MedidasEditor
+              subUid={selected.uid}
+              rows={medidasOfSelected}
+              onToggle={onMedidaToggle}
+              onText={onMedidaText}
+              onKwh={onMedidaKwh}
             />
           </section>
 

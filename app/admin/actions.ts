@@ -297,6 +297,54 @@ export async function updateMetrica(
   revalidatePath("/admin");
 }
 
+const MEDIDA_CODES = new Set([
+  "aislacion",
+  "carpinterias",
+  "hvac",
+  "luminarias",
+  "fotovoltaicos",
+  "solar_termica",
+  "genero",
+  "otras",
+  "ays",
+]);
+
+/**
+ * Met à jour une mesure du projet (clé : subproyecto_uid × medida).
+ * field : "activa" (bool) | "texto" (vide → NULL) | "kwh_anual" (numérique nullable ; interdit pour AyS).
+ */
+export async function updateMedida(
+  subproyectoUid: string,
+  medida: string,
+  field: string,
+  value: string,
+): Promise<void> {
+  assertAdmin();
+  if (!MEDIDA_CODES.has(medida)) throw new Error(`Medida inválida: ${medida}`);
+
+  let patch: Record<string, unknown>;
+  if (field === "activa") {
+    patch = { activa: value === "true" };
+  } else if (field === "texto") {
+    const t = (value ?? "").trim();
+    patch = { texto: t === "" ? null : t };
+  } else if (field === "kwh_anual") {
+    if (medida === "ays") throw new Error("La medida AyS no lleva kWh");
+    patch = { kwh_anual: parseNullableNumber(value) };
+  } else {
+    throw new Error(`Campo no editable: ${field}`);
+  }
+
+  const sb = createServiceClient();
+  const { error } = await sb
+    .from("peebcoolsf_medidas")
+    .update(patch)
+    .eq("subproyecto_uid", subproyectoUid)
+    .eq("medida", medida);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin");
+}
+
 /**
  * Ajoute une école (nouveau sous-projet, tipología E, sección Escuelas).
  * UID auto-généré `SUB-ESC-NNN` (incrémental, par max+1).

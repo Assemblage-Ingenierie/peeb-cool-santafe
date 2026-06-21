@@ -51,6 +51,56 @@ export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
 // ============================================================
+// Mesures du projet (CDC §4.5) — 9 mesures par sous-projet (table peebcoolsf_medidas).
+// Couleurs = TRAIT du pictogramme, style « ligne sur fond blanc » (validé avec le
+// client). Distinctes des pastels de composante (illisibles en trait fin). Source
+// unique des libellés/couleurs des mesures.
+// ============================================================
+
+export type MedidaCode =
+  | "aislacion"
+  | "carpinterias"
+  | "hvac"
+  | "luminarias"
+  | "fotovoltaicos"
+  | "solar_termica"
+  | "genero"
+  | "otras"
+  | "ays";
+
+export interface Medida {
+  code: MedidaCode;
+  nombre: string; // libellé es (Argentine)
+  componente: ComponenteCode | null;
+  color: string; // couleur du trait du pictogramme (ou de la lettre)
+  tieneKwh: boolean; // false → pas de champ kWh/an (AyS)
+  letra?: string; // si défini : rendu en badge-lettre (G / AyS) au lieu d'un picto
+}
+
+// Couleurs de trait des pictogrammes (lisibles sur fond blanc).
+const MED_EE = "#BF9000"; // 4 mesures EE — doré
+const MED_SOLAR = "#e69138"; // photovoltaïque + solaire thermique — orange
+const MED_G = "#534AB7"; // género — violet
+const MED_OTRAS = "#5F5E5A"; // otras medidas — gris
+const MED_AYS = "#639922"; // ambiental y social — vert
+
+// Ordre = colonne `orden` de peebcoolsf_medidas (1→9).
+export const MEDIDAS: Medida[] = [
+  { code: "aislacion",     nombre: "Aislación",          componente: "EE",  color: MED_EE,    tieneKwh: true },
+  { code: "carpinterias",  nombre: "Carpinterías",       componente: "EE",  color: MED_EE,    tieneKwh: true },
+  { code: "hvac",          nombre: "HVAC",               componente: "EE",  color: MED_EE,    tieneKwh: true },
+  { code: "luminarias",    nombre: "Luminarias",         componente: "EE",  color: MED_EE,    tieneKwh: true },
+  { code: "fotovoltaicos", nombre: "Fotovoltaicos",      componente: "EE",  color: MED_SOLAR, tieneKwh: true },
+  { code: "solar_termica", nombre: "Solar térmica",      componente: "EE",  color: MED_SOLAR, tieneKwh: true },
+  { code: "genero",        nombre: "Género",             componente: "G",   color: MED_G,     tieneKwh: true,  letra: "G" },
+  { code: "otras",         nombre: "Otras medidas",      componente: null,  color: MED_OTRAS, tieneKwh: true },
+  { code: "ays",           nombre: "Ambiental y social", componente: "AyS", color: MED_AYS,   tieneKwh: false, letra: "AyS" },
+];
+
+export const getMedida = (code: string): Medida | undefined =>
+  MEDIDAS.find((m) => m.code === code);
+
+// ============================================================
 // Référentiels de gestion (CDC §3.2) — codes alignés sur les tables
 // peebcoolsf_estados / _fases / _tipo_linea (seed). Source unique des
 // libellés/couleurs côté UI (selects de « Gestión del subproyecto »).

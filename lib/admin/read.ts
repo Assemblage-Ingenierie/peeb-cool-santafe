@@ -80,3 +80,25 @@ export async function listMetricas(): Promise<MetricaRow[]> {
   if (error) throw new Error(`Error al leer metricas: ${error.message}`);
   return (data ?? []) as unknown as MetricaRow[];
 }
+
+export type MedidaRow = {
+  subproyecto_uid: string;
+  medida: string;
+  componente: string | null;
+  activa: boolean;
+  texto: string | null;
+  kwh_anual: number | null;
+  orden: number;
+};
+
+/** Mesures du projet (9 par sous-projet, table peebcoolsf_medidas), ordonnées. */
+export async function listMedidas(): Promise<MedidaRow[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("peebcoolsf_medidas")
+    .select("subproyecto_uid, medida, componente, activa, texto, kwh_anual, orden")
+    .order("subproyecto_uid", { ascending: true })
+    .order("orden", { ascending: true });
+  if (error) throw new Error(`Error al leer medidas: ${error.message}`);
+  return (data ?? []) as unknown as MedidaRow[];
+}
