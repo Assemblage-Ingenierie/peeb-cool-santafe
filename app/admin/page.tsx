@@ -37,7 +37,7 @@ export default async function AdminPage() {
     <section className="mx-auto max-w-6xl">
       <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">Admin</h1>
       <p className="mt-1 text-sm text-[var(--text-muted)]">
-        Base de datos del proyecto. Cada fila muestra su UID al inicio para referenciarla.
+        Base de datos del proyecto.
       </p>
       <div className="mt-6">
         <AdminTabs

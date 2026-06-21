@@ -65,7 +65,6 @@ interface EditableTableProps {
   emptyLabel?: string;
   searchPlaceholder?: string;
   filters?: FilterDef[];
-  hideUid?: boolean; // masque la colonne UID (ex. liste de fases fixe)
   hideSearch?: boolean; // masque le champ de recherche (ex. liste fixe et courte)
 }
 
@@ -84,7 +83,6 @@ export function EditableTable({
   emptyLabel = "Sin registros.",
   searchPlaceholder = "Buscar…",
   filters,
-  hideUid = false,
   hideSearch = false,
 }: EditableTableProps) {
   const [query, setQuery] = useState("");
@@ -132,7 +130,6 @@ export function EditableTable({
     (showConfidencial ? 1 : 0) +
     columns.length +
     (showPublicar ? 1 : 0) +
-    (hideUid ? 0 : 1) +
     (onDelete ? 1 : 0);
 
   return (
@@ -167,11 +164,6 @@ export function EditableTable({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--app-bg)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-              {!hideUid && (
-                <th scope="col" className="w-px whitespace-nowrap px-2 py-2 text-[10px] font-normal normal-case opacity-70">
-                  UID
-                </th>
-              )}
               {reorderable && (
                 <th scope="col" className="w-px px-1 py-2" title="Arrastrar para reordenar">
                   <span className="sr-only">Orden</span>
@@ -232,13 +224,6 @@ export function EditableTable({
                     canReorder && overUid === row.uid && dragUid !== row.uid && "border-t-2 border-t-[var(--focus)]",
                   )}
                 >
-                  {!hideUid && (
-                    <td className="whitespace-nowrap px-2 py-1.5 align-middle">
-                      <span className="text-[10px] leading-none text-[var(--text-muted)] opacity-70">
-                        {row.uid}
-                      </span>
-                    </td>
-                  )}
                   {reorderable && (
                     <td className="px-1 py-1.5 align-middle">
                       <span

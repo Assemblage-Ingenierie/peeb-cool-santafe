@@ -376,7 +376,6 @@ export function SubproyectosPanel({
         <div className="space-y-10">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-[var(--text)]">{selected.nombre}</h2>
-            <code className="rounded bg-[var(--app-bg)] px-1.5 py-0.5 text-xs text-[var(--text-muted)]">{selected.uid}</code>
             {selected.seccion === "Escuelas" &&
               (confirmingDelete ? (
                 <span className="ml-auto inline-flex flex-wrap items-center gap-2 rounded-md border border-[var(--accent)] bg-[var(--surface)] px-2 py-1">
@@ -481,7 +480,6 @@ export function SubproyectosPanel({
                 columns={fasesColumns}
                 rows={gestionFases}
                 onCellCommit={gestionHandlers.onCellCommit}
-                hideUid
                 hideSearch
                 emptyLabel="Sin fases."
               />
