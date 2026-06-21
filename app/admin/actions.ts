@@ -108,6 +108,8 @@ export async function updateField(
   if (value === "") {
     if (cfg.dateFields.includes(field)) return; // date NOT NULL : ignorer une valeur vide
     v = cfg.notNull.includes(field) ? "" : null;
+  } else if (field === "apellido") {
+    v = value.trim().toUpperCase(); // règle : apellidos toujours en MAJUSCULES
   } else {
     v = field === "url" || field === "url_conexion" ? value.trim() : value;
   }
