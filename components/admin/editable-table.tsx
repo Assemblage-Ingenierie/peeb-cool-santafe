@@ -168,7 +168,7 @@ export function EditableTable({
           <thead>
             <tr className="border-b border-[var(--border)] bg-[var(--app-bg)] text-left text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               {!hideUid && (
-                <th scope="col" className="w-px whitespace-nowrap px-3 py-2 font-medium normal-case">
+                <th scope="col" className="w-px whitespace-nowrap px-2 py-2 text-[10px] font-normal normal-case opacity-70">
                   UID
                 </th>
               )}
@@ -233,8 +233,10 @@ export function EditableTable({
                   )}
                 >
                   {!hideUid && (
-                    <td className="whitespace-nowrap px-3 py-1.5 align-middle">
-                      <span className="text-xs text-[var(--text-muted)]">{row.uid}</span>
+                    <td className="whitespace-nowrap px-2 py-1.5 align-middle">
+                      <span className="text-[10px] leading-none text-[var(--text-muted)] opacity-70">
+                        {row.uid}
+                      </span>
                     </td>
                   )}
                   {reorderable && (
