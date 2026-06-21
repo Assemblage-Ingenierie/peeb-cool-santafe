@@ -5,6 +5,7 @@ import type {
   Snapshot,
   SnapshotDocumento,
   SnapshotFase,
+  SnapshotMedida,
   SnapshotMetrica,
   Escenario,
 } from "@/lib/snapshot";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/cn";
 import { DatosCard } from "./datos-card";
 import { useEscenarioToggle } from "./use-escenario";
 import { GlobalBlocks } from "./global-blocks";
+import { MedidasBlocks, MedidaLogos } from "./medidas-blocks";
 
 interface BottomBandProps {
   mode: "global" | "subproyectos";
@@ -59,6 +61,16 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
       const arr = m.get(d.subproyecto_uid) ?? [];
       arr.push(d);
       m.set(d.subproyecto_uid, arr);
+    }
+    return m;
+  }, [data]);
+
+  const medidasBySub = useMemo(() => {
+    const m = new Map<string, SnapshotMedida[]>();
+    for (const x of data?.medidas ?? []) {
+      const arr = m.get(x.subproyecto_uid) ?? [];
+      arr.push(x);
+      m.set(x.subproyecto_uid, arr);
     }
     return m;
   }, [data]);
@@ -145,50 +157,72 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
       : getTipologia(tipo)?.nombre ?? "Grupo";
 
   return (
-    <section className="grid gap-4 lg:grid-cols-3">
-      <BlockCard title="Datos">
-        {scopeSubs.length === 0 ? (
-          <Hint>Sin datos.</Hint>
-        ) : (
-          <>
-            <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{scopeLabel}</p>
-            <DatosCard
-              antes={totales.antes}
-              despues={totales.despues}
-              superficie={totales.m2}
-              escenario={escenario}
-              canToggle={canToggle}
-              onSelectEscenario={select}
-            />
-          </>
-        )}
-      </BlockCard>
+    <>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <BlockCard
+          title="Datos"
+          headerRight={single ? <MedidaLogos medidas={medidasBySub.get(single.uid) ?? []} /> : undefined}
+        >
+          {scopeSubs.length === 0 ? (
+            <Hint>Sin datos.</Hint>
+          ) : (
+            <>
+              <p className="mb-2 text-xs font-medium text-[var(--text-muted)]">{scopeLabel}</p>
+              <DatosCard
+                antes={totales.antes}
+                despues={totales.despues}
+                superficie={totales.m2}
+                escenario={escenario}
+                canToggle={canToggle}
+                onSelectEscenario={select}
+              />
+            </>
+          )}
+        </BlockCard>
 
-      <BlockCard title="Documentos">
-        {single ? (
-          <DocumentosBlock docs={docsBySub.get(single.uid) ?? []} />
-        ) : (
-          <Hint>Seleccioná un subproyecto.</Hint>
-        )}
-      </BlockCard>
+        <BlockCard title="Documentos">
+          {single ? (
+            <DocumentosBlock docs={docsBySub.get(single.uid) ?? []} />
+          ) : (
+            <Hint>Seleccioná un subproyecto.</Hint>
+          )}
+        </BlockCard>
 
-      <BlockCard title="Progreso">
-        {single ? (
-          <ProgresoBlock fases={fasesBySub.get(single.uid) ?? []} />
-        ) : (
-          <Hint>Seleccioná un subproyecto.</Hint>
-        )}
-      </BlockCard>
-    </section>
+        <BlockCard title="Progreso">
+          {single ? (
+            <ProgresoBlock fases={fasesBySub.get(single.uid) ?? []} />
+          ) : (
+            <Hint>Seleccioná un subproyecto.</Hint>
+          )}
+        </BlockCard>
+      </section>
+
+      {single ? (
+        <div className="mt-4">
+          <MedidasBlocks medidas={medidasBySub.get(single.uid) ?? []} />
+        </div>
+      ) : null}
+    </>
   );
 }
 
 // --- Sous-composants --------------------------------------------------------
 
-function BlockCard({ title, children }: { title: string; children: ReactNode }) {
+function BlockCard({
+  title,
+  headerRight,
+  children,
+}: {
+  title: string;
+  headerRight?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-      <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-[var(--text)]">{title}</h2>
+        {headerRight}
+      </div>
       <div className="mt-3">{children}</div>
     </div>
   );

@@ -47,7 +47,7 @@ export function MedidasEditor({ subUid, rows, onToggle, onText, onKwh }: Medidas
                 onChange={(e) => onToggle(m.code, e.target.checked)}
                 aria-label={`Activa — ${m.nombre}`}
                 className="h-4 w-4 cursor-pointer"
-                style={{ accentColor: "var(--focus)" }}
+                style={{ accentColor: m.color }}
               />
               Activa
             </label>

@@ -90,6 +90,18 @@ export interface SnapshotEvento {
   participantesLabels: string[]; // libellés résolus, même ordre
 }
 
+// Mesure du projet (table peebcoolsf_medidas) — blocs « Medidas » du mode
+// Subproyectos (CDC §4.1/§4.5). À l'affichage : seules les mesures `activa` sont montrées.
+export interface SnapshotMedida {
+  subproyecto_uid: string;
+  medida: string; // code (voir MEDIDAS dans lib/constants)
+  componente: string | null; // EE | G | AyS | null
+  activa: boolean;
+  texto: string | null;
+  kwh_anual: number | null; // null pour AyS (jamais de kWh)
+  orden: number;
+}
+
 export interface Snapshot {
   generatedAt: string; // ISO — « última actualización » + cache PWA (Étape 5)
   subproyectos: SnapshotSubproyecto[];
@@ -98,6 +110,7 @@ export interface Snapshot {
   documentos: SnapshotDocumento[];
   docsProyecto: SnapshotDocProyecto[];
   eventos: SnapshotEvento[];
+  medidas: SnapshotMedida[];
 }
 
 // --- Types bruts (lignes PostgREST) --------------------------------------
@@ -143,12 +156,13 @@ const METRICA_COLS =
 const GESTION_COLS =
   "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden";
 const DOCGP_COLS = "uid, nombre_documento, url, componente, publicar, orden";
+const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anual, orden";
 
 /** Construit le snapshot complet (un seul aller-retour groupé). */
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = createServiceClient();
 
-  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes] = await Promise.all([
+  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes, medRes] = await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
       .select(SUB_COLS)
@@ -179,6 +193,11 @@ export async function getSnapshot(): Promise<Snapshot> {
       .select(DOCGP_COLS)
       .order("orden", { ascending: true, nullsFirst: false })
       .order("uid", { ascending: true }),
+    sb
+      .from("peebcoolsf_medidas")
+      .select(MEDIDA_COLS)
+      .order("subproyecto_uid", { ascending: true })
+      .order("orden", { ascending: true }),
   ]);
 
   const firstError =
@@ -188,7 +207,8 @@ export async function getSnapshot(): Promise<Snapshot> {
     evtRes.error ||
     eqRes.error ||
     entRes.error ||
-    docGpRes.error;
+    docGpRes.error ||
+    medRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -263,5 +283,6 @@ export async function getSnapshot(): Promise<Snapshot> {
     documentos,
     docsProyecto,
     eventos,
+    medidas: (medRes.data ?? []) as unknown as SnapshotMedida[],
   };
 }
