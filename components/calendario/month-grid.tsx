@@ -18,6 +18,7 @@ interface MonthGridProps {
   eventos: SnapshotEvento[];
   hoy: string; // « AAAA-MM-DD » (jour courant, local)
   zona: Zona;
+  onSelect: (evento: SnapshotEvento) => void;
 }
 
 /**
@@ -26,7 +27,7 @@ interface MonthGridProps {
  * Événements en pastilles « couleur pleine » de la composante (réutilise
  * getComponente, cf. components/dashboard/agenda.tsx), triées par heure.
  */
-export function MonthGrid({ year, month, eventos, hoy, zona }: MonthGridProps) {
+export function MonthGrid({ year, month, eventos, hoy, zona, onSelect }: MonthGridProps) {
   const dias = diasDelMes(year, month);
 
   // Regroupement par jour (clé = `fecha` brute). Événements sans nom ignorés
@@ -93,7 +94,7 @@ export function MonthGrid({ year, month, eventos, hoy, zona }: MonthGridProps) {
 
               <div className="flex flex-col gap-0.5">
                 {visibles.map((e) => (
-                  <Pastilla key={e.uid} evento={e} zona={zona} />
+                  <Pastilla key={e.uid} evento={e} zona={zona} onSelect={onSelect} />
                 ))}
                 {resto > 0 && (
                   <span className="px-1 text-[11px] text-[var(--text-muted)]">+{resto} más</span>
@@ -107,24 +108,34 @@ export function MonthGrid({ year, month, eventos, hoy, zona }: MonthGridProps) {
   );
 }
 
-/** Pastille d'un événement : fond plein de la couleur de composante + heure + nom. */
-function Pastilla({ evento, zona }: { evento: SnapshotEvento; zona: Zona }) {
+/** Pastille cliquable : fond plein de la couleur de composante + heure + nom. */
+function Pastilla({
+  evento,
+  zona,
+  onSelect,
+}: {
+  evento: SnapshotEvento;
+  zona: Zona;
+  onSelect: (evento: SnapshotEvento) => void;
+}) {
   const comp = evento.componente ? getComponente(evento.componente) : undefined;
   const hora = horaEnZona(evento.fecha, evento.hora_inicio, zona);
   const titulo = `${hora ? hora + " · " : ""}${evento.nombre}`;
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={() => onSelect(evento)}
+      title={titulo}
       className={cn(
-        "truncate rounded px-1.5 py-0.5 text-[11px] leading-tight",
+        "block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] leading-tight transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
         !comp && "border border-[var(--border)] bg-[var(--surface)] text-[var(--text)]",
       )}
       style={comp ? { backgroundColor: comp.color, color: comp.onColor } : undefined}
-      title={titulo}
     >
       {hora && <span className="font-semibold">{hora}</span>}
       {hora ? " " : ""}
       {evento.nombre}
-    </div>
+    </button>
   );
 }

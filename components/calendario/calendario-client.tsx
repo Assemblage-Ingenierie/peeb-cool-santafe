@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import type { SnapshotEvento } from "@/lib/snapshot";
 import { cn } from "@/lib/cn";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { MonthGrid } from "./month-grid";
+import { EventoModal } from "./evento-modal";
 import { MESES, offsetLabel, hoyStr, type Zona } from "./fechas";
 
 const ZONA_KEY = "peebcoolsf:calendario:zona";
@@ -27,6 +29,9 @@ export function CalendarioClient() {
     const n = new Date();
     return { year: n.getFullYear(), month: n.getMonth() };
   });
+
+  // Événement sélectionné (modal de détail).
+  const [sel, setSel] = useState<SnapshotEvento | null>(null);
 
   // Zone d'affichage des horaires (défaut Argentine, mémorisée dans localStorage).
   // Initialiseur paresseux avec garde SSR : `localStorage` n'existe pas côté serveur.
@@ -138,8 +143,11 @@ export function CalendarioClient() {
           eventos={snap.status === "ready" ? snap.data.eventos : []}
           hoy={hoyStr()}
           zona={zona}
+          onSelect={setSel}
         />
       )}
+
+      {sel && <EventoModal evento={sel} zona={zona} onClose={() => setSel(null)} />}
     </div>
   );
 }

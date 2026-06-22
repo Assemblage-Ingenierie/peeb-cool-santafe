@@ -20,6 +20,12 @@ const ZONA_TZ: Record<Zona, string> = {
   FR: "Europe/Paris", // UTC+1 / UTC+2 (heure d'été)
 };
 
+// Nom affichable de la zone (pour les libellés de fuseau).
+export const ZONA_NOMBRE: Record<Zona, string> = {
+  AR: "Argentina",
+  FR: "Francia",
+};
+
 // Argentine = UTC−3 toute l'année (pas d'heure d'été) → un horaire mural argentin
 // correspond à l'instant UTC « +3h ». Constante explicite, vérifiée et stable.
 const AR_OFFSET_H = 3;
@@ -62,6 +68,28 @@ export function horaEnZona(fecha: string, hora: string | null, zona: Zona): stri
     minute: "2-digit",
     hour12: false,
   }).format(instante);
+}
+
+/** « DD/MM/AAAA » à partir de « AAAA-MM-DD » (sans Date → pas de décalage). */
+export function fmtFecha(fecha: string): string {
+  const [y, m, d] = fecha.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/**
+ * Plage horaire dans la zone active : « HH:MM–HH:MM », ou « HH:MM » (sans fin),
+ * ou null si pas d'heure de début. Les heures sont converties depuis l'Argentine.
+ */
+export function horaRangoEnZona(
+  fecha: string,
+  hi: string | null,
+  hf: string | null,
+  zona: Zona,
+): string | null {
+  const inicio = horaEnZona(fecha, hi, zona);
+  if (!inicio) return null;
+  const fin = horaEnZona(fecha, hf, zona);
+  return fin ? `${inicio}–${fin}` : inicio;
 }
 
 /**
