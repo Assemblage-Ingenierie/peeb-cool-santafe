@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, type PointerEvent } from "react";
+import { useEffect, useRef, type PointerEvent } from "react";
 import type { SnapshotEvento } from "@/lib/snapshot";
 import { getComponente } from "@/lib/constants";
 import { cn } from "@/lib/cn";
@@ -20,11 +20,25 @@ function fmtFechaHora(fecha: string, hora: string | null): string {
   return s;
 }
 
+// Recale le défilement sur le prochain événement à venir (ou le dernier si tous
+// passés). Helper au niveau module → stable, sans mémoïsation manuelle (compatible
+// React Compiler).
+function scrollToTarget(c: HTMLDivElement | null, firstUpcoming: number) {
+  if (!c) return;
+  const target =
+    firstUpcoming >= 0
+      ? (c.children[firstUpcoming] as HTMLElement | undefined)
+      : (c.lastElementChild as HTMLElement | null);
+  if (target) target.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
+  else c.scrollLeft = 0;
+}
+
 interface AgendaProps {
   eventos: SnapshotEvento[];
   loading: boolean;
   error: string | null;
   labelClassName?: string;
+  labelFooter?: React.ReactNode; // sous le libellé « Agenda » (ex. alerte « +N »)
 }
 
 /**
@@ -32,7 +46,7 @@ interface AgendaProps {
  * passés estompés ; calée par défaut sur le prochain événement à venir.
  * Cliquer le libellé « Agenda » réinitialise le défilement.
  */
-export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps) {
+export function Agenda({ eventos, loading, error, labelClassName, labelFooter }: AgendaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = todayStr();
 
@@ -50,22 +64,11 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
 
   const firstUpcoming = items.findIndex((e) => e.fecha >= today);
 
-  const scrollToDefault = useCallback(() => {
-    const c = scrollRef.current;
-    if (!c) return;
-    const target =
-      firstUpcoming >= 0
-        ? (c.children[firstUpcoming] as HTMLElement | undefined)
-        : (c.lastElementChild as HTMLElement | null);
-    if (target) target.scrollIntoView({ behavior: "auto", inline: "start", block: "nearest" });
-    else c.scrollLeft = 0;
-  }, [firstUpcoming]);
-
   // Recalage par défaut au montage et quand la liste change.
   useEffect(() => {
-    const id = requestAnimationFrame(scrollToDefault);
+    const id = requestAnimationFrame(() => scrollToTarget(scrollRef.current, firstUpcoming));
     return () => cancelAnimationFrame(id);
-  }, [scrollToDefault]);
+  }, [firstUpcoming]);
 
   // Défilement horizontal par glisser (souris) ; tactile = défilement natif.
   const drag = useRef({ down: false, startX: 0, startLeft: 0 });
@@ -88,17 +91,17 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
 
   return (
     <section className="flex items-start gap-4">
-      <button
-        type="button"
-        onClick={scrollToDefault}
-        title="Volver al próximo evento"
-        className={cn(
-          labelClassName,
-          "rounded-md text-left text-base font-semibold text-[var(--text)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        )}
-      >
-        Agenda
-      </button>
+      <div className={cn(labelClassName, "flex flex-col gap-1")}>
+        <button
+          type="button"
+          onClick={() => scrollToTarget(scrollRef.current, firstUpcoming)}
+          title="Volver al próximo evento"
+          className="rounded-md text-left text-base font-semibold text-[var(--text)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+        >
+          Agenda
+        </button>
+        {labelFooter}
+      </div>
 
       <div
         ref={scrollRef}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { useSnapshot } from "./use-snapshot";
 import { Agenda } from "./agenda";
+import { NuevosEventosBadge } from "./nuevos-eventos-badge";
 import { SeguimientoPanel } from "./seguimiento-panel";
 import { GlobalTable } from "./global-table";
 import { BottomBand } from "./bottom-band";
@@ -43,6 +44,11 @@ export function DashboardClient() {
         loading={loading}
         error={error}
         labelClassName={LABEL_COL}
+        labelFooter={
+          snap.status === "ready" ? (
+            <NuevosEventosBadge actividad={snap.data.actividadEventos} />
+          ) : null
+        }
       />
 
       {/* Gestión : projet global (par défaut) ou subproyectos */}
