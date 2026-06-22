@@ -4,9 +4,9 @@ import { FASES, ESTADOS, MEDIDAS, getTipologia } from "@/lib/constants";
 import { economiaKwh, economiaPct, porM2, suma } from "@/lib/calc";
 
 // ============================================================
-// GET /api/export-resumen — exporte le tableau « Resumen » en .xlsx mis en forme
-// (mêmes colonnes/groupes que l'écran : Tipo lettre, Progresión, Medidas allumées,
-// Consumos/GEI/Costos/Beneficiarios). Construit en service_role côté serveur.
+// GET /api/export-resumen — exporte le tableau « Resumen » en .xlsx mis en forme.
+// Respecte la vue à l'écran : ?cols=<groupes visibles> & ?sort=<colKey>:<asc|desc>.
+// (Datos del edificio toujours présent.) Construit en service_role côté serveur.
 // ============================================================
 
 export const runtime = "nodejs";
@@ -35,7 +35,9 @@ interface Fila {
 
 type Kind = "tipo" | "nombre" | "num" | "pct" | "prog" | "med";
 interface ColDef {
-  group: string;
+  gkey: string; // clé de groupe (edificio/progresion/medidas/consumos/gei/costos/beneficiarios)
+  key: string; // clé de colonne (= clés du tableau client, pour le tri)
+  group: string; // libellé du groupe (en-tête fusionné)
   h: string;
   kind: Kind;
   w: number;
@@ -47,9 +49,13 @@ interface ColDef {
   color?: string;
 }
 
-export async function GET() {
-  const snap = await getSnapshot();
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const colsParam = url.searchParams.get("cols");
+  const visibleGroups = colsParam == null ? null : new Set(colsParam.split(",").filter(Boolean));
+  const sortParam = url.searchParams.get("sort");
 
+  const snap = await getSnapshot();
   const metMap = new Map<string, SnapshotMetrica>();
   for (const m of snap.metricas) if (m.escenario === "faisabilidad") metMap.set(m.subproyecto_uid, m);
   const faseMap = new Map<string, Record<string, string | null>>();
@@ -79,38 +85,60 @@ export async function GET() {
   const EDI = "Datos del edificio", CONS = "Consumos de energía (demanda teórica)";
   const GEI = "Emisiones de GEI", COST = "Costos de inversión", BEN = "Beneficiarios";
 
-  const cols: ColDef[] = [
-    { group: EDI, h: "Tipo", kind: "tipo", w: 7 },
-    { group: EDI, h: "Edificio", kind: "nombre", w: 38 },
-    { group: EDI, h: "Superficie (m²)", kind: "num", get: sup, fmt: NUM, w: 13 },
-    ...PROG_FASES.map((fa): ColDef => ({ group: "Progresión", h: FASE_INIT[fa.code] ?? fa.code, kind: "prog", fase: fa.code, w: 5 })),
-    ...MEDIDAS.map((m): ColDef => ({ group: "Medidas", h: m.nombre, kind: "med", code: m.code, color: m.color, w: 5, rot: true })),
-    { group: CONS, h: "Antes (kWh)", kind: "num", get: dem, fmt: NUM, w: 13 },
-    { group: CONS, h: "Antes (kWh/m²)", kind: "num", get: (f) => porM2(dem(f), sup(f)), fmt: D1, w: 13 },
-    { group: CONS, h: "Después (kWh)", kind: "num", get: demD, fmt: NUM, w: 13 },
-    { group: CONS, h: "Después (kWh/m²)", kind: "num", get: (f) => porM2(demD(f), sup(f)), fmt: D1, w: 14 },
-    { group: CONS, h: "Ahorro (kWh)", kind: "num", get: (f) => economiaKwh(dem(f), demD(f)), fmt: NUM, w: 13 },
-    { group: CONS, h: "Ahorro (kWh/m²)", kind: "num", get: (f) => porM2(economiaKwh(dem(f), demD(f)), sup(f)), fmt: D1, w: 14 },
-    { group: CONS, h: "Ahorro (%)", kind: "pct", get: (f) => economiaPct(dem(f), demD(f)), fmt: PCT, w: 12 },
-    { group: GEI, h: "Antes (tCO₂)", kind: "num", get: (f) => f.met?.gei_antes_tco2 ?? null, fmt: D1, w: 13 },
-    { group: GEI, h: "Antes (tCO₂/m²)", kind: "num", get: (f) => porM2(f.met?.gei_antes_tco2 ?? null, sup(f)), fmt: D3, w: 14 },
-    { group: GEI, h: "Después (tCO₂)", kind: "num", get: (f) => f.met?.gei_despues_tco2 ?? null, fmt: D1, w: 13 },
-    { group: GEI, h: "Después (tCO₂/m²)", kind: "num", get: (f) => porM2(f.met?.gei_despues_tco2 ?? null, sup(f)), fmt: D3, w: 15 },
-    { group: GEI, h: "Reducción (tCO₂)", kind: "num", get: (f) => economiaKwh(f.met?.gei_antes_tco2 ?? null, f.met?.gei_despues_tco2 ?? null), fmt: D1, w: 14 },
-    { group: GEI, h: "Reducción (%)", kind: "pct", get: (f) => economiaPct(f.met?.gei_antes_tco2 ?? null, f.met?.gei_despues_tco2 ?? null), fmt: PCT, w: 12 },
-    { group: COST, h: "EE (€)", kind: "num", get: (f) => f.met?.costo_ee_eur ?? null, fmt: NUM, w: 13 },
-    { group: COST, h: "EE (€/m²)", kind: "num", get: (f) => porM2(f.met?.costo_ee_eur ?? null, sup(f)), fmt: NUM, w: 11 },
-    { group: COST, h: "Otras (€)", kind: "num", get: (f) => f.met?.costo_otras_eur ?? null, fmt: NUM, w: 13 },
-    { group: COST, h: "Otras (€/m²)", kind: "num", get: (f) => porM2(f.met?.costo_otras_eur ?? null, sup(f)), fmt: NUM, w: 11 },
-    { group: COST, h: "Total (€)", kind: "num", get: (f) => suma(f.met?.costo_ee_eur ?? null, f.met?.costo_otras_eur ?? null), fmt: NUM, w: 13 },
-    { group: COST, h: "Total (€/m²)", kind: "num", get: (f) => porM2(suma(f.met?.costo_ee_eur ?? null, f.met?.costo_otras_eur ?? null), sup(f)), fmt: NUM, w: 11 },
-    { group: BEN, h: "Personal", kind: "num", get: (f) => f.met?.benef_personal ?? null, fmt: NUM, w: 12 },
-    { group: BEN, h: "% mujeres", kind: "pct", get: (f) => f.met?.benef_personal_pct_muj ?? null, fmt: PCT, w: 11 },
-    { group: BEN, h: "Usuarios", kind: "num", get: (f) => f.met?.benef_usuarios ?? null, fmt: NUM, w: 12 },
-    { group: BEN, h: "% mujeres", kind: "pct", get: (f) => f.met?.benef_usuarios_pct_muj ?? null, fmt: PCT, w: 11 },
-    { group: BEN, h: "Población cubierta", kind: "num", get: (f) => f.met?.benef_indirectos ?? null, fmt: NUM, w: 15 },
-    { group: BEN, h: "% mujeres", kind: "pct", get: (f) => f.met?.benef_indirectos_pct_muj ?? null, fmt: PCT, w: 11 },
+  const ALL: ColDef[] = [
+    { gkey: "edificio", key: "tipo", group: EDI, h: "Tipo", kind: "tipo", w: 7 },
+    { gkey: "edificio", key: "nombre", group: EDI, h: "Edificio", kind: "nombre", w: 38 },
+    { gkey: "edificio", key: "sup", group: EDI, h: "Superficie (m²)", kind: "num", get: sup, fmt: NUM, w: 13 },
+    ...PROG_FASES.map((fa): ColDef => ({ gkey: "progresion", key: fa.code, group: "Progresión", h: FASE_INIT[fa.code] ?? fa.code, kind: "prog", fase: fa.code, w: 5 })),
+    ...MEDIDAS.map((m): ColDef => ({ gkey: "medidas", key: m.code, group: "Medidas", h: m.nombre, kind: "med", code: m.code, color: m.color, w: 5, rot: true })),
+    { gkey: "consumos", key: "d_antes", group: CONS, h: "Antes (kWh)", kind: "num", get: dem, fmt: NUM, w: 13 },
+    { gkey: "consumos", key: "d_antes_m2", group: CONS, h: "Antes (kWh/m²)", kind: "num", get: (f) => porM2(dem(f), sup(f)), fmt: D1, w: 13 },
+    { gkey: "consumos", key: "d_desp", group: CONS, h: "Después (kWh)", kind: "num", get: demD, fmt: NUM, w: 13 },
+    { gkey: "consumos", key: "d_desp_m2", group: CONS, h: "Después (kWh/m²)", kind: "num", get: (f) => porM2(demD(f), sup(f)), fmt: D1, w: 14 },
+    { gkey: "consumos", key: "ahorro", group: CONS, h: "Ahorro (kWh)", kind: "num", get: (f) => economiaKwh(dem(f), demD(f)), fmt: NUM, w: 13 },
+    { gkey: "consumos", key: "ahorro_m2", group: CONS, h: "Ahorro (kWh/m²)", kind: "num", get: (f) => porM2(economiaKwh(dem(f), demD(f)), sup(f)), fmt: D1, w: 14 },
+    { gkey: "consumos", key: "ahorro_pct", group: CONS, h: "Ahorro (%)", kind: "pct", get: (f) => economiaPct(dem(f), demD(f)), fmt: PCT, w: 12 },
+    { gkey: "gei", key: "g_antes", group: GEI, h: "Antes (tCO₂)", kind: "num", get: (f) => f.met?.gei_antes_tco2 ?? null, fmt: D1, w: 13 },
+    { gkey: "gei", key: "g_antes_m2", group: GEI, h: "Antes (tCO₂/m²)", kind: "num", get: (f) => porM2(f.met?.gei_antes_tco2 ?? null, sup(f)), fmt: D3, w: 14 },
+    { gkey: "gei", key: "g_desp", group: GEI, h: "Después (tCO₂)", kind: "num", get: (f) => f.met?.gei_despues_tco2 ?? null, fmt: D1, w: 13 },
+    { gkey: "gei", key: "g_desp_m2", group: GEI, h: "Después (tCO₂/m²)", kind: "num", get: (f) => porM2(f.met?.gei_despues_tco2 ?? null, sup(f)), fmt: D3, w: 15 },
+    { gkey: "gei", key: "g_red", group: GEI, h: "Reducción (tCO₂)", kind: "num", get: (f) => economiaKwh(f.met?.gei_antes_tco2 ?? null, f.met?.gei_despues_tco2 ?? null), fmt: D1, w: 14 },
+    { gkey: "gei", key: "g_red_pct", group: GEI, h: "Reducción (%)", kind: "pct", get: (f) => economiaPct(f.met?.gei_antes_tco2 ?? null, f.met?.gei_despues_tco2 ?? null), fmt: PCT, w: 12 },
+    { gkey: "costos", key: "c_ee", group: COST, h: "EE (€)", kind: "num", get: (f) => f.met?.costo_ee_eur ?? null, fmt: NUM, w: 13 },
+    { gkey: "costos", key: "c_ee_m2", group: COST, h: "EE (€/m²)", kind: "num", get: (f) => porM2(f.met?.costo_ee_eur ?? null, sup(f)), fmt: NUM, w: 11 },
+    { gkey: "costos", key: "c_ot", group: COST, h: "Otras (€)", kind: "num", get: (f) => f.met?.costo_otras_eur ?? null, fmt: NUM, w: 13 },
+    { gkey: "costos", key: "c_ot_m2", group: COST, h: "Otras (€/m²)", kind: "num", get: (f) => porM2(f.met?.costo_otras_eur ?? null, sup(f)), fmt: NUM, w: 11 },
+    { gkey: "costos", key: "c_tot", group: COST, h: "Total (€)", kind: "num", get: (f) => suma(f.met?.costo_ee_eur ?? null, f.met?.costo_otras_eur ?? null), fmt: NUM, w: 13 },
+    { gkey: "costos", key: "c_tot_m2", group: COST, h: "Total (€/m²)", kind: "num", get: (f) => porM2(suma(f.met?.costo_ee_eur ?? null, f.met?.costo_otras_eur ?? null), sup(f)), fmt: NUM, w: 11 },
+    { gkey: "beneficiarios", key: "b_pers", group: BEN, h: "Personal", kind: "num", get: (f) => f.met?.benef_personal ?? null, fmt: NUM, w: 12 },
+    { gkey: "beneficiarios", key: "b_pers_m", group: BEN, h: "% mujeres", kind: "pct", get: (f) => f.met?.benef_personal_pct_muj ?? null, fmt: PCT, w: 11 },
+    { gkey: "beneficiarios", key: "b_usu", group: BEN, h: "Usuarios", kind: "num", get: (f) => f.met?.benef_usuarios ?? null, fmt: NUM, w: 12 },
+    { gkey: "beneficiarios", key: "b_usu_m", group: BEN, h: "% mujeres", kind: "pct", get: (f) => f.met?.benef_usuarios_pct_muj ?? null, fmt: PCT, w: 11 },
+    { gkey: "beneficiarios", key: "b_ind", group: BEN, h: "Población cubierta", kind: "num", get: (f) => f.met?.benef_indirectos ?? null, fmt: NUM, w: 15 },
+    { gkey: "beneficiarios", key: "b_ind_m", group: BEN, h: "% mujeres", kind: "pct", get: (f) => f.met?.benef_indirectos_pct_muj ?? null, fmt: PCT, w: 11 },
   ];
+
+  // Colonnes visibles (edificio toujours ; sinon selon ?cols).
+  const cols = ALL.filter((c) => c.gkey === "edificio" || visibleGroups === null || visibleGroups.has(c.gkey));
+
+  // Tri (selon ?sort=colKey:dir) sur les colonnes triables (edificio + données).
+  if (sortParam) {
+    const [k, dir] = sortParam.split(":");
+    const col = ALL.find((c) => c.key === k);
+    if (col) {
+      const mul = dir === "desc" ? -1 : 1;
+      const sv = (f: Fila): number | string | null =>
+        col.kind === "tipo" ? f.sub.tipologia : col.kind === "nombre" ? f.sub.nombre : col.get ? col.get(f) : null;
+      filas.sort((a, b) => {
+        const va = sv(a), vb = sv(b);
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        if (typeof va === "number" && typeof vb === "number") return (va - vb) * mul;
+        return String(va).localeCompare(String(vb), "es", { numeric: true }) * mul;
+      });
+    }
+  }
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Resumen", { views: [{ state: "frozen", xSplit: 2, ySplit: 2 }] });
@@ -189,12 +217,14 @@ export async function GET() {
     });
   });
 
-  // Légende Progresión (sous le tableau).
-  const legRow = 3 + filas.length + 1;
-  ws.mergeCells(legRow, 1, legRow, Math.min(cols.length, 12));
-  const leg = ws.getCell(legRow, 1);
-  leg.value = "Progresión:  " + PROG_FASES.map((fa) => `${FASE_INIT[fa.code]} = ${fa.nombre}`).join("   ·   ");
-  leg.font = { italic: true, size: 9, color: { argb: "FF646B78" } };
+  // Légende Progresión (sous le tableau) si la colonne est exportée.
+  if (cols.some((c) => c.gkey === "progresion")) {
+    const legRow = 3 + filas.length + 1;
+    ws.mergeCells(legRow, 1, legRow, Math.min(cols.length, 12));
+    const leg = ws.getCell(legRow, 1);
+    leg.value = "Progresión:  " + PROG_FASES.map((fa) => `${FASE_INIT[fa.code]} = ${fa.nombre}`).join("   ·   ");
+    leg.font = { italic: true, size: 9, color: { argb: "FF646B78" } };
+  }
 
   const buf = await wb.xlsx.writeBuffer();
   return new Response(buf as ArrayBuffer, {

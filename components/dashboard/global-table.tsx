@@ -245,6 +245,14 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
     });
   }, [filas, sort]);
 
+  // Lien d'export : reflète les colonnes visibles + le tri courant (= ce qu'on voit à l'écran).
+  const exportHref = useMemo(() => {
+    const groups = TOGGLEABLE.filter((g) => visible.has(g.key)).map((g) => g.key);
+    const params = new URLSearchParams({ cols: groups.join(",") });
+    if (sort) params.set("sort", `${sort.key}:${sort.dir}`);
+    return `/api/export-resumen?${params.toString()}`;
+  }, [visible, sort]);
+
   const progVis = visible.has("progresion");
   const medVis = visible.has("medidas");
   const dataVis = DATA_GROUPS.filter((g) => visible.has(g.key));
@@ -313,7 +321,7 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
             </div>
           </details>
           <a
-            href="/api/export-resumen"
+            href={exportHref}
             className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text)] hover:bg-[var(--app-bg)]"
           >
             Exportar Excel
