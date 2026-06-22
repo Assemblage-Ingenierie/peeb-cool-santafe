@@ -257,7 +257,11 @@ export function AdminTabs({
             </p>
             <EditableTable
               columns={eventosColumns}
-              rows={eventosT.rows}
+              rows={[...eventosT.rows].sort(
+                (a, b) =>
+                  String(b.fecha ?? "").localeCompare(String(a.fecha ?? "")) ||
+                  String(b.hora_inicio ?? "").localeCompare(String(a.hora_inicio ?? "")),
+              )}
               {...eventosT.handlers}
               filters={eventosFilters}
               addLabel="+ Agregar evento"

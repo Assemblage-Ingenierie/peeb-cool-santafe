@@ -83,8 +83,9 @@ export const TABLES: Record<string, TableConfig> = {
     defaults: { nombre: "", participantes: [], formacion: false },
     todayField: "fecha",
     orderBy: [
-      { col: "fecha", ascending: true },
-      { col: "uid", ascending: true },
+      { col: "fecha", ascending: false }, // plus récents en tête
+      { col: "hora_inicio", ascending: false, nullsFirst: false },
+      { col: "uid", ascending: false },
     ],
   },
 
