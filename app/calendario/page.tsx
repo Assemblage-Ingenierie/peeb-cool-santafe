@@ -1,10 +1,7 @@
-import { PagePlaceholder } from "@/components/page-placeholder";
+import { CalendarioClient } from "@/components/calendario/calendario-client";
 
+// Calendario (CDC §4.3) — coquille serveur ; tout l'interactif (lecture
+// /api/snapshot, navigation, sélecteur de fuseau) vit dans CalendarioClient.
 export default function CalendarioPage() {
-  return (
-    <PagePlaceholder
-      title="Calendario"
-      description="Agenda de eventos del proyecto."
-    />
-  );
+  return <CalendarioClient />;
 }

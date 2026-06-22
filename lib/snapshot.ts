@@ -86,6 +86,8 @@ export interface SnapshotEvento {
   modalidad: string | null;
   lugar: string | null;
   url_conexion: string | null;
+  formacion: boolean; // case « Formación » (CDC §4.3)
+  url_documento: string | null; // document associé (CDC §4.3)
   participantes: string[]; // UID bruts (equipo | entidades)
   participantesLabels: string[]; // libellés résolus, même ordre
 }
@@ -126,6 +128,8 @@ type RawEvento = {
   modalidad: string | null;
   lugar: string | null;
   url_conexion: string | null;
+  formacion: boolean | null;
+  url_documento: string | null;
   participantes: string[] | null;
 };
 type RawGestion = {
@@ -182,7 +186,7 @@ export async function getSnapshot(): Promise<Snapshot> {
     sb
       .from("peebcoolsf_eventos")
       .select(
-        "uid, nombre, fecha, hora_inicio, hora_fin, componente, modalidad, lugar, url_conexion, participantes",
+        "uid, nombre, fecha, hora_inicio, hora_fin, componente, modalidad, lugar, url_conexion, formacion, url_documento, participantes",
       )
       .order("fecha", { ascending: true })
       .order("hora_inicio", { ascending: true, nullsFirst: false }),
@@ -237,6 +241,8 @@ export async function getSnapshot(): Promise<Snapshot> {
       modalidad: e.modalidad,
       lugar: e.lugar,
       url_conexion: e.url_conexion,
+      formacion: !!e.formacion,
+      url_documento: e.url_documento,
       participantes,
       participantesLabels: participantes.map((uid) => labels.get(uid) ?? uid),
     };
