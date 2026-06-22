@@ -23,8 +23,8 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
     <aside
       id="sidebar"
       className={cn(
-        "fixed inset-y-0 left-0 z-40 flex w-[264px] flex-col bg-[var(--sidebar-bg)] text-[var(--sidebar-text)] transition-transform duration-200 ease-out",
-        "lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-full lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-[var(--sidebar-bg)] text-[var(--sidebar-text)] shadow-xl transition-transform duration-200 ease-out",
+        "lg:sticky lg:top-0 lg:z-auto lg:h-screen lg:w-full lg:translate-x-0 lg:shadow-none",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
       )}
     >

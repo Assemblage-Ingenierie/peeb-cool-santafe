@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
+    <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
       <Sidebar mobileOpen={mobileOpen} onNavigate={() => setMobileOpen(false)} />
 
       {/* Backdrop du tiroir mobile */}
@@ -35,17 +35,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           type="button"
           aria-label="Cerrar menú"
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-30 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
         />
       )}
 
-      <div className="flex min-h-screen flex-col">
+      {/* min-w-0 : autorise la colonne de contenu à rétrécir (sinon le tableau large
+          et l'agenda débordent et chevauchent la sidebar quand la fenêtre est réduite). */}
+      <div className="flex min-h-screen min-w-0 flex-col">
         <Header
           onMenu={() => setMobileOpen(true)}
           filters={filters}
           onToggleFilter={toggleFilter}
         />
-        <main className="flex-1 px-4 py-6 sm:px-6">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">{children}</main>
       </div>
     </div>
   );

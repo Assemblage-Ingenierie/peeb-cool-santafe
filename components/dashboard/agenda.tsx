@@ -81,7 +81,7 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
         Agenda
       </button>
 
-      <div ref={scrollRef} className="relative flex flex-1 gap-3 overflow-x-auto pb-2">
+      <div ref={scrollRef} className="relative flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2">
         {loading ? (
           <p className="py-6 text-sm text-[var(--text-muted)]">Cargando…</p>
         ) : error ? (
