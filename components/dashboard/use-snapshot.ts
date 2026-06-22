@@ -12,13 +12,20 @@ export type SnapshotState =
   | { status: "error"; message: string }
   | { status: "ready"; data: Snapshot };
 
-/** Récupère une fois le snapshot (réponse en cache) côté client. */
-export function useSnapshot(): SnapshotState {
+/**
+ * Récupère le snapshot côté client. `refreshKey` : incrémenter pour forcer un
+ * rechargement après une écriture (ex. création/édition d'un evento) — la requête
+ * contourne alors le cache HTTP/CDN. La donnée courante reste affichée pendant le
+ * rechargement (pas de retour à « Cargando… »).
+ */
+export function useSnapshot(refreshKey = 0): SnapshotState {
   const [state, setState] = useState<SnapshotState>({ status: "loading" });
 
   useEffect(() => {
     let alive = true;
-    fetch("/api/snapshot")
+    const url = refreshKey > 0 ? `/api/snapshot?t=${refreshKey}` : "/api/snapshot";
+    const init: RequestInit | undefined = refreshKey > 0 ? { cache: "no-store" } : undefined;
+    fetch(url, init)
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return (await r.json()) as Snapshot;
@@ -37,7 +44,7 @@ export function useSnapshot(): SnapshotState {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [refreshKey]);
 
   return state;
 }

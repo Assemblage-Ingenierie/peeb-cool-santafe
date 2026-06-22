@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { SnapshotEvento } from "@/lib/snapshot";
 import { getComponente } from "@/lib/constants";
 import { cn } from "@/lib/cn";
+import { eliminarEvento } from "@/app/calendario/actions";
 import {
   fmtFecha,
   horaRangoEnZona,
@@ -17,6 +18,8 @@ interface EventoModalProps {
   evento: SnapshotEvento;
   zona: Zona;
   onClose: () => void;
+  onEditar: () => void;
+  onEliminado: () => void;
 }
 
 /**
@@ -24,7 +27,11 @@ interface EventoModalProps {
  * (dans le fuseau actif), lugar, modalidad (+ lien si Virtual), participantes,
  * badge Formación, lien vers le document. L'édition arrivera au sous-lot 3.
  */
-export function EventoModal({ evento, zona, onClose }: EventoModalProps) {
+export function EventoModal({ evento, zona, onClose, onEditar, onEliminado }: EventoModalProps) {
+  const [confirmando, setConfirmando] = useState(false);
+  const [eliminando, setEliminando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   // Fermeture au clavier (Échap).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -33,6 +40,18 @@ export function EventoModal({ evento, zona, onClose }: EventoModalProps) {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  async function onConfirmarEliminar() {
+    setError(null);
+    setEliminando(true);
+    try {
+      await eliminarEvento(evento.uid);
+      onEliminado();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al eliminar.");
+      setEliminando(false);
+    }
+  }
 
   const comp = evento.componente ? getComponente(evento.componente) : undefined;
   const [y, m] = parseFecha(evento.fecha);
@@ -155,6 +174,53 @@ export function EventoModal({ evento, zona, onClose }: EventoModalProps) {
             </Fila>
           )}
         </dl>
+
+        {/* Actions : éditer / supprimer (avec confirmation en ligne) */}
+        <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] px-5 py-3">
+          {confirmando ? (
+            <>
+              <span className="text-sm text-[var(--text)]">¿Eliminar este evento?</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmando(false)}
+                  className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={onConfirmarEliminar}
+                  disabled={eliminando}
+                  className={cn(
+                    "rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white transition-opacity",
+                    eliminando ? "opacity-60" : "hover:opacity-90",
+                  )}
+                >
+                  {eliminando ? "Eliminando…" : "Eliminar"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setConfirmando(true)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--accent)] hover:bg-[var(--app-bg)]"
+              >
+                Eliminar
+              </button>
+              <button
+                type="button"
+                onClick={onEditar}
+                className="rounded-md border border-[var(--border)] px-4 py-1.5 text-sm font-semibold text-[var(--text)] hover:bg-[var(--app-bg)]"
+              >
+                Editar
+              </button>
+            </>
+          )}
+        </div>
+        {error && <p className="px-5 pb-3 text-sm text-[var(--accent)]">{error}</p>}
       </div>
     </div>
   );

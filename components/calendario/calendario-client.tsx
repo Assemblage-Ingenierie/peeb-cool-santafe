@@ -6,7 +6,10 @@ import { cn } from "@/lib/cn";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { MonthGrid } from "./month-grid";
 import { EventoModal } from "./evento-modal";
+import { EventoForm } from "./evento-form";
 import { MESES, offsetLabel, hoyStr, type Zona } from "./fechas";
+
+type FormMode = { modo: "crear" } | { modo: "editar"; evento: SnapshotEvento };
 
 const ZONA_KEY = "peebcoolsf:calendario:zona";
 
@@ -22,7 +25,10 @@ const ZONAS: { code: Zona; label: string }[] = [
  * afficher en heure de France (cf. components/calendario/fechas.ts).
  */
 export function CalendarioClient() {
-  const snap = useSnapshot();
+  // Clé de rafraîchissement : incrémentée après une écriture → recharge le snapshot.
+  const [refreshKey, setRefreshKey] = useState(0);
+  const snap = useSnapshot(refreshKey);
+  const bumpRefresh = () => setRefreshKey((k) => k + 1);
 
   // Mois affiché (month 0-based). Init sur le mois courant (local).
   const [cursor, setCursor] = useState(() => {
@@ -30,8 +36,9 @@ export function CalendarioClient() {
     return { year: n.getFullYear(), month: n.getMonth() };
   });
 
-  // Événement sélectionné (modal de détail).
+  // Événement sélectionné (modal de détail) et état du formulaire (création/édition).
   const [sel, setSel] = useState<SnapshotEvento | null>(null);
+  const [formMode, setFormMode] = useState<FormMode | null>(null);
 
   // Zone d'affichage des horaires (défaut Argentine, mémorisée dans localStorage).
   // Initialiseur paresseux avec garde SSR : `localStorage` n'existe pas côté serveur.
@@ -101,9 +108,18 @@ export function CalendarioClient() {
           </button>
         </div>
 
-        {/* Fuseau des horaires affichés */}
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-[var(--text-muted)]">Horarios en</span>
+        {/* Actions (+ Nuevo evento) + fuseau des horaires */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setFormMode({ modo: "crear" })}
+            className="rounded-md bg-[var(--accent)] px-3 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+          >
+            + Nuevo evento
+          </button>
+
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-[var(--text-muted)]">Horarios en</span>
           <div className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--app-bg)] p-0.5">
             {ZONAS.map((z) => {
               const on = zona === z.code;
@@ -129,6 +145,7 @@ export function CalendarioClient() {
             })}
           </div>
         </div>
+        </div>
       </div>
 
       {/* Grille */}
@@ -147,7 +164,34 @@ export function CalendarioClient() {
         />
       )}
 
-      {sel && <EventoModal evento={sel} zona={zona} onClose={() => setSel(null)} />}
+      {sel && (
+        <EventoModal
+          evento={sel}
+          zona={zona}
+          onClose={() => setSel(null)}
+          onEditar={() => {
+            setFormMode({ modo: "editar", evento: sel });
+            setSel(null);
+          }}
+          onEliminado={() => {
+            setSel(null);
+            bumpRefresh();
+          }}
+        />
+      )}
+
+      {formMode && (
+        <EventoForm
+          modo={formMode.modo}
+          evento={formMode.modo === "editar" ? formMode.evento : undefined}
+          personas={snap.status === "ready" ? snap.data.personas : []}
+          onClose={() => setFormMode(null)}
+          onSaved={() => {
+            setFormMode(null);
+            bumpRefresh();
+          }}
+        />
+      )}
     </div>
   );
 }
