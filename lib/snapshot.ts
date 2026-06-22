@@ -104,6 +104,26 @@ export interface SnapshotMedida {
   orden: number;
 }
 
+// Personne sélectionnable comme participante d'un evento (equipo OU entidad) —
+// alimente le sélecteur de participants du formulaire Calendario (sous-lot 3b).
+export interface SnapshotPersona {
+  uid: string;
+  label: string;
+  tipo: "equipo" | "entidad";
+}
+
+// Journal d'activité du Calendario (table peebcoolsf_eventos_actividad) : créations
+// et suppressions faites depuis la page Calendario (self-service). Alimente l'alerte
+// « +N » de l'Inicio (CDC §4.3 — ajout demandé : prévenir l'admin des suppressions).
+export interface SnapshotActividad {
+  id: string;
+  tipo: "creado" | "eliminado";
+  eventoUid: string;
+  eventoNombre: string;
+  eventoFecha: string | null; // YYYY-MM-DD
+  creadoEn: string; // ISO (timestamptz)
+}
+
 export interface Snapshot {
   generatedAt: string; // ISO — « última actualización » + cache PWA (Étape 5)
   subproyectos: SnapshotSubproyecto[];
@@ -113,6 +133,8 @@ export interface Snapshot {
   docsProyecto: SnapshotDocProyecto[];
   eventos: SnapshotEvento[];
   medidas: SnapshotMedida[];
+  personas: SnapshotPersona[];
+  actividadEventos: SnapshotActividad[];
 }
 
 // --- Types bruts (lignes PostgREST) --------------------------------------
@@ -152,6 +174,14 @@ type RawDocGp = {
   componente: string | null;
   publicar: boolean | null;
 };
+type RawActividad = {
+  id: string;
+  tipo: string;
+  evento_uid: string;
+  evento_nombre: string | null;
+  evento_fecha: string | null;
+  creado_en: string;
+};
 
 const SUB_COLS =
   "uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas";
@@ -166,7 +196,7 @@ const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anu
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = createServiceClient();
 
-  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes, medRes] = await Promise.all([
+  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes, medRes, actRes] = await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
       .select(SUB_COLS)
@@ -202,6 +232,12 @@ export async function getSnapshot(): Promise<Snapshot> {
       .select(MEDIDA_COLS)
       .order("subproyecto_uid", { ascending: true })
       .order("orden", { ascending: true }),
+    // Journal d'activité Calendario (créations/suppressions self-service) — récent.
+    sb
+      .from("peebcoolsf_eventos_actividad")
+      .select("id, tipo, evento_uid, evento_nombre, evento_fecha, creado_en")
+      .order("creado_en", { ascending: false })
+      .limit(100),
   ]);
 
   const firstError =
@@ -212,7 +248,8 @@ export async function getSnapshot(): Promise<Snapshot> {
     eqRes.error ||
     entRes.error ||
     docGpRes.error ||
-    medRes.error;
+    medRes.error ||
+    actRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -228,6 +265,28 @@ export async function getSnapshot(): Promise<Snapshot> {
   for (const en of (entRes.data ?? []) as RawEntidad[]) {
     labels.set(en.uid, (en.nombre ?? "").trim() || en.uid);
   }
+
+  // Liste sélectionnable (equipo + entidades), pour le picker de participants.
+  // Tri : équipe d'abord, entités ensuite, chaque groupe par libellé (es-AR).
+  const personas: SnapshotPersona[] = [
+    ...((eqRes.data ?? []) as RawEquipo[]).map(
+      (e): SnapshotPersona => ({ uid: e.uid, label: labels.get(e.uid) ?? e.uid, tipo: "equipo" }),
+    ),
+    ...((entRes.data ?? []) as RawEntidad[]).map(
+      (en): SnapshotPersona => ({ uid: en.uid, label: labels.get(en.uid) ?? en.uid, tipo: "entidad" }),
+    ),
+  ].sort((a, b) =>
+    a.tipo === b.tipo ? a.label.localeCompare(b.label, "es") : a.tipo === "equipo" ? -1 : 1,
+  );
+
+  const actividadEventos: SnapshotActividad[] = ((actRes.data ?? []) as RawActividad[]).map((a) => ({
+    id: a.id,
+    tipo: a.tipo === "eliminado" ? "eliminado" : "creado",
+    eventoUid: a.evento_uid,
+    eventoNombre: a.evento_nombre ?? "",
+    eventoFecha: a.evento_fecha,
+    creadoEn: a.creado_en,
+  }));
 
   const eventos: SnapshotEvento[] = ((evtRes.data ?? []) as RawEvento[]).map((e) => {
     const participantes = Array.isArray(e.participantes) ? e.participantes : [];
@@ -290,5 +349,7 @@ export async function getSnapshot(): Promise<Snapshot> {
     docsProyecto,
     eventos,
     medidas: (medRes.data ?? []) as unknown as SnapshotMedida[],
+    personas,
+    actividadEventos,
   };
 }
