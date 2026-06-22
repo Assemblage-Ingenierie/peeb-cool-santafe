@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent } from "react";
 import type { SnapshotEvento } from "@/lib/snapshot";
 import { getComponente } from "@/lib/constants";
 import { cn } from "@/lib/cn";
@@ -67,6 +67,25 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
     return () => cancelAnimationFrame(id);
   }, [scrollToDefault]);
 
+  // Défilement horizontal par glisser (souris) ; tactile = défilement natif.
+  const drag = useRef({ down: false, startX: 0, startLeft: 0 });
+  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse") return;
+    const c = scrollRef.current;
+    if (!c) return;
+    drag.current = { down: true, startX: e.clientX, startLeft: c.scrollLeft };
+    c.setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (!drag.current.down) return;
+    const c = scrollRef.current;
+    if (c) c.scrollLeft = drag.current.startLeft - (e.clientX - drag.current.startX);
+  };
+  const onPointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    drag.current.down = false;
+    scrollRef.current?.releasePointerCapture?.(e.pointerId);
+  };
+
   return (
     <section className="flex items-start gap-4">
       <button
@@ -81,7 +100,14 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
         Agenda
       </button>
 
-      <div ref={scrollRef} className="relative flex min-w-0 flex-1 gap-3 overflow-x-auto pb-2">
+      <div
+        ref={scrollRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className="no-scrollbar relative flex min-w-0 flex-1 cursor-grab select-none gap-3 overflow-x-auto pb-2 active:cursor-grabbing"
+      >
         {loading ? (
           <p className="py-6 text-sm text-[var(--text-muted)]">Cargando…</p>
         ) : error ? (
@@ -97,7 +123,7 @@ export function Agenda({ eventos, loading, error, labelClassName }: AgendaProps)
                 key={e.uid}
                 className={cn(
                   "min-w-[200px] max-w-[220px] shrink-0 rounded-md p-3 transition-opacity",
-                  past && "opacity-50",
+                  past && "opacity-30",
                   !comp && "border border-[var(--border)] bg-[var(--surface)]",
                 )}
                 style={comp ? { backgroundColor: comp.color, color: comp.onColor } : undefined}
