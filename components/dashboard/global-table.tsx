@@ -23,6 +23,7 @@ const HEAD_TXT_MUTED = UI.sidebarTextMuted;
 const HEAD_BORDER = UI.sidebarBorder;
 const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
 const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
+const COL_TRACK = "#e6e8ec"; // fase sin iniciar : rail gris clair de la barre de progression
 const MED_OFF = "#c7ccd3"; // mesure inactive : logo gris clair
 
 const PROG_W = 26; // colonnes Progresión (initiales horizontales)
@@ -397,19 +398,29 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
                     {c.display(f)}
                   </td>
                 ))}
-                {progVis &&
-                  PROG_FASES.map((fa) => {
-                    const est = f.estados[fa.code] ?? null;
-                    const bg = est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : undefined;
-                    return (
-                      <td
-                        key={fa.code}
-                        title={`${fa.nombre}: ${estadoLabel(est)}`}
-                        className="border border-[var(--border)]"
-                        style={{ width: PROG_W, minWidth: PROG_W, backgroundColor: bg }}
-                      />
-                    );
-                  })}
+                {progVis && (
+                  <td colSpan={PROG_FASES.length} className="border border-[var(--border)] px-1.5 align-middle">
+                    {/* Barre de progression continue : un segment par fase, extrémités
+                        arrondies, rail gris clair pour les fases non démarrées. */}
+                    <div
+                      className="flex overflow-hidden rounded-full"
+                      style={{ gap: 2, backgroundColor: "var(--surface)" }}
+                    >
+                      {PROG_FASES.map((fa) => {
+                        const est = f.estados[fa.code] ?? null;
+                        const bg =
+                          est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : COL_TRACK;
+                        return (
+                          <span
+                            key={fa.code}
+                            title={`${fa.nombre}: ${estadoLabel(est)}`}
+                            style={{ flex: 1, height: 10, backgroundColor: bg }}
+                          />
+                        );
+                      })}
+                    </div>
+                  </td>
+                )}
                 {medVis &&
                   MEDIDAS.map((m) => {
                     const on = f.medidas.has(m.code);
