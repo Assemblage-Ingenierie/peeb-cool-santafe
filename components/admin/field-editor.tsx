@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { fmtNumero } from "@/lib/format";
 import type { SelectOption } from "./editable-table";
 import { NotasEditor } from "./notas-editor";
 
@@ -30,8 +31,6 @@ interface FieldEditorProps {
   values: Record<string, unknown>;
   onCommit: (key: string, value: string) => void;
 }
-
-const NUM_FMT = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
 
 export function FieldEditor({ fields, values, onCommit }: FieldEditorProps) {
   return (
@@ -206,7 +205,7 @@ function NumberField({
       {num === null || Number.isNaN(num) ? (
         <span className="text-[var(--text-muted)]">—</span>
       ) : (
-        <span>{NUM_FMT.format(num)}</span>
+        <span>{fmtNumero(num, 2)}</span>
       )}
     </button>
   );
