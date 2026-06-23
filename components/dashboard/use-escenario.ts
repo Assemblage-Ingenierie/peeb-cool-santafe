@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { Escenario } from "@/lib/snapshot";
 
 /**
@@ -14,11 +14,21 @@ export function useEscenarioToggle(
   proyectoHasData: boolean,
   resetKey: string,
 ) {
-  const [esc, setEsc] = useState<Escenario>("faisabilidad");
+  const defaultEsc: Escenario = canToggle && proyectoHasData ? "proyecto" : "faisabilidad";
+  const [esc, setEsc] = useState<Escenario>(defaultEsc);
 
-  useEffect(() => {
-    setEsc(canToggle && proyectoHasData ? "proyecto" : "faisabilidad");
-  }, [canToggle, proyectoHasData, resetKey]);
+  // Réinitialise au défaut quand le contexte change (sélection, dispo des données
+  // projet). Pattern React « ajuster l'état pendant le rendu » → évite un setState
+  // dans un useEffect (règle react-hooks/set-state-in-effect) et le flash associé.
+  const [contexto, setContexto] = useState({ canToggle, proyectoHasData, resetKey });
+  if (
+    contexto.canToggle !== canToggle ||
+    contexto.proyectoHasData !== proyectoHasData ||
+    contexto.resetKey !== resetKey
+  ) {
+    setContexto({ canToggle, proyectoHasData, resetKey });
+    setEsc(defaultEsc);
+  }
 
   const escenario: Escenario = canToggle ? esc : "faisabilidad";
   const select = (e: Escenario) => {

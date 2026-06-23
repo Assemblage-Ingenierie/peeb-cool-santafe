@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import type { Snapshot, SnapshotMetrica, SnapshotDocProyecto } from "@/lib/snapshot";
+import type { Snapshot, SnapshotMetrica } from "@/lib/snapshot";
 import { COMPONENTES } from "@/lib/constants";
 import { economiaKwh, economiaPct, suma } from "@/lib/calc";
 import { fmtNumero } from "@/lib/format";

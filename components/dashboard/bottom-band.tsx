@@ -7,10 +7,10 @@ import type {
   SnapshotFase,
   SnapshotMedida,
   SnapshotMetrica,
+  SnapshotSubproyecto,
   Escenario,
 } from "@/lib/snapshot";
 import { COMPONENTES, FASES, ESTADOS, getTipologia, UI } from "@/lib/constants";
-import { cn } from "@/lib/cn";
 import { DatosCard } from "./datos-card";
 import { useEscenarioToggle } from "./use-escenario";
 import { GlobalBlocks } from "./global-blocks";
@@ -21,6 +21,40 @@ interface BottomBandProps {
   data: Snapshot | null;
   tipo: string; // todos | A | H | E
   selected: string | null; // uid d'un sous-projet, ou null (= vue groupe)
+}
+
+/** Somme (ou valeur unique) du scénario actif sur un périmètre de sous-projets. */
+function computeTotales(
+  scopeSubs: SnapshotSubproyecto[],
+  escenario: Escenario,
+  metBySub: Map<string, Partial<Record<Escenario, SnapshotMetrica>>>,
+) {
+  let antes = 0,
+    despues = 0,
+    m2 = 0;
+  let hayAntes = false,
+    hayDespues = false,
+    hayM2 = false;
+  for (const s of scopeSubs) {
+    const m = metBySub.get(s.uid)?.[escenario];
+    if (m?.demanda_kwh != null) {
+      antes += m.demanda_kwh;
+      hayAntes = true;
+    }
+    if (m?.demanda_despues_kwh != null) {
+      despues += m.demanda_despues_kwh;
+      hayDespues = true;
+    }
+    if (s.superficie_m2 != null) {
+      m2 += s.superficie_m2;
+      hayM2 = true;
+    }
+  }
+  return {
+    antes: hayAntes ? antes : null,
+    despues: hayDespues ? despues : null,
+    m2: hayM2 ? m2 : null,
+  };
 }
 
 /**
@@ -91,35 +125,9 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
   const resetKey = selected ?? `grupo:${tipo}`;
   const { escenario, select } = useEscenarioToggle(canToggle, proyectoHasData, resetKey);
 
-  // Somme (ou valeur unique) du scénario actif sur le périmètre.
-  const totales = useMemo(() => {
-    let antes = 0,
-      despues = 0,
-      m2 = 0;
-    let hayAntes = false,
-      hayDespues = false,
-      hayM2 = false;
-    for (const s of scopeSubs) {
-      const m = metBySub.get(s.uid)?.[escenario];
-      if (m?.demanda_kwh != null) {
-        antes += m.demanda_kwh;
-        hayAntes = true;
-      }
-      if (m?.demanda_despues_kwh != null) {
-        despues += m.demanda_despues_kwh;
-        hayDespues = true;
-      }
-      if (s.superficie_m2 != null) {
-        m2 += s.superficie_m2;
-        hayM2 = true;
-      }
-    }
-    return {
-      antes: hayAntes ? antes : null,
-      despues: hayDespues ? despues : null,
-      m2: hayM2 ? m2 : null,
-    };
-  }, [scopeSubs, escenario, metBySub]);
+  // Somme (ou valeur unique) du scénario actif sur le périmètre. Helper au niveau
+  // module → mémoïsé par le React Compiler, sans useMemo manuel ni dépendance instable.
+  const totales = computeTotales(scopeSubs, escenario, metBySub);
 
   // --- Mode « Proyecto global » : 3 blocs (Datos técnicos / Documentos / —) -----
   if (mode === "global") {
