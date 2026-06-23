@@ -166,6 +166,7 @@ type RawGestion = {
   fase: string | null;
   tipo_linea: string | null;
   orden: number | null;
+  publicar: boolean | null;
 };
 type RawDocGp = {
   uid: string;
@@ -188,7 +189,7 @@ const SUB_COLS =
 const METRICA_COLS =
   "subproyecto_uid, escenario, demanda_kwh, demanda_despues_kwh, gei_antes_tco2, gei_despues_tco2, costo_ee_eur, costo_otras_eur, benef_personal, benef_personal_pct_muj, benef_usuarios, benef_usuarios_pct_muj, benef_indirectos, benef_indirectos_pct_muj";
 const GESTION_COLS =
-  "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden";
+  "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden, publicar";
 const DOCGP_COLS = "uid, nombre_documento, url, componente, publicar, orden";
 const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anual, orden";
 
@@ -222,9 +223,12 @@ export async function getSnapshot(): Promise<Snapshot> {
       .order("hora_inicio", { ascending: true, nullsFirst: false }),
     sb.from("peebcoolsf_equipo").select("uid, apellido, nombre"),
     sb.from("peebcoolsf_entidades").select("uid, nombre"),
+    // publicar : seuls les documents publiés sont exposés sur les pages publiques
+    // (filtré à la SOURCE → jamais affichés ni présents dans le JSON public).
     sb
       .from("peebcoolsf_documentacion_gp")
       .select(DOCGP_COLS)
+      .eq("publicar", true)
       .order("orden", { ascending: true, nullsFirst: false })
       .order("uid", { ascending: true }),
     sb
@@ -318,8 +322,10 @@ export async function getSnapshot(): Promise<Snapshot> {
       fecha_inicio: r.fecha_inicio,
       fecha_fin: r.fecha_fin,
     }));
+  // Documents de sous-projet : seuls les publiés (publicar=true) sont exposés
+  // publiquement, comme la « Documentación de proyecto » ci-dessus.
   const documentos: SnapshotDocumento[] = gestRows
-    .filter((r) => r.tipo_linea !== "etapa")
+    .filter((r) => r.tipo_linea !== "etapa" && r.publicar === true)
     .map((r) => ({
       uid: r.uid,
       subproyecto_uid: r.subproyecto_uid,
