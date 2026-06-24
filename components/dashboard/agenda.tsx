@@ -96,7 +96,7 @@ export function Agenda({ eventos, loading, error, labelClassName, labelFooter }:
           type="button"
           onClick={() => scrollToTarget(scrollRef.current, firstUpcoming)}
           title="Volver al próximo evento"
-          className="rounded-md text-left text-base font-semibold text-[var(--text)] transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+          className="rounded-md text-left text-base font-semibold text-white transition-colors hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
         >
           Agenda
         </button>
