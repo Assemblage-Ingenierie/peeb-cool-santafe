@@ -6,7 +6,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { TABLES, type TableConfig } from "@/lib/admin/config";
 import type { Row, SubproyectoRow } from "@/lib/admin/read";
-import { FASES, getMedida } from "@/lib/constants";
+import { FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants";
 
 // ============================================================
 // Server Actions génériques (écriture admin, sans cache).
@@ -216,7 +216,7 @@ async function detachEntidad(sb: SupabaseClient, entidadUid: string): Promise<vo
 //  gestion_lineas = UID per-subproyecto + drag & drop).
 // ============================================================
 
-const SUB_TEXT = new Set(["nombre", "direccion", "tipologia"]);
+const SUB_TEXT = new Set(["nombre", "direccion", "tipologia", "ays_texto"]);
 const SUB_NUM = new Set(["lat", "lng", "superficie_m2"]);
 const SUB_NOTNULL = new Set(["nombre", "tipologia"]);
 const TIPOLOGIAS_CODES = new Set(["A", "H", "E"]);
@@ -347,6 +347,27 @@ export async function updateMedida(
   revalidatePath("/admin");
 }
 
+const AYS_REQUISITOS_SET = new Set(REQUISITOS_AYS_CODES);
+
+/** Coche/décoche un requisito AyS d'un sous-projet (table peebcoolsf_ays_requisitos). */
+export async function setAysRequisito(
+  subproyectoUid: string,
+  requisito: string,
+  activa: boolean,
+): Promise<void> {
+  assertAdmin();
+  if (!AYS_REQUISITOS_SET.has(requisito)) throw new Error(`Requisito inválido: ${requisito}`);
+  const sb = createServiceClient();
+  const { error } = await sb
+    .from("peebcoolsf_ays_requisitos")
+    .upsert(
+      { subproyecto_uid: subproyectoUid, requisito, activa },
+      { onConflict: "subproyecto_uid,requisito" },
+    );
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin");
+}
+
 /**
  * Ajoute une école (nouveau sous-projet, tipología E, sección Escuelas).
  * UID auto-généré `SUB-ESC-NNN` (incrémental, par max+1).
@@ -399,6 +420,11 @@ export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; 
     .insert(faseRows)
     .select(TABLES.gestion.select);
   if (fErr) throw new Error(fErr.message);
+
+  // Pré-remplir les requisitos AyS (17 plans) du nouveau sous-projet.
+  const reqRows = REQUISITOS_AYS_CODES.map((code) => ({ subproyecto_uid: uid, requisito: code }));
+  const { error: reqErr } = await sb.from("peebcoolsf_ays_requisitos").insert(reqRows);
+  if (reqErr) throw new Error(reqErr.message);
 
   revalidatePath("/admin");
   return { sub: ins as unknown as SubproyectoRow, fases: (faseData ?? []) as unknown as Row[] };

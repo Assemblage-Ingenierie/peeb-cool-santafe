@@ -24,6 +24,7 @@ export interface SnapshotSubproyecto {
   lng: number | null;
   superficie_m2: number | null;
   notas: string | null; // HTML restreint déjà assaini en écriture
+  ays_texto: string | null; // texte libre « Requisitos AyS » (CDC §4.5)
 }
 
 export interface SnapshotMetrica {
@@ -124,6 +125,13 @@ export interface SnapshotActividad {
   creadoEn: string; // ISO (timestamptz)
 }
 
+// Requisitos AyS cochés (table peebcoolsf_ays_requisitos) — uniquement les actifs.
+// Libellés/groupes résolus côté UI via REQUISITOS_AYS (lib/constants).
+export interface SnapshotAysRequisito {
+  subproyectoUid: string;
+  requisito: string; // code § (ex. "10.5.1")
+}
+
 export interface Snapshot {
   generatedAt: string; // ISO — « última actualización » + cache PWA (Étape 5)
   subproyectos: SnapshotSubproyecto[];
@@ -135,6 +143,7 @@ export interface Snapshot {
   medidas: SnapshotMedida[];
   personas: SnapshotPersona[];
   actividadEventos: SnapshotActividad[];
+  aysRequisitos: SnapshotAysRequisito[];
 }
 
 // --- Types bruts (lignes PostgREST) --------------------------------------
@@ -185,7 +194,7 @@ type RawActividad = {
 };
 
 const SUB_COLS =
-  "uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas";
+  "uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas, ays_texto";
 const METRICA_COLS =
   "subproyecto_uid, escenario, demanda_kwh, demanda_despues_kwh, gei_antes_tco2, gei_despues_tco2, costo_ee_eur, costo_otras_eur, benef_personal, benef_personal_pct_muj, benef_usuarios, benef_usuarios_pct_muj, benef_indirectos, benef_indirectos_pct_muj";
 const GESTION_COLS =
@@ -197,7 +206,8 @@ const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anu
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = createServiceClient();
 
-  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes, medRes, actRes] = await Promise.all([
+  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes, medRes, actRes, aysReqRes] =
+    await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
       .select(SUB_COLS)
@@ -242,6 +252,8 @@ export async function getSnapshot(): Promise<Snapshot> {
       .select("id, tipo, evento_uid, evento_nombre, evento_fecha, creado_en")
       .order("creado_en", { ascending: false })
       .limit(100),
+    // Requisitos AyS cochés (CDC §4.5) — seuls les actifs sortent.
+    sb.from("peebcoolsf_ays_requisitos").select("subproyecto_uid, requisito").eq("activa", true),
   ]);
 
   const firstError =
@@ -253,7 +265,8 @@ export async function getSnapshot(): Promise<Snapshot> {
     entRes.error ||
     docGpRes.error ||
     medRes.error ||
-    actRes.error;
+    actRes.error ||
+    aysReqRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -291,6 +304,10 @@ export async function getSnapshot(): Promise<Snapshot> {
     eventoFecha: a.evento_fecha,
     creadoEn: a.creado_en,
   }));
+
+  const aysRequisitos: SnapshotAysRequisito[] = (
+    (aysReqRes.data ?? []) as { subproyecto_uid: string; requisito: string }[]
+  ).map((r) => ({ subproyectoUid: r.subproyecto_uid, requisito: r.requisito }));
 
   const eventos: SnapshotEvento[] = ((evtRes.data ?? []) as RawEvento[]).map((e) => {
     const participantes = Array.isArray(e.participantes) ? e.participantes : [];
@@ -357,5 +374,6 @@ export async function getSnapshot(): Promise<Snapshot> {
     medidas: (medRes.data ?? []) as unknown as SnapshotMedida[],
     personas,
     actividadEventos,
+    aysRequisitos,
   };
 }

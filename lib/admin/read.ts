@@ -35,6 +35,7 @@ export type SubproyectoRow = {
   lng: number | null;
   superficie_m2: number | null;
   notas: string | null;
+  ays_texto: string | null;
 };
 
 export type MetricaRow = {
@@ -62,7 +63,7 @@ export async function listSubproyectos(): Promise<SubproyectoRow[]> {
   const sb = createServiceClient();
   const { data, error } = await sb
     .from("peebcoolsf_subproyectos")
-    .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas")
+    .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas, ays_texto")
     .order("orden", { ascending: true })
     .order("uid", { ascending: true });
   if (error) throw new Error(`Error al leer subproyectos: ${error.message}`);
@@ -101,4 +102,20 @@ export async function listMedidas(): Promise<MedidaRow[]> {
     .order("orden", { ascending: true });
   if (error) throw new Error(`Error al leer medidas: ${error.message}`);
   return (data ?? []) as unknown as MedidaRow[];
+}
+
+export type AysRequisitoRow = {
+  subproyecto_uid: string;
+  requisito: string;
+  activa: boolean;
+};
+
+/** Requisitos AyS (17 plans par sous-projet, table peebcoolsf_ays_requisitos). */
+export async function listAysRequisitos(): Promise<AysRequisitoRow[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("peebcoolsf_ays_requisitos")
+    .select("subproyecto_uid, requisito, activa");
+  if (error) throw new Error(`Error al leer ays_requisitos: ${error.message}`);
+  return (data ?? []) as unknown as AysRequisitoRow[];
 }

@@ -101,6 +101,70 @@ export const getMedida = (code: string): Medida | undefined =>
   MEDIDAS.find((m) => m.code === code);
 
 // ============================================================
+// Requisitos AyS (CDC §4.5 — nouveau mécanisme) — checklist de plans/programmes
+// du MGAS, groupée en 3 sections (§10.5 / §10.6 / §10.7). Cochés par sous-projet
+// (table peebcoolsf_ays_requisitos). Remplace l'ancienne « medida » AyS.
+// `code` = numéro § (clé stable en base) ; réf. affichée = « MGAS §<code> ».
+// ============================================================
+
+export interface RequisitoAys {
+  code: string; // ex. "10.5.1"
+  label: string;
+}
+
+export interface GrupoRequisitosAys {
+  code: string; // ex. "10.5"
+  titulo: string;
+  requisitos: RequisitoAys[];
+}
+
+export const REQUISITOS_AYS: GrupoRequisitosAys[] = [
+  {
+    code: "10.5",
+    titulo: "Planes para la gestión de los aspectos ambientales",
+    requisitos: [
+      { code: "10.5.1", label: "Plan para la protección de los recursos hídricos" },
+      { code: "10.5.2", label: "Plan para el control de emisiones y calidad del aire" },
+      { code: "10.5.3", label: "Plan de Manejo de Residuos Peligrosos y no Peligrosos, y Productos peligrosos" },
+      { code: "10.5.4", label: "Plan de Eficiencia Energética y de Recursos" },
+      { code: "10.5.5", label: "Programa para el control de plagas y vectores" },
+      { code: "10.5.6", label: "Programa para la conservación de fauna silvestre en edificios" },
+      { code: "10.5.7", label: "Plan de Manejo de Aguas Residuales y Efluentes Domésticos y No Domésticos" },
+      { code: "10.5.8", label: "Plan de Manejo de Sustancias Químicas" },
+    ],
+  },
+  {
+    code: "10.6",
+    titulo: "Programas/planes para la gestión de trabajo, condiciones laborales y SST",
+    requisitos: [
+      { code: "10.6.1", label: "Lineamientos para el Procedimiento de Gestión Laboral" },
+      { code: "10.6.2", label: "Lineamientos para el Plan de salud y seguridad de los trabajadores y de los usuarios de los edificios" },
+      { code: "10.6.3", label: "Lineamientos para el Plan de seguridad vial, manejo de tránsito, desvíos internos y accesos a edificios" },
+      { code: "10.6.4", label: "Lineamientos para Plan de preparación y respuesta ante situaciones de emergencias de origen antrópico" },
+      { code: "10.6.5", label: "Lineamientos para Plan de prevención de contagio por enfermedades infecciosas" },
+    ],
+  },
+  {
+    code: "10.7",
+    titulo: "Programas/planes para la gestión social",
+    requisitos: [
+      { code: "10.7.1", label: "Plan de continuidad de servicios para Hospitales" },
+      { code: "10.7.2", label: "Plan de Continuidad de Servicios Aeroportuarios" },
+      { code: "10.7.3", label: "Plan de Continuidad de Actividades Escolares" },
+      { code: "10.7.4", label: "Plan de Gestión del Patrimonio Cultural" },
+    ],
+  },
+];
+
+/** Tous les codes de requisitos AyS (ordre d'affichage) — seed + résolution. */
+export const REQUISITOS_AYS_CODES: string[] = REQUISITOS_AYS.flatMap((g) =>
+  g.requisitos.map((r) => r.code),
+);
+
+/** Référence MGAS affichable (« 10.5.1 » → « MGAS §10.5.1 »). */
+export const refMgas = (code: string): string => `MGAS §${code}`;
+
+// ============================================================
 // Référentiels de gestion (CDC §3.2) — codes alignés sur les tables
 // peebcoolsf_estados / _fases / _tipo_linea (seed). Source unique des
 // libellés/couleurs côté UI (selects de « Gestión del subproyecto »).
