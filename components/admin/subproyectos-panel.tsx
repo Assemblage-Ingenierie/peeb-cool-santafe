@@ -8,10 +8,12 @@ import { TrashIcon } from "@/components/icons";
 import { EditableTable, type AdminColumn, type AdminRow, type SelectOption } from "./editable-table";
 import { FieldEditor, type FieldDef } from "./field-editor";
 import { MedidasEditor } from "./medidas-editor";
+import { AysRequisitosEditor } from "./ays-requisitos-editor";
 import {
   updateSubproyecto,
   updateMetrica,
   updateMedida,
+  setAysRequisito,
   addSchool,
   deleteSubproyecto,
   addGestionLinea,
@@ -20,7 +22,7 @@ import {
   setFlag,
   deleteRow,
 } from "@/app/admin/actions";
-import type { SubproyectoRow, MetricaRow, MedidaRow, Escenario } from "@/lib/admin/read";
+import type { SubproyectoRow, MetricaRow, MedidaRow, AysRequisitoRow, Escenario } from "@/lib/admin/read";
 
 // ============================================================
 // Gestión de subproyectos (CDC §4.5) : sélecteur (groupé par sección) + 4 sections.
@@ -119,16 +121,19 @@ export function SubproyectosPanel({
   metricas: initialMetricas,
   gestionLineas: initialGestion,
   medidas: initialMedidas,
+  aysRequisitos: initialAysReq,
 }: {
   subproyectos: SubproyectoRow[];
   metricas: MetricaRow[];
   gestionLineas: AdminRow[];
   medidas: MedidaRow[];
+  aysRequisitos: AysRequisitoRow[];
 }) {
   const [subs, setSubs] = useState<SubproyectoRow[]>(initialSubs);
   const [metricas, setMetricas] = useState<MetricaRow[]>(initialMetricas);
   const [gestion, setGestion] = useState<AdminRow[]>(initialGestion);
   const [medidas, setMedidas] = useState<MedidaRow[]>(initialMedidas);
+  const [aysReq, setAysReq] = useState<AysRequisitoRow[]>(initialAysReq);
   const [selectedUid, setSelectedUid] = useState<string | null>(initialSubs[0]?.uid ?? null);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -211,6 +216,32 @@ export function SubproyectosPanel({
     run(() => updateMedida(selectedUid, medida, "kwh_anual", value));
   };
 
+  // --- Requisitos AyS : checklist (table ays_requisitos) + texte libre (ays_texto) ---
+  const aysCheckedOfSelected = useMemo(
+    () =>
+      new Set(
+        aysReq.filter((r) => r.subproyecto_uid === selectedUid && r.activa).map((r) => r.requisito),
+      ),
+    [aysReq, selectedUid],
+  );
+  const onAysToggle = (code: string, activa: boolean) => {
+    if (!selectedUid) return;
+    setAysReq((rs) => {
+      const exists = rs.some((r) => r.subproyecto_uid === selectedUid && r.requisito === code);
+      if (exists) {
+        return rs.map((r) =>
+          r.subproyecto_uid === selectedUid && r.requisito === code ? { ...r, activa } : r,
+        );
+      }
+      return [...rs, { subproyecto_uid: selectedUid, requisito: code, activa }];
+    });
+    run(() => setAysRequisito(selectedUid, code, activa));
+  };
+  const onAysText = (texto: string) => {
+    if (!selectedUid) return;
+    onSubField("ays_texto", texto);
+  };
+
   // --- Section 4 : gestion_lineas ---
   const gestionHandlers = {
     onCellCommit: (uid: string, key: string, value: string) => {
@@ -283,6 +314,7 @@ export function SubproyectosPanel({
     setSubs(remaining);
     setMetricas((rs) => rs.filter((m) => m.subproyecto_uid !== uid));
     setGestion((rs) => rs.filter((g) => g.subproyecto_uid !== uid));
+    setAysReq((rs) => rs.filter((r) => r.subproyecto_uid !== uid));
     setSelectedUid(remaining[0]?.uid ?? null);
     setConfirmingDelete(false);
     run(() => deleteSubproyecto(uid));
@@ -456,7 +488,22 @@ export function SubproyectosPanel({
             />
           </section>
 
-          {/* Section 4 : Gestión del subproyecto → Documentos + Fases */}
+          {/* Section 4 : Requisitos AyS (checklist MGAS + texto libre) */}
+          <section>
+            <h3 className="mb-1 text-base font-semibold text-[var(--text)]">Requisitos AyS</h3>
+            <p className="mb-3 text-sm text-[var(--text-muted)]">
+              Marcá los planes/programas del MGAS que aplican (cada sección se despliega al hacer clic).
+            </p>
+            <AysRequisitosEditor
+              subUid={selected.uid}
+              checked={aysCheckedOfSelected}
+              texto={selected.ays_texto ?? ""}
+              onToggle={onAysToggle}
+              onText={onAysText}
+            />
+          </section>
+
+          {/* Section 5 : Gestión del subproyecto → Documentos + Fases */}
           <section className="space-y-8">
             <h3 className="text-base font-semibold text-[var(--text)]">Gestión del subproyecto</h3>
 

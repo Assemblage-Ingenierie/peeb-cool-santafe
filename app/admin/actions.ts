@@ -308,7 +308,6 @@ const MEDIDA_CODES = new Set([
   "solar_termica",
   "genero",
   "otras",
-  "ays",
 ]);
 
 /**

@@ -17,7 +17,6 @@ const GRUPOS: { titulo: string; match: (m: Medida) => boolean }[] = [
   { titulo: "Medidas EE", match: (m) => m.componente === "EE" },
   { titulo: "Medidas género", match: (m) => m.componente === "G" },
   { titulo: "Otras medidas", match: (m) => m.componente === null },
-  { titulo: "Especificidades AyS", match: (m) => m.componente === "AyS" },
 ];
 
 /** Map code → ligne, restreinte aux mesures cochées. */

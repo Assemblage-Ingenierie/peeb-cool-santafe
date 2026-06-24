@@ -1,6 +1,12 @@
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { AdminTabs } from "@/components/admin/admin-tabs";
-import { listTable, listSubproyectos, listMetricas, listMedidas } from "@/lib/admin/read";
+import {
+  listTable,
+  listSubproyectos,
+  listMetricas,
+  listMedidas,
+  listAysRequisitos,
+} from "@/lib/admin/read";
 
 // L'Admin lit/écrit les données en direct (service_role serveur), sans cache —
 // jamais le snapshot caché (réservé au dashboard public, Étape 4).
@@ -20,7 +26,7 @@ export default async function AdminPage() {
     );
   }
 
-  const [gp, equipo, entidades, eventos, capdoc, subproyectos, metricas, gestion, medidas] =
+  const [gp, equipo, entidades, eventos, capdoc, subproyectos, metricas, gestion, medidas, aysRequisitos] =
     await Promise.all([
       listTable("gp"),
       listTable("equipo"),
@@ -31,6 +37,7 @@ export default async function AdminPage() {
       listMetricas(),
       listTable("gestion"),
       listMedidas(),
+      listAysRequisitos(),
     ]);
 
   return (
@@ -50,6 +57,7 @@ export default async function AdminPage() {
           metricas={metricas}
           gestion={gestion}
           medidas={medidas}
+          aysRequisitos={aysRequisitos}
         />
       </div>
     </section>

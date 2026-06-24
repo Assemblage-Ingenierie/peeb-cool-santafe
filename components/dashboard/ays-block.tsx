@@ -1,0 +1,55 @@
+import { REQUISITOS_AYS, refMgas } from "@/lib/constants";
+
+// ============================================================
+// Bloc « Ambiental y social » (mode Subproyectos, bâtiment sélectionné).
+// Remplace l'ancien groupe « Especificidades AyS ». Contenu : texte libre
+// (ays_texto) puis la liste des requisitos AyS cochés, groupés par section MGAS.
+// ============================================================
+
+export function AysBlock({ texto, checked }: { texto: string | null; checked: Set<string> }) {
+  const grupos = REQUISITOS_AYS.map((g) => ({
+    grupo: g,
+    items: g.requisitos.filter((r) => checked.has(r.code)),
+  })).filter((x) => x.items.length > 0);
+
+  const vacio = !texto && grupos.length === 0;
+
+  return (
+    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+      <h2 className="text-sm font-semibold text-[var(--text)]">Ambiental y social</h2>
+
+      {vacio ? (
+        <p className="mt-2 text-sm text-[var(--text-muted)]">Sin información.</p>
+      ) : (
+        <>
+          {texto ? (
+            <p className="mt-2 whitespace-pre-line text-sm text-[var(--text-muted)]">{texto}</p>
+          ) : null}
+
+          {grupos.map(({ grupo, items }) => (
+            <div key={grupo.code} className="mt-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                {grupo.titulo}{" "}
+                <span className="font-normal normal-case opacity-70">({refMgas(grupo.code)})</span>
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {items.map((r) => (
+                  <li key={r.code} className="flex items-start gap-2 text-sm text-[var(--text)]">
+                    <span
+                      aria-hidden="true"
+                      className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--text-muted)]"
+                    />
+                    <span>
+                      {r.label}{" "}
+                      <span className="text-xs text-[var(--text-muted)]">({refMgas(r.code)})</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </>
+      )}
+    </section>
+  );
+}

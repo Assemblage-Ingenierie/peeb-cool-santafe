@@ -51,7 +51,8 @@ export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
 // ============================================================
-// Mesures du projet (CDC §4.5) — 9 mesures par sous-projet (table peebcoolsf_medidas).
+// Mesures du projet (CDC §4.5) — 8 mesures par sous-projet (table peebcoolsf_medidas).
+// (AyS n'est plus une mesure : voir REQUISITOS_AYS / section « Requisitos AyS ».)
 // Couleurs = TRAIT du pictogramme, style « ligne sur fond blanc » (validé avec le
 // client). Distinctes des pastels de composante (illisibles en trait fin). Source
 // unique des libellés/couleurs des mesures.
@@ -65,8 +66,7 @@ export type MedidaCode =
   | "fotovoltaicos"
   | "solar_termica"
   | "genero"
-  | "otras"
-  | "ays";
+  | "otras";
 
 export interface Medida {
   code: MedidaCode;
@@ -82,7 +82,6 @@ const MED_EE = "#BF9000"; // 4 mesures EE — doré
 const MED_SOLAR = "#e69138"; // photovoltaïque + solaire thermique — orange
 const MED_G = "#534AB7"; // género — violet
 const MED_OTRAS = "#5F5E5A"; // otras medidas — gris
-const MED_AYS = "#639922"; // ambiental y social — vert
 
 // Ordre = colonne `orden` de peebcoolsf_medidas (1→9).
 export const MEDIDAS: Medida[] = [
@@ -94,7 +93,6 @@ export const MEDIDAS: Medida[] = [
   { code: "solar_termica", nombre: "Solar térmica",      componente: "EE",  color: MED_SOLAR, tieneKwh: true },
   { code: "genero",        nombre: "Género",             componente: "G",   color: MED_G,     tieneKwh: false, letra: "G" },
   { code: "otras",         nombre: "Otras medidas",      componente: null,  color: MED_OTRAS, tieneKwh: false },
-  { code: "ays",           nombre: "Ambiental y social", componente: "AyS", color: MED_AYS,   tieneKwh: false, letra: "AyS" },
 ];
 
 export const getMedida = (code: string): Medida | undefined =>

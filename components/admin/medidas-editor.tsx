@@ -55,7 +55,7 @@ export function MedidasEditor({ subUid, rows, onToggle, onText, onKwh }: Medidas
             <input
               type="text"
               defaultValue={texto}
-              placeholder={m.code === "ays" ? "Especificidad ambiental y social…" : "Detalle de la medida…"}
+              placeholder="Detalle de la medida…"
               aria-label={`Detalle — ${m.nombre}`}
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.currentTarget.blur();

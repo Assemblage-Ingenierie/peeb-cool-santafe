@@ -15,6 +15,7 @@ import { DatosCard } from "./datos-card";
 import { useEscenarioToggle } from "./use-escenario";
 import { GlobalBlocks } from "./global-blocks";
 import { MedidasBlocks, MedidaLogos } from "./medidas-blocks";
+import { AysBlock } from "./ays-block";
 
 interface BottomBandProps {
   mode: "global" | "subproyectos";
@@ -105,6 +106,17 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
       const arr = m.get(x.subproyecto_uid) ?? [];
       arr.push(x);
       m.set(x.subproyecto_uid, arr);
+    }
+    return m;
+  }, [data]);
+
+  // Requisitos AyS cochés par sous-projet (codes §).
+  const aysBySub = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const r of data?.aysRequisitos ?? []) {
+      const s = m.get(r.subproyectoUid) ?? new Set<string>();
+      s.add(r.requisito);
+      m.set(r.subproyectoUid, s);
     }
     return m;
   }, [data]);
@@ -206,8 +218,9 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
       </section>
 
       {single ? (
-        <div className="mt-4">
+        <div className="mt-4 space-y-4">
           <MedidasBlocks medidas={medidasBySub.get(single.uid) ?? []} />
+          <AysBlock texto={single.ays_texto} checked={aysBySub.get(single.uid) ?? new Set()} />
         </div>
       ) : null}
     </>
