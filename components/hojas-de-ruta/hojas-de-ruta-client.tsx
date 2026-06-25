@@ -21,8 +21,8 @@ import { useSnapshot } from "@/components/dashboard/use-snapshot";
 // ============================================================
 // Hojas de ruta — page.
 // Sous-lots : 1) page + nav + structure des phases ; 2) contenu AyS ;
-// 3) édition admin des cartes : « realizada » (pilule) + comentario (texte libre).
-// ÉTAT LOCAL pour l'instant (non persisté) — stockage DB dans un sous-lot dédié.
+// 3) édition admin des cartes : realizada (pilule) + comentario + éditer
+//    texte/responsable. ÉTAT LOCAL (non persisté) — stockage DB à venir.
 // ============================================================
 
 const HITO_AFD = "no_objecion_afd";
@@ -60,8 +60,16 @@ interface CardModel {
   nota?: boolean; // description = note (italique) plutôt qu'une référence
 }
 
+// Édition locale d'une carte (admin) : surcharge nom / description / responsable.
+interface Edicion {
+  nombre?: string;
+  descripcion?: string;
+  responsable?: string;
+}
+
 type Seleccion = "global" | string;
 type Vista = "user" | "admin";
+type PanelTipo = "comentario" | "editar";
 
 export function HojasDeRutaClient() {
   const snap = useSnapshot();
@@ -73,7 +81,8 @@ export function HojasDeRutaClient() {
   // États d'édition — LOCAUX (non persistés). Clé = `${seleccion}::${card.key}`.
   const [realizadas, setRealizadas] = useState<Set<string>>(new Set());
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
-  const [comentarioAbierto, setComentarioAbierto] = useState<string | null>(null);
+  const [ediciones, setEdiciones] = useState<Record<string, Edicion>>({});
+  const [panel, setPanel] = useState<{ key: string; tipo: PanelTipo } | null>(null);
   // No objeción AFD (jalon) : case admin « recibida », par feuille de route.
   const [anoAfd, setAnoAfd] = useState<Record<string, boolean>>({});
   const anoChecked = !!anoAfd[seleccion];
@@ -152,6 +161,22 @@ export function HojasDeRutaClient() {
     });
   }
 
+  function togglePanel(k: string, tipo: PanelTipo) {
+    setPanel((cur) => (cur && cur.key === k && cur.tipo === tipo ? null : { key: k, tipo }));
+  }
+
+  function aplicarEdicion(k: string, patch: Edicion) {
+    setEdiciones((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }));
+  }
+
+  function restablecerEdicion(k: string) {
+    setEdiciones((prev) => {
+      const n = { ...prev };
+      delete n[k];
+      return n;
+    });
+  }
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -196,11 +221,7 @@ export function HojasDeRutaClient() {
           Proyecto global
         </RutaButton>
         {subproyectos.map((s) => (
-          <RutaButton
-            key={s.uid}
-            activo={seleccion === s.uid}
-            onClick={() => setSeleccion(s.uid)}
-          >
+          <RutaButton key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
             {s.nombre}
           </RutaButton>
         ))}
@@ -224,8 +245,6 @@ export function HojasDeRutaClient() {
         <div className="divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
           {FILAS_RUTA.map((fila) =>
             fila.hito ? (
-              // Jalon « No objeción AFD » : espace réservé non numéroté. Case admin
-              // « recibida » (rouge) à droite ; une fois cochée, le libellé en bleu.
               <div
                 key={fila.code}
                 className="relative flex items-center justify-center gap-3 bg-[var(--app-bg)] px-12 py-3"
@@ -279,13 +298,14 @@ export function HojasDeRutaClient() {
                         card={card}
                         realizada={realizadas.has(k)}
                         comentario={comentarios[k] ?? ""}
+                        edicion={ediciones[k]}
                         esAdmin={esAdmin}
-                        comentarioAbierto={comentarioAbierto === k}
+                        panel={panel && panel.key === k ? panel.tipo : null}
                         onToggleRealizada={() => toggleRealizada(k)}
-                        onAbrirComentario={() =>
-                          setComentarioAbierto((cur) => (cur === k ? null : k))
-                        }
+                        onPanel={(tipo) => togglePanel(k, tipo)}
                         onComentario={(v) => setComentarios((prev) => ({ ...prev, [k]: v }))}
+                        onEdicion={(patch) => aplicarEdicion(k, patch)}
+                        onReset={() => restablecerEdicion(k)}
                       />
                     );
                   })}
@@ -297,7 +317,8 @@ export function HojasDeRutaClient() {
 
         {admin && (
           <p className="text-xs text-[var(--text-muted)]">
-            Modo Admin: marcar realizada y agregar comentario. Cambios locales (sin guardar todavía).
+            Modo Admin: marcar realizada, editar texto/responsable y agregar comentario. Cambios
+            locales (sin guardar todavía).
           </p>
         )}
       </section>
@@ -331,30 +352,44 @@ function RutaButton({
   );
 }
 
-// Carte de tâche — format validé : en-tête coloré (nom en gras) + corps optionnel
-// + pied foncé « Responsable ». Côté admin : pilule « realizada » (carte atténuée,
-// pilule nette) + comentario (texte libre). Tons par composante (CARD_TONOS).
+// Carte de tâche — format validé : en-tête coloré (nom) + corps optionnel + pied
+// « Responsable ». Côté admin : pilule « realizada », édition (nom / description /
+// responsable) et comentario. Surcharges d'édition locales (non persistées).
 function TareaCard({
   card,
   realizada,
   comentario,
+  edicion,
   esAdmin,
-  comentarioAbierto,
+  panel,
   onToggleRealizada,
-  onAbrirComentario,
+  onPanel,
   onComentario,
+  onEdicion,
+  onReset,
 }: {
   card: CardModel;
   realizada: boolean;
   comentario: string;
+  edicion: Edicion | undefined;
   esAdmin: boolean;
-  comentarioAbierto: boolean;
+  panel: PanelTipo | null;
   onToggleRealizada: () => void;
-  onAbrirComentario: () => void;
+  onPanel: (tipo: PanelTipo) => void;
   onComentario: (v: string) => void;
+  onEdicion: (patch: Edicion) => void;
+  onReset: () => void;
 }) {
   const tono = CARD_TONOS[card.componente];
   const pillVisible = esAdmin || realizada;
+  const nombre = edicion?.nombre ?? card.nombre;
+  const descripcion = edicion?.descripcion ?? card.descripcion ?? "";
+  const responsable = edicion?.responsable ?? RESPONSABLE_DEFECTO;
+  const editando = panel === "editar";
+  const comentarioAbierto = panel === "comentario";
+  const labelStyle = "block text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]";
+  const inputStyle =
+    "mt-0.5 w-full rounded border border-[var(--border)] p-1 text-[11px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]";
 
   return (
     <div className="relative w-[232px] rounded-md border" style={{ borderColor: tono.border }}>
@@ -387,18 +422,18 @@ function TareaCard({
           className="px-3 py-2 pr-9 text-center text-[12.5px] font-semibold leading-snug"
           style={{ backgroundColor: tono.head, color: tono.headText }}
         >
-          {card.nombre}
+          {nombre}
         </div>
 
-        {card.descripcion && (
+        {descripcion && (
           <div
             className={cn(
               "px-3 py-1.5 text-center text-[11px] leading-snug",
-              card.nota && "italic",
+              card.nota && !edicion?.descripcion && "italic",
             )}
             style={{ backgroundColor: tono.body, color: tono.bodyText }}
           >
-            {card.descripcion}
+            {descripcion}
           </div>
         )}
 
@@ -416,41 +451,97 @@ function TareaCard({
           className="px-3 py-1 text-center text-[11px] font-medium"
           style={{ backgroundColor: tono.foot, color: tono.footText }}
         >
-          {RESPONSABLE_DEFECTO}
+          {responsable}
         </div>
       </div>
 
-      {/* Édition du comentario (admin). */}
-      {esAdmin &&
-        (comentarioAbierto ? (
-          <div className="border-t border-[var(--border)] p-2">
+      {/* Panneaux d'édition (admin) */}
+      {esAdmin && editando && (
+        <div className="space-y-1.5 border-t border-[var(--border)] p-2">
+          <div>
+            <label className={labelStyle}>Nombre</label>
             <textarea
-              value={comentario}
-              onChange={(e) => onComentario(e.target.value)}
+              value={nombre}
+              onChange={(e) => onEdicion({ nombre: e.target.value })}
               rows={2}
-              placeholder="Comentario…"
-              autoFocus
-              className="w-full resize-y rounded border border-[var(--border)] p-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+              className={cn(inputStyle, "resize-y")}
             />
-            <div className="mt-1 flex justify-end">
-              <button
-                type="button"
-                onClick={onAbrirComentario}
-                className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
-              >
-                Listo
-              </button>
-            </div>
           </div>
-        ) : (
+          <div>
+            <label className={labelStyle}>Descripción</label>
+            <input
+              value={descripcion}
+              onChange={(e) => onEdicion({ descripcion: e.target.value })}
+              className={inputStyle}
+            />
+          </div>
+          <div>
+            <label className={labelStyle}>Responsable</label>
+            <input
+              value={responsable}
+              onChange={(e) => onEdicion({ responsable: e.target.value })}
+              className={inputStyle}
+            />
+          </div>
+          <div className="flex items-center justify-between pt-0.5">
+            <button
+              type="button"
+              onClick={onReset}
+              className="text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]"
+            >
+              Restablecer
+            </button>
+            <button
+              type="button"
+              onClick={() => onPanel("editar")}
+              className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--text)] hover:bg-[var(--app-bg)]"
+            >
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {esAdmin && comentarioAbierto && (
+        <div className="border-t border-[var(--border)] p-2">
+          <textarea
+            value={comentario}
+            onChange={(e) => onComentario(e.target.value)}
+            rows={2}
+            placeholder="Comentario…"
+            autoFocus
+            className={cn(inputStyle, "resize-y")}
+          />
+          <div className="mt-1 flex justify-end">
+            <button
+              type="button"
+              onClick={() => onPanel("comentario")}
+              className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+            >
+              Listo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {esAdmin && !editando && !comentarioAbierto && (
+        <div className="flex border-t border-[var(--border)] text-[11px] text-[var(--text-muted)]">
           <button
             type="button"
-            onClick={onAbrirComentario}
-            className="flex w-full items-center justify-center gap-1 border-t border-[var(--border)] py-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]"
+            onClick={() => onPanel("editar")}
+            className="flex-1 py-1 transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--text)]"
           >
-            {comentario ? "Editar comentario" : "+ Comentario"}
+            Editar
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => onPanel("comentario")}
+            className="flex-1 border-l border-[var(--border)] py-1 transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--text)]"
+          >
+            {comentario ? "Comentario ✓" : "Comentario"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

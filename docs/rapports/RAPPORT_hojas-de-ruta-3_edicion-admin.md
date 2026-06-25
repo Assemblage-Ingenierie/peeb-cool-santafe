@@ -36,7 +36,15 @@ comentario), réutilisant strictement le format de carte validé ensemble.
   `getComputedStyle` incohérent) → vérification structurelle, pas de capture.
   Confirmation visuelle finale à faire par le client sur localhost:3000.
 
-## Suite (2ᵉ moitié du périmètre demandé)
-- **Editar texto / responsable** (admin, inline, local).
+## Ajout (2026-06-25) — Editar texto / responsable
+- Bouton « Editar » par carte (admin) : formulaire inline (Nombre / Descripción /
+  Responsable), surcharge LOCALE ; « Restablecer » réinitialise. Action bar par
+  carte : « Editar | Comentario ».
+- Vérifié : **build de production propre** (toutes les routes compilent, dont
+  `/hojas-de-ruta`), édition du Responsable reflétée dans le pied de carte (capture
+  à l'appui). Incident `.next` corrompu (404 généralisé + screenshots/timeout)
+  résolu par purge de `.next` + rebuild — code applicatif jamais en cause.
+
+## Suite
 - **Mover y enlazar** : réordonner les cartes + tracer les dépendances (flèches).
-- Puis **persistance DB** (table + écriture MCP + snapshot) de tout l'état d'édition.
+- **Persistance DB** (table + écriture MCP + snapshot) de tout l'état d'édition.
