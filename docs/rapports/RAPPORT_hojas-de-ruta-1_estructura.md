@@ -46,6 +46,9 @@ sous-lots suivants.
   entre « Redacción de pliegos » (Fase 04) et « Licitación » (Fase 05). Les phases
   sont donc numérotées **01–06**. (Traitement « hito » rouge des maquettes possible
   si souhaité plus tard.)
+- Sur ce jalon : **case rouge (admin uniquement) à droite** « No objeción AFD
+  recibida » ; une fois cochée, le libellé passe en **bleu** (`--focus`). État local
+  pour l'instant (persistance en base avec le stockage des tâches, sous-lot à venir).
 
 ## Suite (sous-lots à venir)
 - Colonnes par composante + cartes de tâches (en-tête nom + état, corps doc de

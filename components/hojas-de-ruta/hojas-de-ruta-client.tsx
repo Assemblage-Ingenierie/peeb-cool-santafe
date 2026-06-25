@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { FASES } from "@/lib/constants";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 
 // ============================================================
@@ -43,6 +45,12 @@ type Seleccion = "global" | string;
 export function HojasDeRutaClient() {
   const snap = useSnapshot();
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
+  const admin = isAdmin(getCurrentUser());
+
+  // No objeción AFD (jalon) : case admin « recibida », par feuille de route.
+  // État local pour l'instant — persistance en base avec le stockage des tâches.
+  const [anoAfd, setAnoAfd] = useState<Record<string, boolean>>({});
+  const anoChecked = !!anoAfd[seleccion];
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
 
@@ -98,16 +106,39 @@ export function HojasDeRutaClient() {
           {FILAS_RUTA.map((fila) =>
             fila.hito ? (
               // Jalon « No objeción AFD » : espace réservé non numéroté entre
-              // « Redacción de pliegos » et « Licitación ».
+              // « Redacción de pliegos » et « Licitación ». Case admin « recibida »
+              // (rouge) à droite ; une fois cochée, le libellé passe en bleu.
               <div
                 key={fila.code}
-                className="flex items-center justify-center gap-3 bg-[var(--app-bg)] px-4 py-3"
+                className="relative flex items-center justify-center gap-3 bg-[var(--app-bg)] px-12 py-3"
               >
                 <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                <span
+                  className={cn(
+                    "text-xs font-semibold uppercase tracking-wide transition-colors",
+                    anoChecked ? "text-[var(--focus)]" : "text-[var(--text-muted)]",
+                  )}
+                >
                   {fila.nombre}
                 </span>
                 <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
+                {admin && (
+                  <button
+                    type="button"
+                    onClick={() => setAnoAfd((p) => ({ ...p, [seleccion]: !p[seleccion] }))}
+                    aria-pressed={anoChecked}
+                    aria-label="No objeción AFD recibida"
+                    title="No objeción AFD recibida"
+                    className={cn(
+                      "absolute right-4 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded border-2 border-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+                      anoChecked
+                        ? "bg-[var(--accent)] text-white"
+                        : "bg-transparent text-transparent hover:text-[var(--accent)]",
+                    )}
+                  >
+                    <CheckIcon className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
             ) : (
               <div key={fila.code} className="flex gap-4 p-4">
