@@ -1,10 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   FASES,
+  COMPONENTES,
   ROADMAP_AYS,
   CARD_TONOS,
   COLOR_REALIZADA,
@@ -20,9 +21,9 @@ import { useSnapshot } from "@/components/dashboard/use-snapshot";
 
 // ============================================================
 // Hojas de ruta — page.
-// Sous-lots : 1) page + nav + structure des phases ; 2) contenu AyS ;
-// 3) édition admin des cartes : realizada (pilule) + comentario + éditer
-//    texte/responsable. ÉTAT LOCAL (non persisté) — stockage DB à venir.
+// Sous-lots : 1) page + nav + structure ; 2) contenu AyS ; 3) édition admin
+// (realizada + comentario + éditer texto/responsable) ; 4) enlazar = flèches de
+// dépendance entre cartes. ÉTAT LOCAL (non persisté) — stockage DB à venir.
 // ============================================================
 
 const HITO_AFD = "no_objecion_afd";
@@ -34,8 +35,6 @@ interface FilaRuta {
   numero: number | null;
 }
 
-// « No objeción AFD » = jalon non numéroté entre « Redacción de pliegos » et
-// « Licitación ». Les autres fases sont numérotées 01..N.
 const FILAS_RUTA: FilaRuta[] = [];
 {
   let numero = 0;
@@ -46,25 +45,35 @@ const FILAS_RUTA: FilaRuta[] = [];
   }
 }
 
-// Résolution des libellés de Requisitos AyS (code § → label) pour les cartes dinámicas.
 const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
 
-// Carte affichée dans une fase : une tâche, ou un plan (pour les tâches dinámicas).
 interface CardModel {
   key: string;
   componente: ComponenteCode;
   nombre: string;
   descripcion?: string;
-  nota?: boolean; // description = note (italique) plutôt qu'une référence
+  nota?: boolean;
 }
 
-// Édition locale d'une carte (admin) : surcharge nom / description / responsable.
 interface Edicion {
   nombre?: string;
   descripcion?: string;
   responsable?: string;
+}
+
+interface Enlace {
+  from: string; // statKey source
+  to: string; // statKey cible
+}
+
+interface Flecha {
+  d: string;
+  comp: ComponenteCode;
+  mx: number;
+  my: number;
+  idx: number;
 }
 
 type Seleccion = "global" | string;
@@ -83,21 +92,31 @@ export function HojasDeRutaClient() {
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   const [ediciones, setEdiciones] = useState<Record<string, Edicion>>({});
   const [panel, setPanel] = useState<{ key: string; tipo: PanelTipo } | null>(null);
-  // No objeción AFD (jalon) : case admin « recibida », par feuille de route.
   const [anoAfd, setAnoAfd] = useState<Record<string, boolean>>({});
   const anoChecked = !!anoAfd[seleccion];
+
+  // Dépendances (flèches) + mode liaison — LOCAUX.
+  const [enlaces, setEnlaces] = useState<Enlace[]>([]);
+  const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  const linking = esAdmin && linkFrom !== null;
+
+  // Overlay SVG des flèches (positions mesurées dans le DOM).
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [overlay, setOverlay] = useState<{ w: number; h: number; flechas: Flecha[] }>({
+    w: 0,
+    h: 0,
+    flechas: [],
+  });
+  const [tick, setTick] = useState(0);
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
   const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
 
-  // Libellé de la feuille de route active (titre de section).
   const activa =
     seleccion === "global"
       ? "Proyecto global"
       : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
 
-  // Plans (Requisitos AyS) cochés du sous-projet, ordre stable — pour les tâches
-  // « dinámicas » : une carte par plan coché en Admin.
   function planesDe(uid: string): { code: string; label: string }[] {
     const checked = new Set(
       aysRequisitos.filter((r) => r.subproyectoUid === uid).map((r) => r.requisito),
@@ -108,9 +127,6 @@ export function HojasDeRutaClient() {
     }));
   }
 
-  // Cartes d'une fase. Une tâche normale = une carte ; une tâche « dinámica » se
-  // décline en une carte par plan coché (référence MGAS en sous-titre). Au niveau
-  // global, ou si aucun plan n'est coché, une seule carte générique avec une note.
   function cardsDeFase(faseCode: string): CardModel[] {
     const out: CardModel[] = [];
     for (const t of ROADMAP_AYS) {
@@ -165,17 +181,79 @@ export function HojasDeRutaClient() {
     setPanel((cur) => (cur && cur.key === k && cur.tipo === tipo ? null : { key: k, tipo }));
   }
 
-  function aplicarEdicion(k: string, patch: Edicion) {
-    setEdiciones((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }));
+  function startLink(k: string) {
+    setLinkFrom((cur) => (cur === k ? null : k));
   }
 
-  function restablecerEdicion(k: string) {
-    setEdiciones((prev) => {
-      const n = { ...prev };
-      delete n[k];
-      return n;
+  function completeLink(toKey: string) {
+    setEnlaces((prev) => {
+      if (!linkFrom || linkFrom === toKey) return prev;
+      if (prev.some((e) => e.from === linkFrom && e.to === toKey)) return prev;
+      return [...prev, { from: linkFrom, to: toKey }];
     });
+    setLinkFrom(null);
   }
+
+  function removeEnlace(idx: number) {
+    setEnlaces((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  // Recalcule l'overlay sur redimensionnement de la fenêtre.
+  useEffect(() => {
+    function onResize() {
+      setTick((t) => t + 1);
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  // Mesure la position des cartes liées et construit les chemins des flèches.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const br = box.getBoundingClientRect();
+    const flechas: Flecha[] = [];
+    enlaces.forEach((e, idx) => {
+      const s = box.querySelector<HTMLElement>(`[data-cardkey="${e.from}"]`);
+      const t = box.querySelector<HTMLElement>(`[data-cardkey="${e.to}"]`);
+      if (!s || !t) return;
+      const sr = s.getBoundingClientRect();
+      const tr = t.getBoundingClientRect();
+      let x1: number, y1: number, x2: number, y2: number, vert: boolean;
+      if (tr.top >= sr.bottom - 1) {
+        x1 = sr.left - br.left + sr.width / 2;
+        y1 = sr.bottom - br.top;
+        x2 = tr.left - br.left + tr.width / 2;
+        y2 = tr.top - br.top;
+        vert = true;
+      } else if (tr.bottom <= sr.top + 1) {
+        x1 = sr.left - br.left + sr.width / 2;
+        y1 = sr.top - br.top;
+        x2 = tr.left - br.left + tr.width / 2;
+        y2 = tr.bottom - br.top;
+        vert = true;
+      } else if (tr.left >= sr.right - 1) {
+        x1 = sr.right - br.left;
+        y1 = sr.top - br.top + sr.height / 2;
+        x2 = tr.left - br.left;
+        y2 = tr.top - br.top + tr.height / 2;
+        vert = false;
+      } else {
+        x1 = sr.left - br.left;
+        y1 = sr.top - br.top + sr.height / 2;
+        x2 = tr.right - br.left;
+        y2 = tr.top - br.top + tr.height / 2;
+        vert = false;
+      }
+      const comp = (s.getAttribute("data-comp") as ComponenteCode) || "AyS";
+      const d = vert
+        ? `M ${x1},${y1} C ${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}`
+        : `M ${x1},${y1} C ${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
+      flechas.push({ d, comp, mx: (x1 + x2) / 2, my: (y1 + y2) / 2, idx });
+    });
+    // Mesure DOM → état ; deps couvrent tout ce qui change la mise en page.
+    setOverlay({ w: br.width, h: br.height, flechas });
+  }, [enlaces, seleccion, vista, realizadas, comentarios, ediciones, panel, tick, snap.status]);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -237,12 +315,28 @@ export function HojasDeRutaClient() {
         )}
       </nav>
 
+      {linking && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--focus)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)]">
+          <span>Modo enlace: elegí la tarea de destino de la dependencia.</span>
+          <button
+            type="button"
+            onClick={() => setLinkFrom(null)}
+            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-sm font-medium text-[var(--text)] hover:bg-[var(--app-bg)]"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
       {/* Hoja de ruta activa */}
       <section className="flex flex-col gap-3">
         <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
 
         {/* Estructura vertical de las fases del proyecto */}
-        <div className="divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+        <div
+          ref={boxRef}
+          className="relative divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+        >
           {FILAS_RUTA.map((fila) =>
             fila.hito ? (
               <div
@@ -279,7 +373,6 @@ export function HojasDeRutaClient() {
               </div>
             ) : (
               <div key={fila.code} className="flex items-center gap-4 p-4">
-                {/* Libellé de la fase — à gauche. */}
                 <div className="w-28 shrink-0 self-center sm:w-44">
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
                     Fase {String(fila.numero).padStart(2, "0")}
@@ -288,24 +381,37 @@ export function HojasDeRutaClient() {
                     {fila.nombre}
                   </div>
                 </div>
-                {/* Cartes de la fase (partie AyS pour l'instant). */}
                 <div className="flex flex-1 flex-wrap content-start gap-2.5">
                   {cardsDeFase(fila.code).map((card) => {
                     const k = `${seleccion}::${card.key}`;
                     return (
                       <TareaCard
                         key={card.key}
+                        statKey={k}
                         card={card}
                         realizada={realizadas.has(k)}
                         comentario={comentarios[k] ?? ""}
                         edicion={ediciones[k]}
                         esAdmin={esAdmin}
                         panel={panel && panel.key === k ? panel.tipo : null}
+                        linking={linking}
+                        esFuente={linkFrom === k}
                         onToggleRealizada={() => toggleRealizada(k)}
                         onPanel={(tipo) => togglePanel(k, tipo)}
                         onComentario={(v) => setComentarios((prev) => ({ ...prev, [k]: v }))}
-                        onEdicion={(patch) => aplicarEdicion(k, patch)}
-                        onReset={() => restablecerEdicion(k)}
+                        onEdicion={(patch) =>
+                          setEdiciones((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }))
+                        }
+                        onReset={() =>
+                          setEdiciones((prev) => {
+                            const n = { ...prev };
+                            delete n[k];
+                            return n;
+                          })
+                        }
+                        onStartLink={() => startLink(k)}
+                        onCompleteLink={() => completeLink(k)}
+                        onCancelLink={() => setLinkFrom(null)}
                       />
                     );
                   })}
@@ -313,12 +419,66 @@ export function HojasDeRutaClient() {
               </div>
             ),
           )}
+
+          {/* Overlay des flèches de dépendance */}
+          {overlay.flechas.length > 0 && (
+            <svg
+              className="pointer-events-none absolute left-0 top-0 z-20"
+              width={overlay.w}
+              height={overlay.h}
+              aria-hidden="true"
+            >
+              <defs>
+                {COMPONENTES.map((c) => (
+                  <marker
+                    key={c.code}
+                    id={`ah-${c.code}`}
+                    markerWidth="8"
+                    markerHeight="8"
+                    refX="6"
+                    refY="3"
+                    orient="auto"
+                  >
+                    <path d="M0,0 L6,3 L0,6 z" fill={CARD_TONOS[c.code].foot} />
+                  </marker>
+                ))}
+              </defs>
+              {overlay.flechas.map((f) => (
+                <path
+                  key={`f-${f.idx}`}
+                  d={f.d}
+                  fill="none"
+                  stroke={CARD_TONOS[f.comp].foot}
+                  strokeWidth={1.8}
+                  strokeLinecap="round"
+                  markerEnd={`url(#ah-${f.comp})`}
+                />
+              ))}
+              {esAdmin &&
+                overlay.flechas.map((f) => (
+                  <g
+                    key={`x-${f.idx}`}
+                    className="pointer-events-auto cursor-pointer"
+                    onClick={() => removeEnlace(f.idx)}
+                  >
+                    <title>Eliminar dependencia</title>
+                    <circle cx={f.mx} cy={f.my} r="8" fill="#fff" stroke={CARD_TONOS[f.comp].foot} strokeWidth="1.5" />
+                    <path
+                      d={`M ${f.mx - 3},${f.my - 3} L ${f.mx + 3},${f.my + 3} M ${f.mx + 3},${f.my - 3} L ${f.mx - 3},${f.my + 3}`}
+                      stroke={CARD_TONOS[f.comp].foot}
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    />
+                  </g>
+                ))}
+            </svg>
+          )}
         </div>
 
         {admin && (
           <p className="text-xs text-[var(--text-muted)]">
-            Modo Admin: marcar realizada, editar texto/responsable y agregar comentario. Cambios
-            locales (sin guardar todavía).
+            Modo Admin: marcar realizada, editar texto/responsable, comentario y enlazar
+            dependencias. Cambios locales (sin guardar todavía).
           </p>
         )}
       </section>
@@ -352,33 +512,42 @@ function RutaButton({
   );
 }
 
-// Carte de tâche — format validé : en-tête coloré (nom) + corps optionnel + pied
-// « Responsable ». Côté admin : pilule « realizada », édition (nom / description /
-// responsable) et comentario. Surcharges d'édition locales (non persistées).
 function TareaCard({
+  statKey,
   card,
   realizada,
   comentario,
   edicion,
   esAdmin,
   panel,
+  linking,
+  esFuente,
   onToggleRealizada,
   onPanel,
   onComentario,
   onEdicion,
   onReset,
+  onStartLink,
+  onCompleteLink,
+  onCancelLink,
 }: {
+  statKey: string;
   card: CardModel;
   realizada: boolean;
   comentario: string;
   edicion: Edicion | undefined;
   esAdmin: boolean;
   panel: PanelTipo | null;
+  linking: boolean;
+  esFuente: boolean;
   onToggleRealizada: () => void;
   onPanel: (tipo: PanelTipo) => void;
   onComentario: (v: string) => void;
   onEdicion: (patch: Edicion) => void;
   onReset: () => void;
+  onStartLink: () => void;
+  onCompleteLink: () => void;
+  onCancelLink: () => void;
 }) {
   const tono = CARD_TONOS[card.componente];
   const pillVisible = esAdmin || realizada;
@@ -392,7 +561,15 @@ function TareaCard({
     "mt-0.5 w-full rounded border border-[var(--border)] p-1 text-[11px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]";
 
   return (
-    <div className="relative w-[232px] rounded-md border" style={{ borderColor: tono.border }}>
+    <div
+      data-cardkey={statKey}
+      data-comp={card.componente}
+      className={cn(
+        "relative w-[232px] rounded-md border",
+        esFuente && "ring-2 ring-[var(--accent)]",
+      )}
+      style={{ borderColor: tono.border }}
+    >
       {/* Pilule « realizada » — pleine visibilité (hors du calque atténué). */}
       {pillVisible && (
         <button
@@ -540,7 +717,30 @@ function TareaCard({
           >
             {comentario ? "Comentario ✓" : "Comentario"}
           </button>
+          <button
+            type="button"
+            onClick={onStartLink}
+            className="flex-1 border-l border-[var(--border)] py-1 transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--text)]"
+          >
+            Enlazar
+          </button>
         </div>
+      )}
+
+      {/* Surcouche du mode liaison : la carte source = Cancelar ; les autres = Elegir. */}
+      {linking && (
+        <button
+          type="button"
+          onClick={esFuente ? onCancelLink : onCompleteLink}
+          className="absolute inset-0 z-30 flex items-center justify-center rounded-md border-2 text-[11px] font-semibold"
+          style={
+            esFuente
+              ? { backgroundColor: "rgba(227,5,19,0.10)", borderColor: "var(--accent)", color: "var(--accent)" }
+              : { backgroundColor: "rgba(60,120,216,0.12)", borderColor: "var(--focus)", color: "var(--focus)" }
+          }
+        >
+          {esFuente ? "Cancelar" : "Elegir destino"}
+        </button>
       )}
     </div>
   );
