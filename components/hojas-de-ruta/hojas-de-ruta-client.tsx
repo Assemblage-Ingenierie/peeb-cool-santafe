@@ -7,6 +7,7 @@ import {
   FASES,
   ROADMAP_AYS,
   CARD_TONOS,
+  COLOR_REALIZADA,
   RESPONSABLE_DEFECTO,
   REQUISITOS_AYS,
   REQUISITOS_AYS_CODES,
@@ -18,17 +19,12 @@ import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 
 // ============================================================
-// Hojas de ruta (nouvelle page) — sous-lot 1 : navigation entre les feuilles de
-// route (proyecto global + un sous-projet) et structure verticale des phases.
-// Le contenu des phases (cartes de tâches, dépendances) viendra dans les sous-lots
-// suivants. Lecture publique via /api/snapshot (comme le reste).
+// Hojas de ruta — page.
+// Sous-lots : 1) page + nav + structure des phases ; 2) contenu AyS ;
+// 3) édition admin des cartes : « realizada » (pilule) + comentario (texte libre).
+// ÉTAT LOCAL pour l'instant (non persisté) — stockage DB dans un sous-lot dédié.
 // ============================================================
 
-// Séquence de la feuille de route = toutes les fases SAUF « General » (transversale,
-// hors séquence). Libellés/ordre = source unique lib/constants (FASES).
-// « No objeción AFD » n'est PAS une phase numérotée : c'est un jalon (un espace
-// réservé) entre « Redacción de pliegos » et « Licitación ». Seules les vraies
-// phases sont numérotées 01..N.
 const HITO_AFD = "no_objecion_afd";
 
 interface FilaRuta {
@@ -38,6 +34,8 @@ interface FilaRuta {
   numero: number | null;
 }
 
+// « No objeción AFD » = jalon non numéroté entre « Redacción de pliegos » et
+// « Licitación ». Les autres fases sont numérotées 01..N.
 const FILAS_RUTA: FilaRuta[] = [];
 {
   let numero = 0;
@@ -48,8 +46,7 @@ const FILAS_RUTA: FilaRuta[] = [];
   }
 }
 
-// Résolution des libellés de Requisitos AyS (code § → label) pour les cartes
-// « dinámicas » (« planes » à adapter selon ce qui est coché en Admin).
+// Résolution des libellés de Requisitos AyS (code § → label) pour les cartes dinámicas.
 const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
@@ -63,24 +60,35 @@ interface CardModel {
   nota?: boolean; // description = note (italique) plutôt qu'une référence
 }
 
-// Feuille de route affichée : projet global ou un sous-projet (par UID).
 type Seleccion = "global" | string;
+type Vista = "user" | "admin";
 
 export function HojasDeRutaClient() {
   const snap = useSnapshot();
-  const [seleccion, setSeleccion] = useState<Seleccion>("global");
   const admin = isAdmin(getCurrentUser());
+  const [seleccion, setSeleccion] = useState<Seleccion>("global");
+  const [vista, setVista] = useState<Vista>("admin");
+  const esAdmin = admin && vista === "admin";
 
+  // États d'édition — LOCAUX (non persistés). Clé = `${seleccion}::${card.key}`.
+  const [realizadas, setRealizadas] = useState<Set<string>>(new Set());
+  const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  const [comentarioAbierto, setComentarioAbierto] = useState<string | null>(null);
   // No objeción AFD (jalon) : case admin « recibida », par feuille de route.
-  // État local pour l'instant — persistance en base avec le stockage des tâches.
   const [anoAfd, setAnoAfd] = useState<Record<string, boolean>>({});
   const anoChecked = !!anoAfd[seleccion];
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
   const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
 
+  // Libellé de la feuille de route active (titre de section).
+  const activa =
+    seleccion === "global"
+      ? "Proyecto global"
+      : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
+
   // Plans (Requisitos AyS) cochés du sous-projet, ordre stable — pour les tâches
-  // « dinámicas » : UNE carte par plan coché en Admin.
+  // « dinámicas » : une carte par plan coché en Admin.
   function planesDe(uid: string): { code: string; label: string }[] {
     const checked = new Set(
       aysRequisitos.filter((r) => r.subproyectoUid === uid).map((r) => r.requisito),
@@ -135,21 +143,51 @@ export function HojasDeRutaClient() {
     return out;
   }
 
-  // Libellé de la feuille de route active (titre de section).
-  const activa =
-    seleccion === "global"
-      ? "Proyecto global"
-      : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
+  function toggleRealizada(k: string) {
+    setRealizadas((prev) => {
+      const n = new Set(prev);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
+  }
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">
-          Hojas de ruta
-        </h1>
-        <p className="mt-1 text-sm text-[var(--text-muted)]">
-          Hoja de ruta del proyecto global y de cada subproyecto.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">Hojas de ruta</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            Hoja de ruta del proyecto global y de cada subproyecto.
+          </p>
+        </div>
+        {admin && (
+          <div
+            className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--app-bg)] p-0.5"
+            role="group"
+            aria-label="Vista"
+          >
+            {(["user", "admin"] as Vista[]).map((v) => {
+              const on = vista === v;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setVista(v)}
+                  className={cn(
+                    "rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                    on
+                      ? "bg-[var(--surface)] text-[var(--text)] shadow-sm"
+                      : "text-[var(--text-muted)] hover:text-[var(--text)]",
+                  )}
+                >
+                  {v === "user" ? "Usuario" : "Admin"}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Navegación entre hojas de ruta */}
@@ -186,9 +224,8 @@ export function HojasDeRutaClient() {
         <div className="divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
           {FILAS_RUTA.map((fila) =>
             fila.hito ? (
-              // Jalon « No objeción AFD » : espace réservé non numéroté entre
-              // « Redacción de pliegos » et « Licitación ». Case admin « recibida »
-              // (rouge) à droite ; une fois cochée, le libellé passe en bleu.
+              // Jalon « No objeción AFD » : espace réservé non numéroté. Case admin
+              // « recibida » (rouge) à droite ; une fois cochée, le libellé en bleu.
               <div
                 key={fila.code}
                 className="relative flex items-center justify-center gap-3 bg-[var(--app-bg)] px-12 py-3"
@@ -203,7 +240,7 @@ export function HojasDeRutaClient() {
                   {fila.nombre}
                 </span>
                 <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
-                {admin && (
+                {esAdmin && (
                   <button
                     type="button"
                     onClick={() => setAnoAfd((p) => ({ ...p, [seleccion]: !p[seleccion] }))}
@@ -234,14 +271,35 @@ export function HojasDeRutaClient() {
                 </div>
                 {/* Cartes de la fase (partie AyS pour l'instant). */}
                 <div className="flex flex-1 flex-wrap content-start gap-2.5">
-                  {cardsDeFase(fila.code).map((card) => (
-                    <TareaCard key={card.key} card={card} />
-                  ))}
+                  {cardsDeFase(fila.code).map((card) => {
+                    const k = `${seleccion}::${card.key}`;
+                    return (
+                      <TareaCard
+                        key={card.key}
+                        card={card}
+                        realizada={realizadas.has(k)}
+                        comentario={comentarios[k] ?? ""}
+                        esAdmin={esAdmin}
+                        comentarioAbierto={comentarioAbierto === k}
+                        onToggleRealizada={() => toggleRealizada(k)}
+                        onAbrirComentario={() =>
+                          setComentarioAbierto((cur) => (cur === k ? null : k))
+                        }
+                        onComentario={(v) => setComentarios((prev) => ({ ...prev, [k]: v }))}
+                      />
+                    );
+                  })}
                 </div>
               </div>
             ),
           )}
         </div>
+
+        {admin && (
+          <p className="text-xs text-[var(--text-muted)]">
+            Modo Admin: marcar realizada y agregar comentario. Cambios locales (sin guardar todavía).
+          </p>
+        )}
       </section>
     </div>
   );
@@ -274,36 +332,125 @@ function RutaButton({
 }
 
 // Carte de tâche — format validé : en-tête coloré (nom en gras) + corps optionnel
-// (description / référence) + pied foncé « Responsable ». Tons par composante.
-function TareaCard({ card }: { card: CardModel }) {
+// + pied foncé « Responsable ». Côté admin : pilule « realizada » (carte atténuée,
+// pilule nette) + comentario (texte libre). Tons par composante (CARD_TONOS).
+function TareaCard({
+  card,
+  realizada,
+  comentario,
+  esAdmin,
+  comentarioAbierto,
+  onToggleRealizada,
+  onAbrirComentario,
+  onComentario,
+}: {
+  card: CardModel;
+  realizada: boolean;
+  comentario: string;
+  esAdmin: boolean;
+  comentarioAbierto: boolean;
+  onToggleRealizada: () => void;
+  onAbrirComentario: () => void;
+  onComentario: (v: string) => void;
+}) {
   const tono = CARD_TONOS[card.componente];
-  return (
-    <div
-      className="flex w-[232px] flex-col overflow-hidden rounded-md border"
-      style={{ borderColor: tono.border }}
-    >
-      <div
-        className="px-3 py-2 text-center text-[12.5px] font-semibold leading-snug"
-        style={{ backgroundColor: tono.head, color: tono.headText }}
-      >
-        {card.nombre}
-      </div>
+  const pillVisible = esAdmin || realizada;
 
-      {card.descripcion && (
-        <div
-          className={cn("px-3 py-1.5 text-center text-[11px] leading-snug", card.nota && "italic")}
-          style={{ backgroundColor: tono.body, color: tono.bodyText }}
+  return (
+    <div className="relative w-[232px] rounded-md border" style={{ borderColor: tono.border }}>
+      {/* Pilule « realizada » — pleine visibilité (hors du calque atténué). */}
+      {pillVisible && (
+        <button
+          type="button"
+          onClick={esAdmin ? onToggleRealizada : undefined}
+          disabled={!esAdmin}
+          aria-pressed={realizada}
+          aria-label="Marcar como realizada"
+          title="Realizada"
+          className={cn(
+            "absolute right-2 top-2 z-10 flex h-[18px] w-7 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+            realizada
+              ? "border-transparent text-white"
+              : "border-[var(--text-muted)] bg-[var(--surface)] text-transparent",
+            esAdmin && "cursor-pointer",
+            esAdmin && !realizada && "hover:text-[var(--text-muted)]",
+          )}
+          style={realizada ? { backgroundColor: COLOR_REALIZADA } : undefined}
         >
-          {card.descripcion}
-        </div>
+          <CheckIcon className="h-3 w-3" />
+        </button>
       )}
 
-      <div
-        className="mt-auto px-3 py-1 text-center text-[11px] font-medium"
-        style={{ backgroundColor: tono.foot, color: tono.footText }}
-      >
-        {RESPONSABLE_DEFECTO}
+      {/* Contenu — atténué quand realizada (la pilule reste nette). */}
+      <div className={cn("flex flex-col overflow-hidden rounded-md", realizada && "opacity-45")}>
+        <div
+          className="px-3 py-2 pr-9 text-center text-[12.5px] font-semibold leading-snug"
+          style={{ backgroundColor: tono.head, color: tono.headText }}
+        >
+          {card.nombre}
+        </div>
+
+        {card.descripcion && (
+          <div
+            className={cn(
+              "px-3 py-1.5 text-center text-[11px] leading-snug",
+              card.nota && "italic",
+            )}
+            style={{ backgroundColor: tono.body, color: tono.bodyText }}
+          >
+            {card.descripcion}
+          </div>
+        )}
+
+        {comentario && (
+          <div
+            className="border-t px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]"
+            style={{ backgroundColor: "var(--app-bg)", borderColor: tono.border }}
+          >
+            <span className="font-medium">Comentario: </span>
+            {comentario}
+          </div>
+        )}
+
+        <div
+          className="px-3 py-1 text-center text-[11px] font-medium"
+          style={{ backgroundColor: tono.foot, color: tono.footText }}
+        >
+          {RESPONSABLE_DEFECTO}
+        </div>
       </div>
+
+      {/* Édition du comentario (admin). */}
+      {esAdmin &&
+        (comentarioAbierto ? (
+          <div className="border-t border-[var(--border)] p-2">
+            <textarea
+              value={comentario}
+              onChange={(e) => onComentario(e.target.value)}
+              rows={2}
+              placeholder="Comentario…"
+              autoFocus
+              className="w-full resize-y rounded border border-[var(--border)] p-1.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+            />
+            <div className="mt-1 flex justify-end">
+              <button
+                type="button"
+                onClick={onAbrirComentario}
+                className="rounded px-2 py-0.5 text-[11px] font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onAbrirComentario}
+            className="flex w-full items-center justify-center gap-1 border-t border-[var(--border)] py-1 text-[11px] text-[var(--text-muted)] hover:text-[var(--text)]"
+          >
+            {comentario ? "Editar comentario" : "+ Comentario"}
+          </button>
+        ))}
     </div>
   );
 }
