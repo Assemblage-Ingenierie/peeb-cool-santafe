@@ -208,6 +208,7 @@ export const ROADMAP_AYS: RoadmapTarea[] = [
   { fase: "estudios_preliminares", componente: "AyS", nombre: "Elegibilidad y nivel de riesgo · Ficha de evaluación (Anexo 5)" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Pre-categorización provincial digital" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Memoria descriptiva / anteproyecto" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Identificación de los otros planes de gestión relevantes para el proyecto" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Plan de gestión del Patrimonio" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Categorización provincial" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Plan de continuidad de los servicios" },
