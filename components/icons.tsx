@@ -15,6 +15,15 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M9 4v14M15 6v14" />
     </>
   ),
+  hojas: (
+    <>
+      <circle cx="6" cy="6" r="1.8" />
+      <circle cx="6" cy="12" r="1.8" />
+      <circle cx="6" cy="18" r="1.8" />
+      <path d="M6 7.8v2.4M6 13.8v2.4" />
+      <path d="M11 6h9M11 12h9M11 18h6" />
+    </>
+  ),
   calendario: (
     <>
       <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
