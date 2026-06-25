@@ -3,7 +3,15 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { FASES } from "@/lib/constants";
+import {
+  FASES,
+  ROADMAP_AYS,
+  CARD_TONOS,
+  RESPONSABLE_DEFECTO,
+  REQUISITOS_AYS,
+  REQUISITOS_AYS_CODES,
+  type RoadmapTarea,
+} from "@/lib/constants";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
@@ -39,6 +47,12 @@ const FILAS_RUTA: FilaRuta[] = [];
   }
 }
 
+// Résolution des libellés de Requisitos AyS (code § → label) pour les cartes
+// « dinámicas » (« planes » à adapter selon ce qui est coché en Admin).
+const REQ_LABEL = new Map<string, string>(
+  REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
+);
+
 // Feuille de route affichée : projet global ou un sous-projet (par UID).
 type Seleccion = "global" | string;
 
@@ -53,6 +67,16 @@ export function HojasDeRutaClient() {
   const anoChecked = !!anoAfd[seleccion];
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
+  const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
+
+  // Requisitos AyS cochés du sous-projet (libellés, ordre stable) — alimentent les
+  // tâches « dinámicas » (« planes » à adapter selon ce qui est coché en Admin).
+  function requisitosDe(uid: string): string[] {
+    const checked = new Set(
+      aysRequisitos.filter((r) => r.subproyectoUid === uid).map((r) => r.requisito),
+    );
+    return REQUISITOS_AYS_CODES.filter((c) => checked.has(c)).map((c) => REQ_LABEL.get(c) ?? c);
+  }
 
   // Libellé de la feuille de route active (titre de section).
   const activa =
@@ -141,8 +165,22 @@ export function HojasDeRutaClient() {
                 )}
               </div>
             ) : (
-              <div key={fila.code} className="flex gap-4 p-4">
-                <div className="w-28 shrink-0 sm:w-44">
+              <div key={fila.code} className="flex items-center gap-4 p-4">
+                {/* Cartes de la fase (partie AyS pour l'instant) — à gauche. */}
+                <div className="flex flex-1 flex-wrap content-start gap-2.5">
+                  {ROADMAP_AYS.filter((t) => t.fase === fila.code).map((tarea, idx) => (
+                    <TareaCard
+                      key={`${fila.code}-${idx}`}
+                      tarea={tarea}
+                      esGlobal={seleccion === "global"}
+                      requisitos={
+                        tarea.dinamica && seleccion !== "global" ? requisitosDe(seleccion) : null
+                      }
+                    />
+                  ))}
+                </div>
+                {/* Libellé de la fase — à droite. */}
+                <div className="w-28 shrink-0 self-center sm:w-44">
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
                     Fase {String(fila.numero).padStart(2, "0")}
                   </div>
@@ -150,8 +188,6 @@ export function HojasDeRutaClient() {
                     {fila.nombre}
                   </div>
                 </div>
-                {/* Zone de contenu de la phase — vide pour l'instant (cartes à venir). */}
-                <div className="min-h-[72px] flex-1 rounded-md bg-[var(--app-bg)]" aria-hidden="true" />
               </div>
             ),
           )}
@@ -184,5 +220,58 @@ function RutaButton({
     >
       {children}
     </button>
+  );
+}
+
+// Carte de tâche de la feuille de route. Style sobre par composante (CARD_TONOS).
+// Les tâches « dinámicas » listent les Requisitos AyS cochés du sous-projet
+// (ou une note au niveau « Proyecto global »). Responsable par défaut = ACEFE.
+function TareaCard({
+  tarea,
+  requisitos,
+  esGlobal,
+}: {
+  tarea: RoadmapTarea;
+  requisitos: string[] | null;
+  esGlobal: boolean;
+}) {
+  const tono = CARD_TONOS[tarea.componente];
+  return (
+    <div
+      className="flex w-[232px] flex-col overflow-hidden rounded-md border"
+      style={{ backgroundColor: tono.bg, borderColor: tono.border }}
+    >
+      <div
+        className="px-3 pb-1.5 pt-2 text-center text-[12.5px] font-semibold leading-snug"
+        style={{ color: tono.texto }}
+      >
+        {tarea.nombre}
+      </div>
+
+      {tarea.dinamica && (
+        <div className="px-3 pb-1 text-[11px] leading-snug" style={{ color: tono.texto }}>
+          {esGlobal ? (
+            <p className="text-center italic opacity-75">
+              Según los requisitos AyS de cada subproyecto
+            </p>
+          ) : requisitos && requisitos.length > 0 ? (
+            <ul className="list-disc space-y-0.5 pl-4">
+              {requisitos.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-center italic opacity-60">Sin requisitos AyS marcados</p>
+          )}
+        </div>
+      )}
+
+      <div
+        className="mt-auto px-3 pb-2 pt-1 text-center text-[11px] opacity-75"
+        style={{ color: tono.texto }}
+      >
+        {RESPONSABLE_DEFECTO}
+      </div>
+    </div>
   );
 }

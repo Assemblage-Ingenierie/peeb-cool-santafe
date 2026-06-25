@@ -50,6 +50,23 @@ export const getComponente = (code: string): Componente | undefined =>
 export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
+// --- Tons des cartes de la feuille de route (Hojas de ruta) ---
+// Fond clair + bordure + texte foncé, par composante. Nuances DÉRIVÉES des
+// couleurs §2.3 (mêmes familles) — pas de nouvelle couleur de marque. Source
+// unique des couleurs de carte de la feuille de route.
+export interface CardTono {
+  bg: string;
+  border: string;
+  texto: string;
+}
+
+export const CARD_TONOS: Record<ComponenteCode, CardTono> = {
+  GP: { bg: "#ebecee", border: "#9aa1ad", texto: "#30323e" },
+  EE: { bg: "#fff8e1", border: "#e6c34d", texto: "#7a6100" },
+  AyS: { bg: "#eaf3e5", border: "#93c47d", texto: "#274e13" },
+  G: { bg: "#efeaf6", border: "#b4a7d6", texto: "#4b3b86" },
+};
+
 // ============================================================
 // Mesures du projet (CDC §4.5) — 8 mesures par sous-projet (table peebcoolsf_medidas).
 // (AyS n'est plus une mesure : voir REQUISITOS_AYS / section « Requisitos AyS ».)
@@ -161,6 +178,55 @@ export const REQUISITOS_AYS_CODES: string[] = REQUISITOS_AYS.flatMap((g) =>
 
 /** Référence MGAS affichable (« 10.5.1 » → « MGAS §10.5.1 »). */
 export const refMgas = (code: string): string => `MGAS §${code}`;
+
+// ============================================================
+// Hojas de ruta — tâches de la feuille de route, par fase et composante.
+// Source unique des libellés des tâches. Responsable par défaut = « ACEFE ».
+// Les tâches `dinamica` adaptent leur contenu aux Requisitos AyS cochés du
+// sous-projet (REQUISITOS_AYS / table ays_requisitos).
+// ============================================================
+
+export const RESPONSABLE_DEFECTO = "ACEFE";
+
+export interface RoadmapTarea {
+  fase: string; // code de fase (voir FASES)
+  componente: ComponenteCode;
+  nombre: string;
+  dinamica?: boolean; // contenu adapté aux Requisitos AyS cochés du sous-projet
+}
+
+// Partie AyS (identique pour tous les sous-projets ; les tâches `dinamica` se
+// déclinent selon les requisitos cochés de chaque sous-projet).
+export const ROADMAP_AYS: RoadmapTarea[] = [
+  { fase: "estudios_preliminares", componente: "AyS", nombre: "Elegibilidad y nivel de riesgo · Ficha de evaluación (Anexo 5)" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Pre-categorización provincial digital" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Memoria descriptiva / anteproyecto" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Plan de gestión del Patrimonio" },
+  { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Categorización provincial" },
+  { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Plan de continuidad de los servicios" },
+  {
+    fase: "proyecto_ejecutivo",
+    componente: "AyS",
+    nombre: "Lineamientos para otros planes necesarios según proyecto",
+    dinamica: true,
+  },
+  {
+    fase: "redaccion_pliegos",
+    componente: "AyS",
+    nombre: "Participación de experto AyS en la redacción del pliego",
+  },
+  {
+    fase: "redaccion_pliegos",
+    componente: "AyS",
+    nombre: "Asegurar la integración de los lineamientos establecidos en la fase anterior",
+  },
+  { fase: "licitacion", componente: "AyS", nombre: "Verificación de las ofertas AyS según criterios AyS" },
+  { fase: "licitacion", componente: "AyS", nombre: "Conformidad de los planes solicitados", dinamica: true },
+  { fase: "obra", componente: "AyS", nombre: "Aprobación y seguimiento del PGASC" },
+  { fase: "obra", componente: "AyS", nombre: "Conformidad del cronograma con el plan de continuidad" },
+  { fase: "obra", componente: "AyS", nombre: "Coordinación y seguimiento de los planes solicitados" },
+  { fase: "obra", componente: "AyS", nombre: "Gestión de reclamos" },
+];
 
 // ============================================================
 // Référentiels de gestion (CDC §3.2) — codes alignés sur les tables
