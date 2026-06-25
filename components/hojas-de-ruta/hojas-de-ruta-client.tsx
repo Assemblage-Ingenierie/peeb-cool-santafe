@@ -267,10 +267,10 @@ export function HojasDeRutaClient() {
                     aria-label="No objeción AFD recibida"
                     title="No objeción AFD recibida"
                     className={cn(
-                      "absolute right-4 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded border-2 border-[var(--accent)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+                      "absolute right-4 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
                       anoChecked
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-transparent text-transparent hover:text-[var(--accent)]",
+                        ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                        : "border-[var(--text-muted)] bg-transparent text-transparent hover:text-[var(--text-muted)]",
                     )}
                   >
                     <CheckIcon className="h-3.5 w-3.5" />
