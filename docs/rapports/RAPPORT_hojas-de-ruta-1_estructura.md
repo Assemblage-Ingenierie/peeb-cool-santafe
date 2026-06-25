@@ -40,6 +40,13 @@ sous-lots suivants.
 - Aperçu visuel `preview_start` non lancé (un `next dev` occupe déjà le port 3000) →
   vérifié via HTTP/DOM.
 
+## Ajuste (2026-06-24)
+- « No objeción AFD » n'est pas une phase numérotée : rendu comme un **jalon /
+  espace réservé** (séparateur sobre, label centré entre deux filets, non numéroté)
+  entre « Redacción de pliegos » (Fase 04) et « Licitación » (Fase 05). Les phases
+  sont donc numérotées **01–06**. (Traitement « hito » rouge des maquettes possible
+  si souhaité plus tard.)
+
 ## Suite (sous-lots à venir)
 - Colonnes par composante + cartes de tâches (en-tête nom + état, corps doc de
   référence, pied responsable).

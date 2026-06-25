@@ -13,9 +13,29 @@ import { useSnapshot } from "@/components/dashboard/use-snapshot";
 // suivants. Lecture publique via /api/snapshot (comme le reste).
 // ============================================================
 
-// Fases chronologiques de la feuille de route = toutes les fases SAUF « General »
-// (transversale, hors séquence). Libellés/ordre = source unique lib/constants (FASES).
-const FASES_ROADMAP = FASES.filter((f) => f.code !== "general");
+// Séquence de la feuille de route = toutes les fases SAUF « General » (transversale,
+// hors séquence). Libellés/ordre = source unique lib/constants (FASES).
+// « No objeción AFD » n'est PAS une phase numérotée : c'est un jalon (un espace
+// réservé) entre « Redacción de pliegos » et « Licitación ». Seules les vraies
+// phases sont numérotées 01..N.
+const HITO_AFD = "no_objecion_afd";
+
+interface FilaRuta {
+  code: string;
+  nombre: string;
+  hito: boolean;
+  numero: number | null;
+}
+
+const FILAS_RUTA: FilaRuta[] = [];
+{
+  let numero = 0;
+  for (const f of FASES.filter((x) => x.code !== "general")) {
+    const hito = f.code === HITO_AFD;
+    if (!hito) numero += 1;
+    FILAS_RUTA.push({ code: f.code, nombre: f.nombre, hito, numero: hito ? null : numero });
+  }
+}
 
 // Feuille de route affichée : projet global ou un sous-projet (par UID).
 type Seleccion = "global" | string;
@@ -75,20 +95,35 @@ export function HojasDeRutaClient() {
 
         {/* Estructura vertical de las fases del proyecto */}
         <div className="divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-          {FASES_ROADMAP.map((fase, i) => (
-            <div key={fase.code} className="flex gap-4 p-4">
-              <div className="w-28 shrink-0 sm:w-44">
-                <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
-                  Fase {String(i + 1).padStart(2, "0")}
-                </div>
-                <div className="mt-0.5 text-sm font-semibold leading-snug text-[var(--text)]">
-                  {fase.nombre}
-                </div>
+          {FILAS_RUTA.map((fila) =>
+            fila.hito ? (
+              // Jalon « No objeción AFD » : espace réservé non numéroté entre
+              // « Redacción de pliegos » et « Licitación ».
+              <div
+                key={fila.code}
+                className="flex items-center justify-center gap-3 bg-[var(--app-bg)] px-4 py-3"
+              >
+                <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+                  {fila.nombre}
+                </span>
+                <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
               </div>
-              {/* Zone de contenu de la phase — vide pour l'instant (cartes à venir). */}
-              <div className="min-h-[72px] flex-1 rounded-md bg-[var(--app-bg)]" aria-hidden="true" />
-            </div>
-          ))}
+            ) : (
+              <div key={fila.code} className="flex gap-4 p-4">
+                <div className="w-28 shrink-0 sm:w-44">
+                  <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                    Fase {String(fila.numero).padStart(2, "0")}
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold leading-snug text-[var(--text)]">
+                    {fila.nombre}
+                  </div>
+                </div>
+                {/* Zone de contenu de la phase — vide pour l'instant (cartes à venir). */}
+                <div className="min-h-[72px] flex-1 rounded-md bg-[var(--app-bg)]" aria-hidden="true" />
+              </div>
+            ),
+          )}
         </div>
       </section>
     </div>
