@@ -111,8 +111,11 @@ export function HojasDeRutaClient() {
 
   // Réordonnancement (mover) — ordre LOCAL par (sélection, fase) ; glisser-déposer.
   const [orden, setOrden] = useState<Record<string, string[]>>({});
-  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null); // visuel uniquement
   const [dropKey, setDropKey] = useState<string | null>(null);
+  // Carte tirée — en ref (synchrone) : l'état React n'est pas fiable entre
+  // dragstart et drop selon le timing de re-render → le drop lisait parfois null.
+  const dragKeyRef = useRef<string | null>(null);
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
   const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
@@ -446,14 +449,20 @@ export function HojasDeRutaClient() {
                         onStartLink={() => startLink(k)}
                         onCompleteLink={() => completeLink(k)}
                         onCancelLink={() => setLinkFrom(null)}
-                        onDragStartCard={() => setDragKey(card.key)}
-                        onDragOverCard={() => setDropKey(card.key)}
+                        onDragStartCard={() => {
+                          dragKeyRef.current = card.key;
+                          setDragKey(card.key);
+                        }}
+                        onDragOverCard={() => setDropKey((p) => (p === card.key ? p : card.key))}
                         onDropCard={() => {
-                          if (dragKey) moverCard(fila.code, dragKey, card.key);
+                          const from = dragKeyRef.current;
+                          dragKeyRef.current = null;
+                          if (from) moverCard(fila.code, from, card.key);
                           setDragKey(null);
                           setDropKey(null);
                         }}
                         onDragEndCard={() => {
+                          dragKeyRef.current = null;
                           setDragKey(null);
                           setDropKey(null);
                         }}

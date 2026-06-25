@@ -23,10 +23,16 @@ Dernier morceau d'édition : **mover** (réordonner les cartes par glisser-dépo
 - `npm run lint` : vert.
 - Marges : `clientHeight - scrollHeight = 0` sur les 16 cartes (aucun vide) ; hauteurs
   redevenues naturelles/différentes (ex. Identificación 120 px, Plan de gestión 85 px).
-- Mover : 16 cartes `draggable=true` en admin ; glisser-déposer simulé (dragstart puis
-  drop sur des ticks séparés) → « Plan de gestión del Patrimonio » déplacé en tête
-  d'Anteproyecto. (Note : la simulation doit séparer dragstart et drop pour laisser
-  `dragKey` se poser ; en usage réel les gestes sont naturellement séparés.)
+- Mover : 16 cartes `draggable=true` en admin ; glisser-déposer réordonne au sein de
+  la fase → « Plan de gestión del Patrimonio » déplacé en tête d'Anteproyecto.
+
+## Correctif (2026-06-25) — drag & drop fiable
+Le drop lisait la carte tirée depuis l'**état React** (`dragKey`), pas garanti à jour
+entre `dragstart` et `drop` selon le timing de re-render → le réordonnancement était
+aléatoire/inopérant en usage réel. Passage de la carte tirée en **ref synchrone**
+(`dragKeyRef`) ; `dragKey` (état) ne sert plus qu'au visuel (atténuation). Vérifié : la
+simulation « même tick » (dragstart + drop dans le même eval) réordonne désormais
+correctement, ce qui échouait avant le correctif.
 
 ## État de l'édition admin (périmètre demandé — local)
 - ✅ Marcar realizada · ✅ Comentario · ✅ Editar texto/responsable · ✅ Enlazar
