@@ -10,7 +10,8 @@ import {
   RESPONSABLE_DEFECTO,
   REQUISITOS_AYS,
   REQUISITOS_AYS_CODES,
-  type RoadmapTarea,
+  refMgas,
+  type ComponenteCode,
 } from "@/lib/constants";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
@@ -53,6 +54,15 @@ const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
 
+// Carte affichée dans une fase : une tâche, ou un plan (pour les tâches dinámicas).
+interface CardModel {
+  key: string;
+  componente: ComponenteCode;
+  nombre: string;
+  descripcion?: string;
+  nota?: boolean; // description = note (italique) plutôt qu'une référence
+}
+
 // Feuille de route affichée : projet global ou un sous-projet (par UID).
 type Seleccion = "global" | string;
 
@@ -69,13 +79,60 @@ export function HojasDeRutaClient() {
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
   const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
 
-  // Requisitos AyS cochés du sous-projet (libellés, ordre stable) — alimentent les
-  // tâches « dinámicas » (« planes » à adapter selon ce qui est coché en Admin).
-  function requisitosDe(uid: string): string[] {
+  // Plans (Requisitos AyS) cochés du sous-projet, ordre stable — pour les tâches
+  // « dinámicas » : UNE carte par plan coché en Admin.
+  function planesDe(uid: string): { code: string; label: string }[] {
     const checked = new Set(
       aysRequisitos.filter((r) => r.subproyectoUid === uid).map((r) => r.requisito),
     );
-    return REQUISITOS_AYS_CODES.filter((c) => checked.has(c)).map((c) => REQ_LABEL.get(c) ?? c);
+    return REQUISITOS_AYS_CODES.filter((c) => checked.has(c)).map((c) => ({
+      code: c,
+      label: REQ_LABEL.get(c) ?? c,
+    }));
+  }
+
+  // Cartes d'une fase. Une tâche normale = une carte ; une tâche « dinámica » se
+  // décline en une carte par plan coché (référence MGAS en sous-titre). Au niveau
+  // global, ou si aucun plan n'est coché, une seule carte générique avec une note.
+  function cardsDeFase(faseCode: string): CardModel[] {
+    const out: CardModel[] = [];
+    for (const t of ROADMAP_AYS) {
+      if (t.fase !== faseCode) continue;
+      if (!t.dinamica) {
+        out.push({ key: t.nombre, componente: t.componente, nombre: t.nombre });
+        continue;
+      }
+      if (seleccion === "global") {
+        out.push({
+          key: `${t.fase}-global`,
+          componente: t.componente,
+          nombre: t.nombre,
+          descripcion: "Según los requisitos AyS de cada subproyecto",
+          nota: true,
+        });
+        continue;
+      }
+      const planes = planesDe(seleccion);
+      if (planes.length === 0) {
+        out.push({
+          key: `${t.fase}-vacio`,
+          componente: t.componente,
+          nombre: t.nombre,
+          descripcion: "Sin requisitos AyS marcados",
+          nota: true,
+        });
+        continue;
+      }
+      for (const p of planes) {
+        out.push({
+          key: `${t.fase}-${p.code}`,
+          componente: t.componente,
+          nombre: p.label,
+          descripcion: refMgas(p.code),
+        });
+      }
+    }
+    return out;
   }
 
   // Libellé de la feuille de route active (titre de section).
@@ -166,20 +223,7 @@ export function HojasDeRutaClient() {
               </div>
             ) : (
               <div key={fila.code} className="flex items-center gap-4 p-4">
-                {/* Cartes de la fase (partie AyS pour l'instant) — à gauche. */}
-                <div className="flex flex-1 flex-wrap content-start gap-2.5">
-                  {ROADMAP_AYS.filter((t) => t.fase === fila.code).map((tarea, idx) => (
-                    <TareaCard
-                      key={`${fila.code}-${idx}`}
-                      tarea={tarea}
-                      esGlobal={seleccion === "global"}
-                      requisitos={
-                        tarea.dinamica && seleccion !== "global" ? requisitosDe(seleccion) : null
-                      }
-                    />
-                  ))}
-                </div>
-                {/* Libellé de la fase — à droite. */}
+                {/* Libellé de la fase — à gauche. */}
                 <div className="w-28 shrink-0 self-center sm:w-44">
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
                     Fase {String(fila.numero).padStart(2, "0")}
@@ -187,6 +231,12 @@ export function HojasDeRutaClient() {
                   <div className="mt-0.5 text-sm font-semibold leading-snug text-[var(--text)]">
                     {fila.nombre}
                   </div>
+                </div>
+                {/* Cartes de la fase (partie AyS pour l'instant). */}
+                <div className="flex flex-1 flex-wrap content-start gap-2.5">
+                  {cardsDeFase(fila.code).map((card) => (
+                    <TareaCard key={card.key} card={card} />
+                  ))}
                 </div>
               </div>
             ),
@@ -223,52 +273,34 @@ function RutaButton({
   );
 }
 
-// Carte de tâche de la feuille de route. Style sobre par composante (CARD_TONOS).
-// Les tâches « dinámicas » listent les Requisitos AyS cochés du sous-projet
-// (ou une note au niveau « Proyecto global »). Responsable par défaut = ACEFE.
-function TareaCard({
-  tarea,
-  requisitos,
-  esGlobal,
-}: {
-  tarea: RoadmapTarea;
-  requisitos: string[] | null;
-  esGlobal: boolean;
-}) {
-  const tono = CARD_TONOS[tarea.componente];
+// Carte de tâche — format validé : en-tête coloré (nom en gras) + corps optionnel
+// (description / référence) + pied foncé « Responsable ». Tons par composante.
+function TareaCard({ card }: { card: CardModel }) {
+  const tono = CARD_TONOS[card.componente];
   return (
     <div
       className="flex w-[232px] flex-col overflow-hidden rounded-md border"
-      style={{ backgroundColor: tono.bg, borderColor: tono.border }}
+      style={{ borderColor: tono.border }}
     >
       <div
-        className="px-3 pb-1.5 pt-2 text-center text-[12.5px] font-semibold leading-snug"
-        style={{ color: tono.texto }}
+        className="px-3 py-2 text-center text-[12.5px] font-semibold leading-snug"
+        style={{ backgroundColor: tono.head, color: tono.headText }}
       >
-        {tarea.nombre}
+        {card.nombre}
       </div>
 
-      {tarea.dinamica && (
-        <div className="px-3 pb-1 text-[11px] leading-snug" style={{ color: tono.texto }}>
-          {esGlobal ? (
-            <p className="text-center italic opacity-75">
-              Según los requisitos AyS de cada subproyecto
-            </p>
-          ) : requisitos && requisitos.length > 0 ? (
-            <ul className="list-disc space-y-0.5 pl-4">
-              {requisitos.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-center italic opacity-60">Sin requisitos AyS marcados</p>
-          )}
+      {card.descripcion && (
+        <div
+          className={cn("px-3 py-1.5 text-center text-[11px] leading-snug", card.nota && "italic")}
+          style={{ backgroundColor: tono.body, color: tono.bodyText }}
+        >
+          {card.descripcion}
         </div>
       )}
 
       <div
-        className="mt-auto px-3 pb-2 pt-1 text-center text-[11px] opacity-75"
-        style={{ color: tono.texto }}
+        className="mt-auto px-3 py-1 text-center text-[11px] font-medium"
+        style={{ backgroundColor: tono.foot, color: tono.footText }}
       >
         {RESPONSABLE_DEFECTO}
       </div>

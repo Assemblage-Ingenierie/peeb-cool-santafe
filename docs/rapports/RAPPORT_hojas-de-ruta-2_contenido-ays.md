@@ -47,6 +47,15 @@ phase, certaines « dynamiques » (adaptées aux Requisitos AyS cochés en Admin
 - Aperçu visuel `preview_start` non lancé (port 3000 occupé par un `next dev`) →
   vérifié via HTTP/DOM.
 
+## Ajuste (retour client — respect des décisions validées)
+- **Format de carte validé** rétabli : en-tête coloré (nom en gras) / corps optionnel
+  (description ou référence) / **pied foncé « Responsable »**. `CARD_TONOS` passe à
+  des tons en-tête/corps/pied par composante (au lieu d'un simple fond plat).
+- **Phases remises à gauche** (le libellé de phase avait été déplacé à droite à tort).
+- **Tâches dynamiques = une carte par plan** AyS coché (et non une liste dans une
+  seule carte) : en-tête = libellé du plan, corps = référence MGAS §, pied = ACEFE.
+  Au niveau global, ou sans plan coché → une carte générique avec note.
+
 ## Suite
 - Colonnes / cartes des autres composantes (EE, Género, GP).
 - État « réalisée » (pilule) + commentaire admin sur les cartes + stockage DB.

@@ -51,20 +51,24 @@ export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
 // --- Tons des cartes de la feuille de route (Hojas de ruta) ---
-// Fond clair + bordure + texte foncé, par composante. Nuances DÉRIVÉES des
-// couleurs §2.3 (mêmes familles) — pas de nouvelle couleur de marque. Source
-// unique des couleurs de carte de la feuille de route.
+// Format de carte validé : EN-TÊTE (nom) / CORPS (description) / PIED (responsable),
+// par composante. Nuances DÉRIVÉES des couleurs §2.3 (mêmes familles) — pas de
+// nouvelle couleur de marque. Source unique des couleurs de carte de la feuille de route.
 export interface CardTono {
-  bg: string;
+  head: string; // fond en-tête
+  headText: string; // texte en-tête (nom de la tâche)
+  body: string; // fond corps
+  bodyText: string; // texte corps (description / référence)
+  foot: string; // fond pied (Responsable)
+  footText: string; // texte pied
   border: string;
-  texto: string;
 }
 
 export const CARD_TONOS: Record<ComponenteCode, CardTono> = {
-  GP: { bg: "#ebecee", border: "#9aa1ad", texto: "#30323e" },
-  EE: { bg: "#fff8e1", border: "#e6c34d", texto: "#7a6100" },
-  AyS: { bg: "#eaf3e5", border: "#93c47d", texto: "#274e13" },
-  G: { bg: "#efeaf6", border: "#b4a7d6", texto: "#4b3b86" },
+  GP:  { head: "#434343", headText: "#ffffff", body: "#ededed", bodyText: "#444444", foot: "#1f1f1f", footText: "#ffffff", border: "#bdbdbd" },
+  EE:  { head: "#ffe599", headText: "#5b4708", body: "#fff8e1", bodyText: "#7a6100", foot: "#bf9000", footText: "#ffffff", border: "#f1c232" },
+  AyS: { head: "#b6d7a8", headText: "#274e13", body: "#eaf3e5", bodyText: "#3b6d11", foot: "#38761d", footText: "#ffffff", border: "#b6d7a8" },
+  G:   { head: "#b4a7d6", headText: "#2b1a5e", body: "#ede9f4", bodyText: "#4b3b86", foot: "#674ea7", footText: "#ffffff", border: "#b4a7d6" },
 };
 
 // ============================================================
