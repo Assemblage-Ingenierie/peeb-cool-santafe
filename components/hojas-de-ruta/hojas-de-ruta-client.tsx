@@ -18,6 +18,14 @@ import {
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
+import {
+  roadmapSetRealizada,
+  roadmapSetComentario,
+  roadmapSetEdicion,
+  roadmapSetAnoAfd,
+  roadmapAddEnlace,
+  roadmapRemoveEnlace,
+} from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
 // Hojas de ruta — page.
@@ -48,6 +56,23 @@ const FILAS_RUTA: FilaRuta[] = [];
 const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
+
+// Clé spéciale = case « No objeción AFD recibida » (persistée comme une tâche).
+const ANO_KEY = "__ano_afd__";
+
+// Découpe une clé locale `${feuille}::${tareaKey}` pour la persistance.
+function splitKey(sk: string): { feuille: string; tarea: string } {
+  const i = sk.indexOf("::");
+  return { feuille: sk.slice(0, i), tarea: sk.slice(i + 2) };
+}
+
+// Sauvegarde différée (texte) — évite une écriture en base par frappe.
+const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+function debouncedSave(key: string, fn: () => void, ms = 600) {
+  const prev = saveTimers.get(key);
+  if (prev) clearTimeout(prev);
+  saveTimers.set(key, setTimeout(fn, ms));
+}
 
 interface CardModel {
   key: string;
@@ -100,6 +125,9 @@ export function HojasDeRutaClient() {
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   const linking = esAdmin && linkFrom !== null;
 
+  // Hydratation de l'état local depuis le snapshot (une fois prêt).
+  const [hydrated, setHydrated] = useState(false);
+
   // Overlay SVG des flèches (positions mesurées dans le DOM).
   const boxRef = useRef<HTMLDivElement>(null);
   const [overlay, setOverlay] = useState<{ w: number; h: number; flechas: Flecha[] }>({
@@ -111,6 +139,42 @@ export function HojasDeRutaClient() {
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
   const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
+
+  // Charge l'état persisté (realizadas, comentarios, ediciones, anoAfd, enlaces)
+  // depuis le snapshot, une seule fois (ajuster l'état pendant le rendu).
+  if (!hydrated && snap.status === "ready") {
+    const rz = new Set<string>();
+    const com: Record<string, string> = {};
+    const edi: Record<string, Edicion> = {};
+    const ano: Record<string, boolean> = {};
+    for (const r of snap.data.roadmapEstado) {
+      const sk = `${r.feuille}::${r.tareaKey}`;
+      if (r.tareaKey === ANO_KEY) {
+        if (r.realizada) ano[r.feuille] = true;
+        continue;
+      }
+      if (r.realizada) rz.add(sk);
+      if (r.comentario) com[sk] = r.comentario;
+      if (r.nombre != null || r.descripcion != null || r.responsable != null) {
+        edi[sk] = {
+          ...(r.nombre != null ? { nombre: r.nombre } : {}),
+          ...(r.descripcion != null ? { descripcion: r.descripcion } : {}),
+          ...(r.responsable != null ? { responsable: r.responsable } : {}),
+        };
+      }
+    }
+    setRealizadas(rz);
+    setComentarios(com);
+    setEdiciones(edi);
+    setAnoAfd(ano);
+    setEnlaces(
+      snap.data.roadmapEnlace.map((e) => ({
+        from: `${e.feuille}::${e.desde}`,
+        to: `${e.feuille}::${e.hacia}`,
+      })),
+    );
+    setHydrated(true);
+  }
 
   const activa =
     seleccion === "global"
@@ -186,16 +250,27 @@ export function HojasDeRutaClient() {
   }
 
   function completeLink(toKey: string) {
-    setEnlaces((prev) => {
-      if (!linkFrom || linkFrom === toKey) return prev;
-      if (prev.some((e) => e.from === linkFrom && e.to === toKey)) return prev;
-      return [...prev, { from: linkFrom, to: toKey }];
-    });
+    if (linkFrom && linkFrom !== toKey) {
+      setEnlaces((prev) =>
+        prev.some((e) => e.from === linkFrom && e.to === toKey)
+          ? prev
+          : [...prev, { from: linkFrom, to: toKey }],
+      );
+      const a = splitKey(linkFrom);
+      const b = splitKey(toKey);
+      roadmapAddEnlace(a.feuille, a.tarea, b.tarea).catch(() => {});
+    }
     setLinkFrom(null);
   }
 
   function removeEnlace(idx: number) {
+    const e = enlaces[idx];
     setEnlaces((prev) => prev.filter((_, i) => i !== idx));
+    if (e) {
+      const a = splitKey(e.from);
+      const b = splitKey(e.to);
+      roadmapRemoveEnlace(a.feuille, a.tarea, b.tarea).catch(() => {});
+    }
   }
 
   // Recalcule l'overlay sur redimensionnement de la fenêtre.
@@ -356,7 +431,11 @@ export function HojasDeRutaClient() {
                 {esAdmin && (
                   <button
                     type="button"
-                    onClick={() => setAnoAfd((p) => ({ ...p, [seleccion]: !p[seleccion] }))}
+                    onClick={() => {
+                      const nuevo = !anoChecked;
+                      setAnoAfd((p) => ({ ...p, [seleccion]: nuevo }));
+                      roadmapSetAnoAfd(seleccion, nuevo).catch(() => {});
+                    }}
                     aria-pressed={anoChecked}
                     aria-label="No objeción AFD recibida"
                     title="No objeción AFD recibida"
@@ -396,19 +475,39 @@ export function HojasDeRutaClient() {
                         panel={panel && panel.key === k ? panel.tipo : null}
                         linking={linking}
                         esFuente={linkFrom === k}
-                        onToggleRealizada={() => toggleRealizada(k)}
+                        onToggleRealizada={() => {
+                          const nuevo = !realizadas.has(k);
+                          toggleRealizada(k);
+                          roadmapSetRealizada(seleccion, card.key, nuevo).catch(() => {});
+                        }}
                         onPanel={(tipo) => togglePanel(k, tipo)}
-                        onComentario={(v) => setComentarios((prev) => ({ ...prev, [k]: v }))}
-                        onEdicion={(patch) =>
-                          setEdiciones((prev) => ({ ...prev, [k]: { ...prev[k], ...patch } }))
-                        }
-                        onReset={() =>
+                        onComentario={(v) => {
+                          setComentarios((prev) => ({ ...prev, [k]: v }));
+                          debouncedSave(`com:${k}`, () =>
+                            roadmapSetComentario(seleccion, card.key, v).catch(() => {}),
+                          );
+                        }}
+                        onEdicion={(patch) => {
+                          const next = { ...ediciones[k], ...patch };
+                          setEdiciones((prev) => ({ ...prev, [k]: next }));
+                          debouncedSave(`edi:${k}`, () =>
+                            roadmapSetEdicion(
+                              seleccion,
+                              card.key,
+                              next.nombre ?? "",
+                              next.descripcion ?? "",
+                              next.responsable ?? "",
+                            ).catch(() => {}),
+                          );
+                        }}
+                        onReset={() => {
                           setEdiciones((prev) => {
                             const n = { ...prev };
                             delete n[k];
                             return n;
-                          })
-                        }
+                          });
+                          roadmapSetEdicion(seleccion, card.key, "", "", "").catch(() => {});
+                        }}
                         onStartLink={() => startLink(k)}
                         onCompleteLink={() => completeLink(k)}
                         onCancelLink={() => setLinkFrom(null)}

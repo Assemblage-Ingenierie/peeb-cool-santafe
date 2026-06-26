@@ -132,6 +132,26 @@ export interface SnapshotAysRequisito {
   requisito: string; // code § (ex. "10.5.1")
 }
 
+// Hojas de ruta — état d'édition persisté (table peebcoolsf_roadmap_estado).
+// `feuille` = 'global' | uid sous-projet ; `tareaKey` = clé de carte
+// (ou '__ano_afd__' pour la case « No objeción AFD recibida »).
+export interface SnapshotRoadmapEstado {
+  feuille: string;
+  tareaKey: string;
+  realizada: boolean;
+  comentario: string | null;
+  nombre: string | null;
+  descripcion: string | null;
+  responsable: string | null;
+}
+
+// Hojas de ruta — dépendances (flèches) persistées (table peebcoolsf_roadmap_enlace).
+export interface SnapshotRoadmapEnlace {
+  feuille: string;
+  desde: string;
+  hacia: string;
+}
+
 export interface Snapshot {
   generatedAt: string; // ISO — « última actualización » + cache PWA (Étape 5)
   subproyectos: SnapshotSubproyecto[];
@@ -144,6 +164,8 @@ export interface Snapshot {
   personas: SnapshotPersona[];
   actividadEventos: SnapshotActividad[];
   aysRequisitos: SnapshotAysRequisito[];
+  roadmapEstado: SnapshotRoadmapEstado[];
+  roadmapEnlace: SnapshotRoadmapEnlace[];
 }
 
 // --- Types bruts (lignes PostgREST) --------------------------------------
@@ -206,8 +228,20 @@ const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anu
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = createServiceClient();
 
-  const [subRes, metRes, gestRes, evtRes, eqRes, entRes, docGpRes, medRes, actRes, aysReqRes] =
-    await Promise.all([
+  const [
+    subRes,
+    metRes,
+    gestRes,
+    evtRes,
+    eqRes,
+    entRes,
+    docGpRes,
+    medRes,
+    actRes,
+    aysReqRes,
+    rmEstadoRes,
+    rmEnlaceRes,
+  ] = await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
       .select(SUB_COLS)
@@ -254,6 +288,11 @@ export async function getSnapshot(): Promise<Snapshot> {
       .limit(100),
     // Requisitos AyS cochés (CDC §4.5) — seuls les actifs sortent.
     sb.from("peebcoolsf_ays_requisitos").select("subproyecto_uid, requisito").eq("activa", true),
+    // Hojas de ruta : état d'édition + dépendances (toutes lignes).
+    sb
+      .from("peebcoolsf_roadmap_estado")
+      .select("feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable"),
+    sb.from("peebcoolsf_roadmap_enlace").select("feuille, desde, hacia"),
   ]);
 
   const firstError =
@@ -266,7 +305,9 @@ export async function getSnapshot(): Promise<Snapshot> {
     docGpRes.error ||
     medRes.error ||
     actRes.error ||
-    aysReqRes.error;
+    aysReqRes.error ||
+    rmEstadoRes.error ||
+    rmEnlaceRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -308,6 +349,30 @@ export async function getSnapshot(): Promise<Snapshot> {
   const aysRequisitos: SnapshotAysRequisito[] = (
     (aysReqRes.data ?? []) as { subproyecto_uid: string; requisito: string }[]
   ).map((r) => ({ subproyectoUid: r.subproyecto_uid, requisito: r.requisito }));
+
+  const roadmapEstado: SnapshotRoadmapEstado[] = (
+    (rmEstadoRes.data ?? []) as {
+      feuille: string;
+      tarea_key: string;
+      realizada: boolean | null;
+      comentario: string | null;
+      nombre: string | null;
+      descripcion: string | null;
+      responsable: string | null;
+    }[]
+  ).map((r) => ({
+    feuille: r.feuille,
+    tareaKey: r.tarea_key,
+    realizada: !!r.realizada,
+    comentario: r.comentario,
+    nombre: r.nombre,
+    descripcion: r.descripcion,
+    responsable: r.responsable,
+  }));
+
+  const roadmapEnlace: SnapshotRoadmapEnlace[] = (
+    (rmEnlaceRes.data ?? []) as { feuille: string; desde: string; hacia: string }[]
+  ).map((r) => ({ feuille: r.feuille, desde: r.desde, hacia: r.hacia }));
 
   const eventos: SnapshotEvento[] = ((evtRes.data ?? []) as RawEvento[]).map((e) => {
     const participantes = Array.isArray(e.participantes) ? e.participantes : [];
@@ -375,5 +440,7 @@ export async function getSnapshot(): Promise<Snapshot> {
     personas,
     actividadEventos,
     aysRequisitos,
+    roadmapEstado,
+    roadmapEnlace,
   };
 }
