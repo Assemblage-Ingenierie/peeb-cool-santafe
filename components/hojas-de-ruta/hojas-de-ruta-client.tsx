@@ -642,10 +642,12 @@ function TareaCard({
             }
           : undefined
       }
+      onDragEnter={arrastrable ? (e) => e.preventDefault() : undefined}
       onDragOver={
         arrastrable
           ? (e) => {
               e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
               onDragOverCard();
             }
           : undefined

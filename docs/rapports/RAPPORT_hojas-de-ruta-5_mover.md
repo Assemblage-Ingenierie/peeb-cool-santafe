@@ -34,6 +34,15 @@ aléatoire/inopérant en usage réel. Passage de la carte tirée en **ref synchr
 simulation « même tick » (dragstart + drop dans le même eval) réordonne désormais
 correctement, ce qui échouait avant le correctif.
 
+## Correctif 2 (2026-06-25) — acceptation native du drop
+Retour utilisateur : le drag démarre (curseur main + fantôme qui suit) mais « n'accroche
+nulle part » → aucune cible n'accepte le drop. Le `preventDefault` sur `dragOver` seul ne
+suffisait pas dans son navigateur. Ajout : `preventDefault` sur **`dragEnter`** +
+`e.dataTransfer.dropEffect = "move"` dans `dragOver` (signature classique d'un drop refusé
+malgré une source draggable). À confirmer côté navigateur ; plan B si insuffisant =
+réécrire le réordonnancement en **pointer events** (mousedown/move/up), déterministe et
+indépendant des quirks HTML5 DnD.
+
 ## État de l'édition admin (périmètre demandé — local)
 - ✅ Marcar realizada · ✅ Comentario · ✅ Editar texto/responsable · ✅ Enlazar
   (flèches) · ✅ Mover (réordonner).
