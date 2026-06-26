@@ -109,14 +109,6 @@ export function HojasDeRutaClient() {
   });
   const [tick, setTick] = useState(0);
 
-  // Réordonnancement (mover) — ordre LOCAL par (sélection, fase) ; glisser-déposer.
-  const [orden, setOrden] = useState<Record<string, string[]>>({});
-  const [dragKey, setDragKey] = useState<string | null>(null); // visuel uniquement
-  const [dropKey, setDropKey] = useState<string | null>(null);
-  // Carte tirée — en ref (synchrone) : l'état React n'est pas fiable entre
-  // dragstart et drop selon le timing de re-render → le drop lisait parfois null.
-  const dragKeyRef = useRef<string | null>(null);
-
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
   const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
 
@@ -174,33 +166,6 @@ export function HojasDeRutaClient() {
       }
     }
     return out;
-  }
-
-  // Applique l'ordre local d'une fase (cartes inconnues ajoutées à la fin).
-  function ordenarCards(faseCode: string, cards: CardModel[]): CardModel[] {
-    const ord = orden[`${seleccion}::${faseCode}`];
-    if (!ord) return cards;
-    const byKey = new Map(cards.map((c) => [c.key, c]));
-    const result: CardModel[] = [];
-    for (const k of ord) {
-      const c = byKey.get(k);
-      if (c) {
-        result.push(c);
-        byKey.delete(k);
-      }
-    }
-    for (const c of byKey.values()) result.push(c);
-    return result;
-  }
-
-  // Déplace `fromKey` avant `toKey` au sein d'une même fase.
-  function moverCard(faseCode: string, fromKey: string, toKey: string) {
-    if (fromKey === toKey) return;
-    const actual = ordenarCards(faseCode, cardsDeFase(faseCode)).map((c) => c.key);
-    if (!actual.includes(fromKey) || !actual.includes(toKey)) return; // même fase uniquement
-    const arr = actual.filter((k) => k !== fromKey);
-    arr.splice(arr.indexOf(toKey), 0, fromKey);
-    setOrden((prev) => ({ ...prev, [`${seleccion}::${faseCode}`]: arr }));
   }
 
   function toggleRealizada(k: string) {
@@ -288,7 +253,7 @@ export function HojasDeRutaClient() {
     });
     // Mesure DOM → état ; deps couvrent tout ce qui change la mise en page.
     setOverlay({ w: br.width, h: br.height, flechas });
-  }, [enlaces, seleccion, vista, realizadas, comentarios, ediciones, panel, orden, tick, snap.status]);
+  }, [enlaces, seleccion, vista, realizadas, comentarios, ediciones, panel, tick, snap.status]);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -417,7 +382,7 @@ export function HojasDeRutaClient() {
                   </div>
                 </div>
                 <div className="flex flex-1 flex-wrap content-start items-start gap-2.5">
-                  {ordenarCards(fila.code, cardsDeFase(fila.code)).map((card) => {
+                  {cardsDeFase(fila.code).map((card) => {
                     const k = `${seleccion}::${card.key}`;
                     return (
                       <TareaCard
@@ -431,8 +396,6 @@ export function HojasDeRutaClient() {
                         panel={panel && panel.key === k ? panel.tipo : null}
                         linking={linking}
                         esFuente={linkFrom === k}
-                        arrastrando={dragKey === card.key}
-                        soltarAqui={dropKey === card.key && dragKey !== card.key}
                         onToggleRealizada={() => toggleRealizada(k)}
                         onPanel={(tipo) => togglePanel(k, tipo)}
                         onComentario={(v) => setComentarios((prev) => ({ ...prev, [k]: v }))}
@@ -449,23 +412,6 @@ export function HojasDeRutaClient() {
                         onStartLink={() => startLink(k)}
                         onCompleteLink={() => completeLink(k)}
                         onCancelLink={() => setLinkFrom(null)}
-                        onDragStartCard={() => {
-                          dragKeyRef.current = card.key;
-                          setDragKey(card.key);
-                        }}
-                        onDragOverCard={() => setDropKey((p) => (p === card.key ? p : card.key))}
-                        onDropCard={() => {
-                          const from = dragKeyRef.current;
-                          dragKeyRef.current = null;
-                          if (from) moverCard(fila.code, from, card.key);
-                          setDragKey(null);
-                          setDropKey(null);
-                        }}
-                        onDragEndCard={() => {
-                          dragKeyRef.current = null;
-                          setDragKey(null);
-                          setDropKey(null);
-                        }}
                       />
                     );
                   })}
@@ -584,12 +530,6 @@ function TareaCard({
   onStartLink,
   onCompleteLink,
   onCancelLink,
-  arrastrando,
-  soltarAqui,
-  onDragStartCard,
-  onDragOverCard,
-  onDropCard,
-  onDragEndCard,
 }: {
   statKey: string;
   card: CardModel;
@@ -608,15 +548,8 @@ function TareaCard({
   onStartLink: () => void;
   onCompleteLink: () => void;
   onCancelLink: () => void;
-  arrastrando: boolean;
-  soltarAqui: boolean;
-  onDragStartCard: () => void;
-  onDragOverCard: () => void;
-  onDropCard: () => void;
-  onDragEndCard: () => void;
 }) {
   const tono = CARD_TONOS[card.componente];
-  const arrastrable = esAdmin && !linking && panel === null;
   const pillVisible = esAdmin || realizada;
   const nombre = edicion?.nombre ?? card.nombre;
   const descripcion = edicion?.descripcion ?? card.descripcion ?? "";
@@ -631,42 +564,9 @@ function TareaCard({
     <div
       data-cardkey={statKey}
       data-comp={card.componente}
-      draggable={arrastrable}
-      title={arrastrable ? "Arrastrar para reordenar" : undefined}
-      onDragStart={
-        arrastrable
-          ? (e) => {
-              e.dataTransfer.effectAllowed = "move";
-              e.dataTransfer.setData("text/plain", statKey);
-              onDragStartCard();
-            }
-          : undefined
-      }
-      onDragEnter={arrastrable ? (e) => e.preventDefault() : undefined}
-      onDragOver={
-        arrastrable
-          ? (e) => {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
-              onDragOverCard();
-            }
-          : undefined
-      }
-      onDrop={
-        arrastrable
-          ? (e) => {
-              e.preventDefault();
-              onDropCard();
-            }
-          : undefined
-      }
-      onDragEnd={arrastrable ? onDragEndCard : undefined}
       className={cn(
         "relative w-[232px] rounded-md border",
-        arrastrable && "cursor-grab active:cursor-grabbing",
         esFuente && "ring-2 ring-[var(--accent)]",
-        arrastrando && "opacity-40",
-        soltarAqui && "ring-2 ring-[var(--focus)]",
       )}
       style={{ borderColor: tono.border }}
     >

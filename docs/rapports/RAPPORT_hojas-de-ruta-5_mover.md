@@ -1,5 +1,13 @@
 # RAPPORT — Hojas de ruta, sous-lot 5 : mover + fix marges
 
+> ⚠️ **Retrait (2026-06-25)** : le **mover** (réordonnancement par glisser-déposer) a
+> été **retiré à la demande du client** (réordonner des cartes n'est pas utile pour
+> l'usage visé ; à revoir plus tard si besoin). Supprimés : états/handlers de drag,
+> `ordenarCards`/`moverCard`. **Conservés** : le **correctif des marges** (`items-start`,
+> indépendant et utile) et toute l'autre édition (realizada, comentario, editar, enlazar).
+> Le reste de ce rapport est gardé pour historique.
+
+
 Date : 2026-06-25
 Branche : main
 
