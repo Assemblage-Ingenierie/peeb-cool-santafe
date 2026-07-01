@@ -170,6 +170,24 @@ export async function roadmapEliminarCarta(
   if (error) throw new Error(error.message);
 }
 
+/** Déplace une carte : nouvelle fila (phase/semestre) + orden (drag-drop). */
+export async function roadmapMoverCarta(
+  feuille: string,
+  tareaKey: string,
+  fila: string,
+  orden: number,
+): Promise<void> {
+  assertAdmin();
+  assertFeuille(feuille);
+  assertKey(tareaKey);
+  assertFila(fila);
+  const sb = createServiceClient();
+  const { error } = await sb
+    .from(ESTADO)
+    .upsert({ feuille, tarea_key: tareaKey, fila, orden }, { onConflict: "feuille,tarea_key" });
+  if (error) throw new Error(error.message);
+}
+
 /** Restaure toutes les cartes par défaut masquées d'une feuille. */
 export async function roadmapRestaurarOcultas(feuille: string): Promise<void> {
   assertAdmin();

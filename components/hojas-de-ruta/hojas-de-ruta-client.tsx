@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { DragEvent, ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   FASES,
@@ -27,6 +27,7 @@ import {
   roadmapCrearCarta,
   roadmapEliminarCarta,
   roadmapRestaurarOcultas,
+  roadmapMoverCarta,
 } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
@@ -155,6 +156,13 @@ export function HojasDeRutaClient() {
   const [ocultas, setOcultas] = useState<Set<string>>(new Set()); // cartes par défaut masquées
   const [creadas, setCreadas] = useState<Record<string, ComponenteCode>>({}); // statKey → composante
   const [posiciones, setPosiciones] = useState<Record<string, Posicion>>({}); // fila/orden override
+
+  // Drag-drop vertical (composante fixe). `drag` = carte en cours ; `dropAt` =
+  // emplacement d'insertion aimanté (fila × composante × index).
+  const [drag, setDrag] = useState<{ key: string; comp: ComponenteCode } | null>(null);
+  const [dropAt, setDropAt] = useState<{ fila: string; comp: ComponenteCode; index: number } | null>(
+    null,
+  );
 
   // Hydratation de l'état local depuis le snapshot (une fois prêt).
   const [hydrated, setHydrated] = useState(false);
@@ -423,6 +431,85 @@ export function HojasDeRutaClient() {
     setOcultas((p) => new Set([...p].filter((sk) => splitKey(sk).feuille !== seleccion)));
   }
 
+  // --- Drag-drop des cartes (vertical, composante fixe) ---
+  function onCardDragStart(e: DragEvent<HTMLElement>, card: CardModel) {
+    setDrag({ key: `${seleccion}::${card.key}`, comp: card.componente });
+    e.dataTransfer.effectAllowed = "move";
+    try {
+      e.dataTransfer.setData("text/plain", card.key);
+    } catch {
+      /* certains navigateurs exigent un setData ; sans importance ici */
+    }
+  }
+  function onCardDragEnd() {
+    setDrag(null);
+    setDropAt(null);
+  }
+  // Calcule l'index d'insertion aimanté selon la position du curseur.
+  function onColumnaDragOver(
+    e: DragEvent<HTMLElement>,
+    fila: string,
+    comp: ComponenteCode,
+    cards: CardModel[],
+  ) {
+    if (!drag || drag.comp !== comp) return; // composante fixe : drop hors colonne interdit
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const kids = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-cardkey]"));
+    let index = cards.length;
+    for (let i = 0; i < kids.length; i += 1) {
+      const r = kids[i].getBoundingClientRect();
+      if (e.clientY < r.top + r.height / 2) {
+        index = i;
+        break;
+      }
+    }
+    setDropAt((cur) =>
+      cur && cur.fila === fila && cur.comp === comp && cur.index === index
+        ? cur
+        : { fila, comp, index },
+    );
+  }
+  function onColumnaDrop(
+    e: DragEvent<HTMLElement>,
+    fila: string,
+    comp: ComponenteCode,
+    cards: CardModel[],
+  ) {
+    if (!drag || drag.comp !== comp) return;
+    e.preventDefault();
+    const index =
+      dropAt && dropAt.fila === fila && dropAt.comp === comp ? dropAt.index : cards.length;
+    const esOtro = (c: CardModel) => `${seleccion}::${c.key}` !== drag.key;
+    let prev: CardModel | null = null;
+    let next: CardModel | null = null;
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (esOtro(cards[i])) {
+        prev = cards[i];
+        break;
+      }
+    }
+    for (let i = index; i < cards.length; i += 1) {
+      if (esOtro(cards[i])) {
+        next = cards[i];
+        break;
+      }
+    }
+    const po = prev?.orden ?? null;
+    const no = next?.orden ?? null;
+    let orden: number;
+    if (po != null && no != null) orden = (po + no) / 2;
+    else if (po != null) orden = po + 1;
+    else if (no != null) orden = no - 1;
+    else orden = 0;
+    const dragKey = drag.key;
+    const tarea = splitKey(dragKey).tarea;
+    setPosiciones((p) => ({ ...p, [dragKey]: { fila, orden } }));
+    roadmapMoverCarta(seleccion, tarea, fila, orden).catch(() => {});
+    setDrag(null);
+    setDropAt(null);
+  }
+
   // Recalcule l'overlay sur redimensionnement de la fenêtre.
   useEffect(() => {
     function onResize() {
@@ -478,7 +565,20 @@ export function HojasDeRutaClient() {
     });
     // Mesure DOM → état ; deps couvrent tout ce qui change la mise en page.
     setOverlay({ w: br.width, h: br.height, flechas });
-  }, [enlaces, seleccion, vista, realizadas, comentarios, ediciones, panel, tick, snap.status]);
+  }, [
+    enlaces,
+    seleccion,
+    vista,
+    realizadas,
+    comentarios,
+    ediciones,
+    panel,
+    tick,
+    snap.status,
+    posiciones,
+    creadas,
+    ocultas,
+  ]);
 
   function renderCard(card: CardModel) {
     const k = `${seleccion}::${card.key}`;
@@ -532,6 +632,20 @@ export function HojasDeRutaClient() {
         onCancelLink={() => setLinkFrom(null)}
         creada={!!creadas[k]}
         onEliminar={() => eliminarCard(card, !!creadas[k])}
+        arrastrable={esAdmin && !card.nota && !linking && !(panel !== null && panel.key === k)}
+        arrastrando={drag?.key === k}
+        onDragStart={(e) => onCardDragStart(e, card)}
+        onDragEnd={onCardDragEnd}
+      />
+    );
+  }
+
+  // Fine ligne d'insertion aimantée (drop indicator).
+  function DropIndicator() {
+    return (
+      <div
+        className="h-1 w-full max-w-[264px] rounded-full bg-[var(--accent)]"
+        aria-hidden="true"
       />
     );
   }
@@ -541,20 +655,37 @@ export function HojasDeRutaClient() {
   function columnasGrid(filaCode: string) {
     return (
       <div className="grid flex-1 grid-cols-3 items-start gap-x-4">
-        {COLUMNAS.map((comp) => (
-          <div key={comp} className="flex flex-col items-start gap-2.5">
-            {cartasColumna(filaCode, comp).map(renderCard)}
-            {esAdmin && (
-              <button
-                type="button"
-                onClick={() => addCard(filaCode, comp)}
-                className="w-full max-w-[264px] rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--focus)] hover:text-[var(--text)]"
-              >
-                + Añadir tarjeta
-              </button>
-            )}
-          </div>
-        ))}
+        {COLUMNAS.map((comp) => {
+          const cards = cartasColumna(filaCode, comp);
+          const activo = drag?.comp === comp; // composante fixe : drop dans la même colonne
+          const showAt =
+            dropAt && dropAt.fila === filaCode && dropAt.comp === comp ? dropAt.index : -1;
+          return (
+            <div
+              key={comp}
+              className="flex flex-col items-start gap-2.5"
+              onDragOver={activo ? (e) => onColumnaDragOver(e, filaCode, comp, cards) : undefined}
+              onDrop={activo ? (e) => onColumnaDrop(e, filaCode, comp, cards) : undefined}
+            >
+              {cards.map((card, i) => (
+                <Fragment key={card.key}>
+                  {showAt === i && <DropIndicator />}
+                  {renderCard(card)}
+                </Fragment>
+              ))}
+              {showAt === cards.length && <DropIndicator />}
+              {esAdmin && (
+                <button
+                  type="button"
+                  onClick={() => addCard(filaCode, comp)}
+                  className="w-full max-w-[264px] rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--focus)] hover:text-[var(--text)]"
+                >
+                  + Añadir tarjeta
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -831,6 +962,10 @@ function TareaCard({
   onCancelLink,
   creada,
   onEliminar,
+  arrastrable,
+  arrastrando,
+  onDragStart,
+  onDragEnd,
 }: {
   statKey: string;
   card: CardModel;
@@ -851,6 +986,10 @@ function TareaCard({
   onCancelLink: () => void;
   creada: boolean;
   onEliminar: () => void;
+  arrastrable: boolean;
+  arrastrando: boolean;
+  onDragStart: (e: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
 }) {
   const tono = CARD_TONOS[card.componente];
   const pillVisible = esAdmin || realizada;
@@ -869,9 +1008,14 @@ function TareaCard({
     <div
       data-cardkey={statKey}
       data-comp={card.componente}
+      draggable={arrastrable}
+      onDragStart={arrastrable ? onDragStart : undefined}
+      onDragEnd={arrastrable ? onDragEnd : undefined}
       className={cn(
         "relative w-full max-w-[264px] rounded-md border",
         esFuente && "ring-2 ring-[var(--accent)]",
+        arrastrable && "cursor-grab active:cursor-grabbing",
+        arrastrando && "opacity-40",
       )}
       style={{ borderColor: tono.border }}
     >
