@@ -143,6 +143,11 @@ export interface SnapshotRoadmapEstado {
   nombre: string | null;
   descripcion: string | null;
   responsable: string | null;
+  oculta: boolean; // carte par défaut masquée sur cette feuille
+  fila: string | null; // override de phase/semestre (null = fila d'origine)
+  orden: number | null; // clé de tri dans la colonne (null = ordre par défaut)
+  componente: string | null; // composante d'une carte créée (null = carte par défaut)
+  creada: boolean; // true = carte ajoutée à la main (tarea_key = UID)
 }
 
 // Hojas de ruta — dépendances (flèches) persistées (table peebcoolsf_roadmap_enlace).
@@ -291,7 +296,9 @@ export async function getSnapshot(): Promise<Snapshot> {
     // Hojas de ruta : état d'édition + dépendances (toutes lignes).
     sb
       .from("peebcoolsf_roadmap_estado")
-      .select("feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable"),
+      .select(
+        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada",
+      ),
     sb.from("peebcoolsf_roadmap_enlace").select("feuille, desde, hacia"),
   ]);
 
@@ -359,6 +366,11 @@ export async function getSnapshot(): Promise<Snapshot> {
       nombre: string | null;
       descripcion: string | null;
       responsable: string | null;
+      oculta: boolean | null;
+      fila: string | null;
+      orden: number | null;
+      componente: string | null;
+      creada: boolean | null;
     }[]
   ).map((r) => ({
     feuille: r.feuille,
@@ -368,6 +380,11 @@ export async function getSnapshot(): Promise<Snapshot> {
     nombre: r.nombre,
     descripcion: r.descripcion,
     responsable: r.responsable,
+    oculta: !!r.oculta,
+    fila: r.fila,
+    orden: r.orden,
+    componente: r.componente,
+    creada: !!r.creada,
   }));
 
   const roadmapEnlace: SnapshotRoadmapEnlace[] = (

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git --version)",
+      "Bash(gh auth *)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-src-dir --eslint --import-alias \"@/*\" --yes)",
+      "Bash(npx create-next-app@latest peeb-cool-santafe --typescript --tailwind --app --no-src-dir --eslint --import-alias \"@/*\" --yes)",
+      "Bash(powershell -Command \"Get-ChildItem -Path '.\\\\peeb-cool-santafe' -Force | Move-Item -Destination '.' -Force\")",
+      "Bash(rmdir peeb-cool-santafe *)",
+      "WebSearch",
+      "Bash(git init *)",
+      "Bash(git branch *)",
+      "Bash(gh repo *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git config *)"
+    ]
+  }
+}

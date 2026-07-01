@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 
@@ -26,6 +27,17 @@ function assertFeuille(feuille: string) {
 
 function assertKey(key: string) {
   if (!key || key.length > 300) throw new Error("Clave de tarea inválida");
+}
+
+const COMPONENTES_VALIDAS = new Set(["GP", "EE", "AyS", "G"]);
+function assertComponente(componente: string) {
+  if (!COMPONENTES_VALIDAS.has(componente)) {
+    throw new Error(`Componente inválida: ${componente}`);
+  }
+}
+
+function assertFila(fila: string) {
+  if (!fila || fila.length > 100) throw new Error("Fila inválida");
 }
 
 /** Texte vide → NULL (convention projet). */
@@ -105,6 +117,69 @@ export async function roadmapSetAnoAfd(feuille: string, recibida: boolean): Prom
       { feuille, tarea_key: ANO_KEY, realizada: recibida },
       { onConflict: "feuille,tarea_key" },
     );
+  if (error) throw new Error(error.message);
+}
+
+/** Crée une carte (composante fixe) sur une feuille/fila. Retourne sa clé. */
+export async function roadmapCrearCarta(
+  feuille: string,
+  componente: string,
+  fila: string,
+  nombre: string,
+  orden: number,
+): Promise<string> {
+  assertAdmin();
+  assertFeuille(feuille);
+  assertComponente(componente);
+  assertFila(fila);
+  const tareaKey = `carta-${randomUUID()}`;
+  const sb = createServiceClient();
+  const { error } = await sb.from(ESTADO).insert({
+    feuille,
+    tarea_key: tareaKey,
+    creada: true,
+    componente,
+    fila,
+    orden,
+    nombre: nullable(nombre),
+  });
+  if (error) throw new Error(error.message);
+  return tareaKey;
+}
+
+/** Supprime une carte : créée → DELETE (+ enlaces) ; par défaut → masquée. */
+export async function roadmapEliminarCarta(
+  feuille: string,
+  tareaKey: string,
+  creada: boolean,
+): Promise<void> {
+  assertAdmin();
+  assertFeuille(feuille);
+  assertKey(tareaKey);
+  const sb = createServiceClient();
+  if (creada) {
+    const { error } = await sb.from(ESTADO).delete().eq("feuille", feuille).eq("tarea_key", tareaKey);
+    if (error) throw new Error(error.message);
+    // Nettoie les dépendances qui référencent la carte supprimée.
+    await sb.from(ENLACE).delete().eq("feuille", feuille).or(`desde.eq.${tareaKey},hacia.eq.${tareaKey}`);
+    return;
+  }
+  const { error } = await sb
+    .from(ESTADO)
+    .upsert({ feuille, tarea_key: tareaKey, oculta: true }, { onConflict: "feuille,tarea_key" });
+  if (error) throw new Error(error.message);
+}
+
+/** Restaure toutes les cartes par défaut masquées d'une feuille. */
+export async function roadmapRestaurarOcultas(feuille: string): Promise<void> {
+  assertAdmin();
+  assertFeuille(feuille);
+  const sb = createServiceClient();
+  const { error } = await sb
+    .from(ESTADO)
+    .update({ oculta: false })
+    .eq("feuille", feuille)
+    .eq("oculta", true);
   if (error) throw new Error(error.message);
 }
 

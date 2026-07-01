@@ -24,6 +24,9 @@ import {
   roadmapSetAnoAfd,
   roadmapAddEnlace,
   roadmapRemoveEnlace,
+  roadmapCrearCarta,
+  roadmapEliminarCarta,
+  roadmapRestaurarOcultas,
 } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
@@ -96,6 +99,7 @@ interface CardModel {
   responsable?: string; // défaut (surchargé par l'édition admin) — sinon ACEFE
   comentario?: string; // commentaire par défaut (surchargé par l'édition admin)
   nota?: boolean;
+  orden?: number; // clé de tri effective dans la colonne (fila × composante)
 }
 
 interface Edicion {
@@ -107,6 +111,12 @@ interface Edicion {
 interface Enlace {
   from: string; // statKey source
   to: string; // statKey cible
+}
+
+// Override de position d'une carte (drag-drop / cartes créées).
+interface Posicion {
+  fila: string | null; // phase (sous-projet) / semestre (global) ; null = fila d'origine
+  orden: number | null; // clé de tri dans la colonne ; null = ordre par défaut
 }
 
 interface Flecha {
@@ -141,6 +151,11 @@ export function HojasDeRutaClient() {
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   const linking = esAdmin && linkFrom !== null;
 
+  // Gestionnaire de cartes (migration 015). Clés = statKey `${feuille}::${key}`.
+  const [ocultas, setOcultas] = useState<Set<string>>(new Set()); // cartes par défaut masquées
+  const [creadas, setCreadas] = useState<Record<string, ComponenteCode>>({}); // statKey → composante
+  const [posiciones, setPosiciones] = useState<Record<string, Posicion>>({}); // fila/orden override
+
   // Hydratation de l'état local depuis le snapshot (une fois prêt).
   const [hydrated, setHydrated] = useState(false);
 
@@ -163,6 +178,9 @@ export function HojasDeRutaClient() {
     const com: Record<string, string> = {};
     const edi: Record<string, Edicion> = {};
     const ano: Record<string, boolean> = {};
+    const ocu = new Set<string>();
+    const cre: Record<string, ComponenteCode> = {};
+    const pos: Record<string, Posicion> = {};
     for (const r of snap.data.roadmapEstado) {
       const sk = `${r.feuille}::${r.tareaKey}`;
       if (r.tareaKey === ANO_KEY) {
@@ -178,11 +196,17 @@ export function HojasDeRutaClient() {
           ...(r.responsable != null ? { responsable: r.responsable } : {}),
         };
       }
+      if (r.oculta) ocu.add(sk);
+      if (r.creada && r.componente) cre[sk] = r.componente as ComponenteCode;
+      if (r.fila != null || r.orden != null) pos[sk] = { fila: r.fila, orden: r.orden };
     }
     setRealizadas(rz);
     setComentarios(com);
     setEdiciones(edi);
     setAnoAfd(ano);
+    setOcultas(ocu);
+    setCreadas(cre);
+    setPosiciones(pos);
     setEnlaces(
       snap.data.roadmapEnlace.map((e) => ({
         from: `${e.feuille}::${e.desde}`,
@@ -254,6 +278,51 @@ export function HojasDeRutaClient() {
     return out;
   }
 
+  // Instances de cartes par colonne (fila × composante), triées par orden.
+  // Combine les cartes par défaut (non masquées, position éventuellement
+  // surchargée) et les cartes créées. Clé de map = `${fila}|${componente}`.
+  function construirColumnas(): Map<string, CardModel[]> {
+    const acc = new Map<string, CardModel[]>();
+    const add = (fila: string, comp: ComponenteCode, card: CardModel, orden: number) => {
+      const key = `${fila}|${comp}`;
+      const arr = acc.get(key);
+      const c = { ...card, orden };
+      if (arr) arr.push(c);
+      else acc.set(key, [c]);
+    };
+    // Cartes par défaut (jamais pour « Proyecto global »).
+    if (seleccion !== "global") {
+      let idx = 0;
+      for (const fila of FILAS_RUTA) {
+        if (fila.hito) continue;
+        for (const card of cardsDeFase(fila.code)) {
+          idx += 1;
+          const sk = `${seleccion}::${card.key}`;
+          if (ocultas.has(sk)) continue;
+          const p = posiciones[sk];
+          add(p?.fila ?? fila.code, card.componente, card, p?.orden ?? idx);
+        }
+      }
+    }
+    // Cartes créées (identité = statKey ; texte via ediciones/comentarios).
+    for (const [sk, comp] of Object.entries(creadas)) {
+      const { feuille, tarea } = splitKey(sk);
+      if (feuille !== seleccion) continue;
+      const p = posiciones[sk];
+      if (!p?.fila) continue;
+      add(p.fila, comp, { key: tarea, componente: comp, nombre: "" }, p.orden ?? 0);
+    }
+    for (const arr of acc.values()) {
+      arr.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0) || (a.key < b.key ? -1 : 1));
+    }
+    return acc;
+  }
+  const columnas = construirColumnas();
+  function cartasColumna(fila: string, comp: ComponenteCode): CardModel[] {
+    return columnas.get(`${fila}|${comp}`) ?? [];
+  }
+  const ocultasFeuille = [...ocultas].filter((sk) => splitKey(sk).feuille === seleccion).length;
+
   function toggleRealizada(k: string) {
     setRealizadas((prev) => {
       const n = new Set(prev);
@@ -293,6 +362,65 @@ export function HojasDeRutaClient() {
       const b = splitKey(e.to);
       roadmapRemoveEnlace(a.feuille, a.tarea, b.tarea).catch(() => {});
     }
+  }
+
+  // Crée une carte dans la colonne (fila × composante) et ouvre son édition.
+  async function addCard(fila: string, comp: ComponenteCode) {
+    const orden = cartasColumna(fila, comp).reduce((m, c) => Math.max(m, c.orden ?? 0), 0) + 1;
+    try {
+      const key = await roadmapCrearCarta(seleccion, comp, fila, "Nueva tarea", orden);
+      const k = `${seleccion}::${key}`;
+      setCreadas((p) => ({ ...p, [k]: comp }));
+      setPosiciones((p) => ({ ...p, [k]: { fila, orden } }));
+      setEdiciones((p) => ({ ...p, [k]: { nombre: "Nueva tarea" } }));
+      setPanel({ key: k, tipo: "editar" });
+    } catch {
+      /* écriture DB : ignore (l'UI reste cohérente au prochain chargement) */
+    }
+  }
+
+  // Supprime une carte : créée → retrait complet ; par défaut → masquée.
+  function eliminarCard(card: CardModel, creada: boolean) {
+    const k = `${seleccion}::${card.key}`;
+    const etiqueta = ediciones[k]?.nombre ?? card.nombre ?? "esta tarjeta";
+    if (!window.confirm(`¿Eliminar «${etiqueta}»?`)) return;
+    roadmapEliminarCarta(seleccion, card.key, creada).catch(() => {});
+    if (creada) {
+      setCreadas((p) => {
+        const n = { ...p };
+        delete n[k];
+        return n;
+      });
+      setPosiciones((p) => {
+        const n = { ...p };
+        delete n[k];
+        return n;
+      });
+      setEdiciones((p) => {
+        const n = { ...p };
+        delete n[k];
+        return n;
+      });
+      setComentarios((p) => {
+        const n = { ...p };
+        delete n[k];
+        return n;
+      });
+      setRealizadas((p) => {
+        const n = new Set(p);
+        n.delete(k);
+        return n;
+      });
+      setEnlaces((p) => p.filter((e) => e.from !== k && e.to !== k));
+    } else {
+      setOcultas((p) => new Set(p).add(k));
+    }
+  }
+
+  // Restaure toutes les cartes par défaut masquées de la feuille courante.
+  function restaurarOcultas() {
+    roadmapRestaurarOcultas(seleccion).catch(() => {});
+    setOcultas((p) => new Set([...p].filter((sk) => splitKey(sk).feuille !== seleccion)));
   }
 
   // Recalcule l'overlay sur redimensionnement de la fenêtre.
@@ -402,7 +530,32 @@ export function HojasDeRutaClient() {
         onStartLink={() => startLink(k)}
         onCompleteLink={() => completeLink(k)}
         onCancelLink={() => setLinkFrom(null)}
+        creada={!!creadas[k]}
+        onEliminar={() => eliminarCard(card, !!creadas[k])}
       />
+    );
+  }
+
+  // Grille des 3 colonnes (EE / Género / AyS) d'une fila (phase ou semestre),
+  // partagée par les sous-projets et « Proyecto global ». Bouton d'ajout (admin).
+  function columnasGrid(filaCode: string) {
+    return (
+      <div className="grid flex-1 grid-cols-3 items-start gap-x-4">
+        {COLUMNAS.map((comp) => (
+          <div key={comp} className="flex flex-col items-start gap-2.5">
+            {cartasColumna(filaCode, comp).map(renderCard)}
+            {esAdmin && (
+              <button
+                type="button"
+                onClick={() => addCard(filaCode, comp)}
+                className="w-full max-w-[264px] rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--focus)] hover:text-[var(--text)]"
+              >
+                + Añadir tarjeta
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
     );
   }
 
@@ -481,7 +634,18 @@ export function HojasDeRutaClient() {
 
       {/* Hoja de ruta activa */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
+          {esAdmin && ocultasFeuille > 0 && (
+            <button
+              type="button"
+              onClick={restaurarOcultas}
+              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+            >
+              {ocultasFeuille} tarjeta(s) oculta(s) · Restaurar
+            </button>
+          )}
+        </div>
 
         {/* Estructura vertical de las fases del proyecto */}
         <div
@@ -499,7 +663,7 @@ export function HojasDeRutaClient() {
                       {sem.label}
                     </div>
                   </div>
-                  <div className="flex-1" />
+                  {columnasGrid(sem.code)}
                 </div>
               ))
             : FILAS_RUTA.map((fila) =>
@@ -550,15 +714,7 @@ export function HojasDeRutaClient() {
                     {fila.nombre}
                   </div>
                 </div>
-                <div className="grid flex-1 grid-cols-3 items-start gap-x-4">
-                  {COLUMNAS.map((comp) => (
-                    <div key={comp} className="flex flex-col items-start gap-2.5">
-                      {cardsDeFase(fila.code)
-                        .filter((card) => card.componente === comp)
-                        .map(renderCard)}
-                    </div>
-                  ))}
-                </div>
+                {columnasGrid(fila.code)}
               </div>
             ),
           )}
@@ -673,6 +829,8 @@ function TareaCard({
   onStartLink,
   onCompleteLink,
   onCancelLink,
+  creada,
+  onEliminar,
 }: {
   statKey: string;
   card: CardModel;
@@ -691,6 +849,8 @@ function TareaCard({
   onStartLink: () => void;
   onCompleteLink: () => void;
   onCancelLink: () => void;
+  creada: boolean;
+  onEliminar: () => void;
 }) {
   const tono = CARD_TONOS[card.componente];
   const pillVisible = esAdmin || realizada;
@@ -738,10 +898,28 @@ function TareaCard({
         </button>
       )}
 
+      {/* Suppression (admin) — coin haut-gauche, hors du calque atténué. */}
+      {esAdmin && (
+        <button
+          type="button"
+          onClick={onEliminar}
+          aria-label={creada ? "Eliminar tarjeta" : "Ocultar tarjeta"}
+          title={creada ? "Eliminar" : "Ocultar"}
+          className="absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 border-[var(--text-muted)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:border-red-500 hover:bg-red-500 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]"
+        >
+          <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true">
+            <path d="M1 1 L11 11 M11 1 L1 11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+      )}
+
       {/* Contenu — atténué quand realizada (la pilule reste nette). */}
       <div className={cn("flex flex-col overflow-hidden rounded-md", realizada && "opacity-45")}>
         <div
-          className="px-3 py-2 pr-9 text-center text-[12.5px] font-semibold leading-snug"
+          className={cn(
+            "py-2 text-center text-[12.5px] font-semibold leading-snug",
+            esAdmin ? "px-9" : "px-3 pr-9",
+          )}
           style={{ backgroundColor: tono.head, color: tono.headText }}
         >
           {nombre}
