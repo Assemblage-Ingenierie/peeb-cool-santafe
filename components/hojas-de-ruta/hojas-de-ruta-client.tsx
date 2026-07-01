@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import {
   FASES,
   COMPONENTES,
-  ROADMAP_AYS,
+  ROADMAP_TAREAS,
   CARD_TONOS,
   COLOR_REALIZADA,
   RESPONSABLE_DEFECTO,
@@ -79,6 +79,8 @@ interface CardModel {
   componente: ComponenteCode;
   nombre: string;
   descripcion?: string;
+  responsable?: string; // défaut (surchargé par l'édition admin) — sinon ACEFE
+  comentario?: string; // commentaire par défaut (surchargé par l'édition admin)
   nota?: boolean;
 }
 
@@ -193,10 +195,16 @@ export function HojasDeRutaClient() {
 
   function cardsDeFase(faseCode: string): CardModel[] {
     const out: CardModel[] = [];
-    for (const t of ROADMAP_AYS) {
+    for (const t of ROADMAP_TAREAS) {
       if (t.fase !== faseCode) continue;
       if (!t.dinamica) {
-        out.push({ key: t.nombre, componente: t.componente, nombre: t.nombre });
+        out.push({
+          key: t.id ?? t.nombre,
+          componente: t.componente,
+          nombre: t.nombre,
+          responsable: t.responsable,
+          comentario: t.comentario,
+        });
         continue;
       }
       if (seleccion === "global") {
@@ -652,7 +660,9 @@ function TareaCard({
   const pillVisible = esAdmin || realizada;
   const nombre = edicion?.nombre ?? card.nombre;
   const descripcion = edicion?.descripcion ?? card.descripcion ?? "";
-  const responsable = edicion?.responsable ?? RESPONSABLE_DEFECTO;
+  const responsable = edicion?.responsable ?? card.responsable ?? RESPONSABLE_DEFECTO;
+  // Commentaire affiché = note admin persistée si présente, sinon défaut de la carte.
+  const comentarioEff = comentario || card.comentario || "";
   const editando = panel === "editar";
   const comentarioAbierto = panel === "comentario";
   const labelStyle = "block text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]";
@@ -713,13 +723,13 @@ function TareaCard({
           </div>
         )}
 
-        {comentario && (
+        {comentarioEff && (
           <div
             className="border-t px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]"
             style={{ backgroundColor: "var(--app-bg)", borderColor: tono.border }}
           >
             <span className="font-medium">Comentario: </span>
-            {comentario}
+            {comentarioEff}
           </div>
         )}
 
@@ -814,7 +824,7 @@ function TareaCard({
             onClick={() => onPanel("comentario")}
             className="flex-1 border-l border-[var(--border)] py-1 transition-colors hover:bg-[var(--app-bg)] hover:text-[var(--text)]"
           >
-            {comentario ? "Comentario ✓" : "Comentario"}
+            {comentarioEff ? "Comentario ✓" : "Comentario"}
           </button>
           <button
             type="button"

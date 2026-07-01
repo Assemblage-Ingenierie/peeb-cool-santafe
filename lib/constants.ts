@@ -196,15 +196,22 @@ export const refMgas = (code: string): string => `MGAS §${code}`;
 export const RESPONSABLE_DEFECTO = "ACEFE";
 
 export interface RoadmapTarea {
+  // Clé de persistance stable (défaut = `nombre`). OBLIGATOIRE si deux tâches
+  // partagent le même `nombre` (sinon collision de l'état en base).
+  id?: string;
   fase: string; // code de fase (voir FASES)
   componente: ComponenteCode;
   nombre: string;
+  responsable?: string; // défaut = RESPONSABLE_DEFECTO (ACEFE)
+  comentario?: string; // commentaire par défaut de la carte (surchargé par l'édition admin)
   dinamica?: boolean; // contenu adapté aux Requisitos AyS cochés du sous-projet
 }
 
-// Partie AyS (identique pour tous les sous-projets ; les tâches `dinamica` se
-// déclinent selon les requisitos cochés de chaque sous-projet).
-export const ROADMAP_AYS: RoadmapTarea[] = [
+// Tâches de la feuille de route, toutes composantes (AyS, Género, …). Identiques
+// pour tous les sous-projets ; les tâches `dinamica` (AyS) se déclinent selon les
+// requisitos cochés de chaque sous-projet.
+export const ROADMAP_TAREAS: RoadmapTarea[] = [
+  // --- Ambiental y social (AyS) ---
   { fase: "estudios_preliminares", componente: "AyS", nombre: "Elegibilidad y nivel de riesgo · Ficha de evaluación (Anexo 5)" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Pre-categorización provincial digital" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Memoria descriptiva / anteproyecto" },
@@ -234,6 +241,20 @@ export const ROADMAP_AYS: RoadmapTarea[] = [
   { fase: "obra", componente: "AyS", nombre: "Conformidad del cronograma con el plan de continuidad" },
   { fase: "obra", componente: "AyS", nombre: "Coordinación y seguimiento de los planes solicitados" },
   { fase: "obra", componente: "AyS", nombre: "Gestión de reclamos" },
+
+  // --- Género (G) — responsable por defecto ACEFE, salvo indicación (AT). ---
+  { id: "genero-ep-diagnostico", fase: "estudios_preliminares", componente: "G", nombre: "Diagnóstico con perspectiva de género" },
+  { id: "genero-ep-formacion", fase: "estudios_preliminares", componente: "G", nombre: "Formación a los equipos de la UG / Ministerio de línea sobre la incorporación de la perspectiva de género", responsable: "AT", comentario: "Impacto 4" },
+  { id: "genero-antep-revision", fase: "anteproyecto", componente: "G", nombre: "Revisión de proyecto con perspectiva de género", responsable: "AT" },
+  { id: "genero-antep-validacion", fase: "anteproyecto", componente: "G", nombre: "Validación de las medidas con mujeres beneficiarias", comentario: "Impacto 1" },
+  { id: "genero-antep-secretaria", fase: "anteproyecto", componente: "G", nombre: "Participación de Secretaría de Mujeres, Género y Diversidad", comentario: "Impacto 3" },
+  { id: "genero-pe-revision", fase: "proyecto_ejecutivo", componente: "G", nombre: "Revisión de proyecto con perspectiva de género", responsable: "AT" },
+  { id: "genero-pliegos-lenguaje", fase: "redaccion_pliegos", componente: "G", nombre: "Revisión y corrección del lenguaje en documentos de licitación", responsable: "AT", comentario: "Impacto 5" },
+  { id: "genero-pliegos-clausulas", fase: "redaccion_pliegos", componente: "G", nombre: "Incorporar cláusulas que valoren a oferentes con políticas de género", responsable: "AT", comentario: "Impacto 9.3" },
+  { id: "genero-pliegos-inclusion", fase: "redaccion_pliegos", componente: "G", nombre: "Inclusión de políticas de igualdad y de género en los Pliegos de Condiciones de las licitaciones", responsable: "AT", comentario: "Impacto 9.4" },
+  { id: "genero-pliegos-criterios", fase: "redaccion_pliegos", componente: "G", nombre: "Definición de criterios de evaluación específicos para valorar oferentes con políticas de género", comentario: "Impacto 9.5" },
+  { id: "genero-pliegos-elm", fase: "redaccion_pliegos", componente: "G", nombre: "Revisión de documentos de licitación con respecto a Empresas Lideradas por Mujeres (ELM)", comentario: "Impacto 10" },
+  { id: "genero-licitacion-evaluacion", fase: "licitacion", componente: "G", nombre: "Evaluación de ofertas con perspectiva de género", comentario: "Impacto 9 — relacionado con los criterios establecidos anteriormente" },
 ];
 
 // ============================================================
