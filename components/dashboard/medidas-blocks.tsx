@@ -1,6 +1,6 @@
 "use client";
 
-import { MEDIDAS, type Medida } from "@/lib/constants";
+import { MEDIDAS, getComponente, type Medida, type ComponenteCode } from "@/lib/constants";
 import { MedidaIcon } from "@/components/medida-icons";
 import { fmtNumero, GUION } from "@/lib/format";
 import type { SnapshotMedida } from "@/lib/snapshot";
@@ -13,10 +13,10 @@ import type { SnapshotMedida } from "@/lib/snapshot";
 //    (activa) ; AyS = texto seul (sans kWh). Ordre = MEDIDAS (lib/constants).
 // ============================================================
 
-const GRUPOS: { titulo: string; match: (m: Medida) => boolean }[] = [
-  { titulo: "Medidas EE", match: (m) => m.componente === "EE" },
-  { titulo: "Medidas género", match: (m) => m.componente === "G" },
-  { titulo: "Otras medidas", match: (m) => m.componente === null },
+const GRUPOS: { titulo: string; comp: ComponenteCode | null; match: (m: Medida) => boolean }[] = [
+  { titulo: "Medidas EE", comp: "EE", match: (m) => m.componente === "EE" },
+  { titulo: "Medidas género", comp: "G", match: (m) => m.componente === "G" },
+  { titulo: "Otras medidas", comp: null, match: (m) => m.componente === null },
 ];
 
 /** Map code → ligne, restreinte aux mesures cochées. */
@@ -45,6 +45,7 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
   const active = activeByCode(medidas);
   const grupos = GRUPOS.map((g) => ({
     titulo: g.titulo,
+    comp: g.comp,
     items: MEDIDAS.filter((m) => g.match(m) && active.has(m.code)).map((meta) => ({
       meta,
       row: active.get(meta.code)!,
@@ -55,9 +56,16 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
 
   return (
     <section className="grid gap-4 lg:grid-cols-2">
-      {grupos.map((g) => (
+      {grupos.map((g) => {
+        const c = g.comp ? getComponente(g.comp) : undefined;
+        return (
         <div key={g.titulo} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-          <h2 className="text-sm font-semibold text-[var(--text)]">{g.titulo}</h2>
+          <h2
+            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[var(--text)]"
+            style={c ? { backgroundColor: c.color, color: c.onColor } : { backgroundColor: "var(--app-bg)" }}
+          >
+            {g.titulo}
+          </h2>
           <ul className="mt-2 divide-y divide-[var(--border)]">
             {g.items.map(({ meta, row }) => (
               <li key={meta.code} className="flex items-start gap-2.5 py-2.5 first:pt-1">
@@ -89,7 +97,8 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
             ))}
           </ul>
         </div>
-      ))}
+        );
+      })}
     </section>
   );
 }
