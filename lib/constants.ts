@@ -71,9 +71,6 @@ export const CARD_TONOS: Record<ComponenteCode, CardTono> = {
   G:   { head: "#d9d2e9", headText: "#2b1a5e", body: "#ede9f4", bodyText: "#4b3b86", foot: "#674ea7", footText: "#ffffff", border: "#b4a7d6" },
 };
 
-// Couleur de la pilule « realizada » (tâche réalisée) — vert foncé, coche blanche.
-export const COLOR_REALIZADA = "#1b5e20";
-
 // ============================================================
 // Mesures du projet (CDC §4.5) — 8 mesures par sous-projet (table peebcoolsf_medidas).
 // (AyS n'est plus une mesure : voir REQUISITOS_AYS / section « Requisitos AyS ».)

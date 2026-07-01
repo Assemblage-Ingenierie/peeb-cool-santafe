@@ -8,7 +8,6 @@ import {
   COMPONENTES,
   ROADMAP_TAREAS,
   CARD_TONOS,
-  COLOR_REALIZADA,
   RESPONSABLE_DEFECTO,
   REQUISITOS_AYS,
   REQUISITOS_AYS_CODES,
@@ -702,14 +701,14 @@ function TareaCard({
           aria-label="Marcar como realizada"
           title="Realizada"
           className={cn(
-            "absolute right-2 top-2 z-10 flex h-[18px] w-7 items-center justify-center rounded-full border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
+            "absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
             realizada
               ? "border-transparent text-white"
               : "border-[var(--text-muted)] bg-[var(--surface)] text-transparent",
             esAdmin && "cursor-pointer",
             esAdmin && !realizada && "hover:text-[var(--text-muted)]",
           )}
-          style={realizada ? { backgroundColor: COLOR_REALIZADA } : undefined}
+          style={realizada ? { backgroundColor: tono.foot } : undefined}
         >
           <CheckIcon className="h-3 w-3" />
         </button>
