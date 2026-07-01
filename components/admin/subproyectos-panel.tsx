@@ -9,6 +9,7 @@ import { EditableTable, type AdminColumn, type AdminRow, type SelectOption } fro
 import { FieldEditor, type FieldDef } from "./field-editor";
 import { MedidasEditor } from "./medidas-editor";
 import { AysRequisitosEditor } from "./ays-requisitos-editor";
+import { FasesEditor, type TaskPlan } from "./fases-editor";
 import {
   updateSubproyecto,
   updateMetrica,
@@ -21,8 +22,17 @@ import {
   updateField,
   setFlag,
   deleteRow,
+  gestionSetDuracion,
 } from "@/app/admin/actions";
-import type { SubproyectoRow, MetricaRow, MedidaRow, AysRequisitoRow, Escenario } from "@/lib/admin/read";
+import { roadmapSetPlan } from "@/app/hojas-de-ruta/actions";
+import type {
+  SubproyectoRow,
+  MetricaRow,
+  MedidaRow,
+  AysRequisitoRow,
+  RoadmapEstadoRow,
+  Escenario,
+} from "@/lib/admin/read";
 
 // ============================================================
 // Gestión de subproyectos (CDC §4.5) : sélecteur (groupé par sección) + 4 sections.
@@ -89,14 +99,6 @@ const documentosColumns: AdminColumn[] = [
   { key: "fecha", label: "Fecha", type: "date" },
 ];
 
-// Fases : liste fixe (1 ligne par fase). Nom de fase en lecture seule + estado + 2 dates.
-const fasesColumns: AdminColumn[] = [
-  { key: "titulo", label: "Fase", readOnly: true },
-  { key: "estado", label: "Estado", type: "select", options: ESTADO_OPTIONS, placeholder: "—" },
-  { key: "fecha_inicio", label: "Fecha inicio", type: "date" },
-  { key: "fecha_fin", label: "Fecha fin", type: "date" },
-];
-
 function emptyMetrica(subUid: string, escenario: Escenario): MetricaRow {
   return {
     subproyecto_uid: subUid,
@@ -122,18 +124,21 @@ export function SubproyectosPanel({
   gestionLineas: initialGestion,
   medidas: initialMedidas,
   aysRequisitos: initialAysReq,
+  roadmapEstado: initialRoadmap,
 }: {
   subproyectos: SubproyectoRow[];
   metricas: MetricaRow[];
   gestionLineas: AdminRow[];
   medidas: MedidaRow[];
   aysRequisitos: AysRequisitoRow[];
+  roadmapEstado: RoadmapEstadoRow[];
 }) {
   const [subs, setSubs] = useState<SubproyectoRow[]>(initialSubs);
   const [metricas, setMetricas] = useState<MetricaRow[]>(initialMetricas);
   const [gestion, setGestion] = useState<AdminRow[]>(initialGestion);
   const [medidas, setMedidas] = useState<MedidaRow[]>(initialMedidas);
   const [aysReq, setAysReq] = useState<AysRequisitoRow[]>(initialAysReq);
+  const [roadmap, setRoadmap] = useState<RoadmapEstadoRow[]>(initialRoadmap);
   const [selectedUid, setSelectedUid] = useState<string | null>(initialSubs[0]?.uid ?? null);
   const [, startTransition] = useTransition();
   const router = useRouter();
@@ -287,6 +292,52 @@ export function SubproyectosPanel({
       });
       run(() => reorderRows("gestion", orderedUids));
     },
+  };
+
+  // --- Fases : duración estimada (gestion_lineas) + planificación des tâches ---
+  const requisitosCodesSel = aysReq
+    .filter((r) => r.subproyecto_uid === selectedUid && r.activa)
+    .map((r) => r.requisito);
+
+  const onFaseDuracion = (uid: string, durValor: number | null, durUnidad: string | null) => {
+    setGestion((rs) =>
+      rs.map((r) => (r.uid === uid ? { ...r, dur_valor: durValor, dur_unidad: durUnidad } : r)),
+    );
+    run(() => gestionSetDuracion(uid, durValor, durUnidad));
+  };
+
+  const onTaskPlan = (tareaKey: string, patch: Partial<TaskPlan>) => {
+    if (!selectedUid) return;
+    const feuille = selectedUid;
+    const apply = (row: RoadmapEstadoRow): RoadmapEstadoRow => ({
+      ...row,
+      ...("fechaInicio" in patch ? { fecha_inicio: patch.fechaInicio ?? null } : {}),
+      ...("fechaFin" in patch ? { fecha_fin: patch.fechaFin ?? null } : {}),
+      ...("durValor" in patch ? { dur_valor: patch.durValor ?? null } : {}),
+      ...("durUnidad" in patch ? { dur_unidad: patch.durUnidad ?? null } : {}),
+    });
+    setRoadmap((rs) => {
+      const idx = rs.findIndex((r) => r.feuille === feuille && r.tarea_key === tareaKey);
+      if (idx >= 0) return rs.map((r, i) => (i === idx ? apply(r) : r));
+      return [
+        ...rs,
+        apply({
+          feuille,
+          tarea_key: tareaKey,
+          oculta: false,
+          creada: false,
+          componente: null,
+          fila: null,
+          orden: null,
+          nombre: null,
+          fecha_inicio: null,
+          fecha_fin: null,
+          dur_valor: null,
+          dur_unidad: null,
+        }),
+      ];
+    });
+    run(() => roadmapSetPlan(feuille, tareaKey, patch));
   };
 
   // --- Ajout d'une école ---
@@ -522,13 +573,18 @@ export function SubproyectosPanel({
 
             <div>
               <h4 className="mb-1 text-sm font-semibold text-[var(--text)]">Fases</h4>
-              <p className="mb-2 text-sm text-[var(--text-muted)]">Estado y fechas (inicio / fin) por fase del proyecto.</p>
-              <EditableTable
-                columns={fasesColumns}
-                rows={gestionFases}
-                onCellCommit={gestionHandlers.onCellCommit}
-                hideSearch
-                emptyLabel="Sin fases."
+              <p className="mb-2 text-sm text-[var(--text-muted)]">
+                Estado, fechas y duración estimada por fase. Desplegá una fase para ver y planificar
+                sus tareas (sincronizadas con Hojas de ruta).
+              </p>
+              <FasesEditor
+                fases={gestionFases}
+                feuille={selected.uid}
+                requisitosCodes={requisitosCodesSel}
+                roadmapEstado={roadmap}
+                onFaseField={gestionHandlers.onCellCommit}
+                onFaseDuracion={onFaseDuracion}
+                onTaskPlan={onTaskPlan}
               />
             </div>
           </section>

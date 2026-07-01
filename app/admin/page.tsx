@@ -6,6 +6,7 @@ import {
   listMetricas,
   listMedidas,
   listAysRequisitos,
+  listRoadmapEstado,
 } from "@/lib/admin/read";
 
 // L'Admin lit/écrit les données en direct (service_role serveur), sans cache —
@@ -26,19 +27,31 @@ export default async function AdminPage() {
     );
   }
 
-  const [gp, equipo, entidades, eventos, capdoc, subproyectos, metricas, gestion, medidas, aysRequisitos] =
-    await Promise.all([
-      listTable("gp"),
-      listTable("equipo"),
-      listTable("entidades"),
-      listTable("eventos"),
-      listTable("capdoc"),
-      listSubproyectos(),
-      listMetricas(),
-      listTable("gestion"),
-      listMedidas(),
-      listAysRequisitos(),
-    ]);
+  const [
+    gp,
+    equipo,
+    entidades,
+    eventos,
+    capdoc,
+    subproyectos,
+    metricas,
+    gestion,
+    medidas,
+    aysRequisitos,
+    roadmapEstado,
+  ] = await Promise.all([
+    listTable("gp"),
+    listTable("equipo"),
+    listTable("entidades"),
+    listTable("eventos"),
+    listTable("capdoc"),
+    listSubproyectos(),
+    listMetricas(),
+    listTable("gestion"),
+    listMedidas(),
+    listAysRequisitos(),
+    listRoadmapEstado(),
+  ]);
 
   return (
     <section className="mx-auto max-w-6xl">
@@ -58,6 +71,7 @@ export default async function AdminPage() {
           gestion={gestion}
           medidas={medidas}
           aysRequisitos={aysRequisitos}
+          roadmapEstado={roadmapEstado}
         />
       </div>
     </section>

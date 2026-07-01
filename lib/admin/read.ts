@@ -119,3 +119,33 @@ export async function listAysRequisitos(): Promise<AysRequisitoRow[]> {
   if (error) throw new Error(`Error al leer ays_requisitos: ${error.message}`);
   return (data ?? []) as unknown as AysRequisitoRow[];
 }
+
+export type RoadmapEstadoRow = {
+  feuille: string;
+  tarea_key: string;
+  oculta: boolean;
+  creada: boolean;
+  componente: string | null;
+  fila: string | null;
+  orden: number | null;
+  nombre: string | null;
+  fecha_inicio: string | null;
+  fecha_fin: string | null;
+  dur_valor: number | null;
+  dur_unidad: string | null;
+};
+
+/**
+ * État de la feuille de route (toutes feuilles). Sert à afficher les tâches
+ * (cartes) par fase dans l'Admin, synchronisées avec Hojas de ruta.
+ */
+export async function listRoadmapEstado(): Promise<RoadmapEstadoRow[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb
+    .from("peebcoolsf_roadmap_estado")
+    .select(
+      "feuille, tarea_key, oculta, creada, componente, fila, orden, nombre, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
+    );
+  if (error) throw new Error(`Error al leer roadmap_estado: ${error.message}`);
+  return (data ?? []) as unknown as RoadmapEstadoRow[];
+}

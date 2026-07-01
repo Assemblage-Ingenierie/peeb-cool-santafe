@@ -13,7 +13,13 @@ import {
 } from "./editable-table";
 import { SubproyectosPanel } from "./subproyectos-panel";
 import { addRow, updateField, setFlag, setArrayField, deleteRow } from "@/app/admin/actions";
-import type { SubproyectoRow, MetricaRow, MedidaRow, AysRequisitoRow } from "@/lib/admin/read";
+import type {
+  SubproyectoRow,
+  MetricaRow,
+  MedidaRow,
+  AysRequisitoRow,
+  RoadmapEstadoRow,
+} from "@/lib/admin/read";
 
 const TABS = [
   { key: "gp", label: "Gestión de proyecto" },
@@ -104,6 +110,7 @@ export function AdminTabs({
   gestion,
   medidas,
   aysRequisitos,
+  roadmapEstado,
 }: {
   gp: AdminRow[];
   equipo: AdminRow[];
@@ -115,6 +122,7 @@ export function AdminTabs({
   gestion: AdminRow[];
   medidas: MedidaRow[];
   aysRequisitos: AysRequisitoRow[];
+  roadmapEstado: RoadmapEstadoRow[];
 }) {
   const [active, setActive] = useState<TabKey>("gp");
 
@@ -338,6 +346,7 @@ export function AdminTabs({
             gestionLineas={gestion}
             medidas={medidas}
             aysRequisitos={aysRequisitos}
+            roadmapEstado={roadmapEstado}
           />
         )}
       </div>

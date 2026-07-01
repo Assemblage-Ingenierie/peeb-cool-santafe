@@ -6,15 +6,12 @@ import { cn } from "@/lib/cn";
 import {
   FASES,
   COMPONENTES,
-  ROADMAP_TAREAS,
   CARD_TONOS,
   RESPONSABLE_DEFECTO,
-  REQUISITOS_AYS,
-  REQUISITOS_AYS_CODES,
   DURACION_UNIDADES,
-  refMgas,
   type ComponenteCode,
 } from "@/lib/constants";
+import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import { formatDuracion } from "@/lib/format";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
@@ -58,10 +55,6 @@ const FILAS_RUTA: FilaRuta[] = [];
     FILAS_RUTA.push({ code: f.code, nombre: f.nombre, hito, numero: hito ? null : numero });
   }
 }
-
-const REQ_LABEL = new Map<string, string>(
-  REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
-);
 
 // Semestres du calendrier global (S2 2026 → S2 2030). La feuille « Proyecto
 // global » utilise cette décomposition en semestres au lieu des phases.
@@ -258,101 +251,42 @@ export function HojasDeRutaClient() {
       ? "Proyecto global"
       : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
 
-  function planesDe(uid: string): { code: string; label: string }[] {
-    const checked = new Set(
-      aysRequisitos.filter((r) => r.subproyectoUid === uid).map((r) => r.requisito),
-    );
-    return REQUISITOS_AYS_CODES.filter((c) => checked.has(c)).map((c) => ({
-      code: c,
-      label: REQ_LABEL.get(c) ?? c,
-    }));
-  }
-
-  function cardsDeFase(faseCode: string): CardModel[] {
-    const out: CardModel[] = [];
-    for (const t of ROADMAP_TAREAS) {
-      if (t.fase !== faseCode) continue;
-      if (!t.dinamica) {
-        out.push({
-          key: t.id ?? t.nombre,
-          componente: t.componente,
-          nombre: t.nombre,
-          responsable: t.responsable,
-          comentario: t.comentario,
-        });
-        continue;
-      }
-      if (seleccion === "global") {
-        out.push({
-          key: `${t.fase}-global`,
-          componente: t.componente,
-          nombre: t.nombre,
-          descripcion: "Según los requisitos AyS de cada subproyecto",
-          nota: true,
-        });
-        continue;
-      }
-      const planes = planesDe(seleccion);
-      if (planes.length === 0) {
-        out.push({
-          key: `${t.fase}-vacio`,
-          componente: t.componente,
-          nombre: t.nombre,
-          descripcion: "Sin requisitos AyS marcados",
-          nota: true,
-        });
-        continue;
-      }
-      for (const p of planes) {
-        out.push({
-          key: `${t.fase}-${p.code}`,
-          componente: t.componente,
-          nombre: p.label,
-          descripcion: refMgas(p.code),
-        });
-      }
-    }
-    return out;
-  }
-
-  // Instances de cartes par colonne (fila × composante), triées par orden.
-  // Combine les cartes par défaut (non masquées, position éventuellement
-  // surchargée) et les cartes créées. Clé de map = `${fila}|${componente}`.
+  // Instances de cartes par colonne (fila × composante) — modèle partagé
+  // (lib/roadmap). On traduit l'état local (ocultas/creadas/posiciones/ediciones)
+  // en overrides par tarea_key pour la feuille courante.
   function construirColumnas(): Map<string, CardModel[]> {
-    const acc = new Map<string, CardModel[]>();
-    const add = (fila: string, comp: ComponenteCode, card: CardModel, orden: number) => {
-      const key = `${fila}|${comp}`;
-      const arr = acc.get(key);
-      const c = { ...card, orden };
-      if (arr) arr.push(c);
-      else acc.set(key, [c]);
-    };
-    // Cartes par défaut (jamais pour « Proyecto global »).
-    if (seleccion !== "global") {
-      let idx = 0;
-      for (const fila of FILAS_RUTA) {
-        if (fila.hito) continue;
-        for (const card of cardsDeFase(fila.code)) {
-          idx += 1;
-          const sk = `${seleccion}::${card.key}`;
-          if (ocultas.has(sk)) continue;
-          const p = posiciones[sk];
-          add(p?.fila ?? fila.code, card.componente, card, p?.orden ?? idx);
-        }
+    const pref = `${seleccion}::`;
+    const estado = new Map<string, RoadmapOverride>();
+    const ensure = (tarea: string) => {
+      let o = estado.get(tarea);
+      if (!o) {
+        o = {};
+        estado.set(tarea, o);
       }
-    }
-    // Cartes créées (identité = statKey ; texte via ediciones/comentarios).
+      return o;
+    };
+    for (const sk of ocultas) if (sk.startsWith(pref)) ensure(splitKey(sk).tarea).oculta = true;
     for (const [sk, comp] of Object.entries(creadas)) {
-      const { feuille, tarea } = splitKey(sk);
-      if (feuille !== seleccion) continue;
-      const p = posiciones[sk];
-      if (!p?.fila) continue;
-      add(p.fila, comp, { key: tarea, componente: comp, nombre: "" }, p.orden ?? 0);
+      if (!sk.startsWith(pref)) continue;
+      const o = ensure(splitKey(sk).tarea);
+      o.creada = true;
+      o.componente = comp;
+      o.nombre = ediciones[sk]?.nombre ?? null;
     }
-    for (const arr of acc.values()) {
-      arr.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0) || (a.key < b.key ? -1 : 1));
+    for (const [sk, p] of Object.entries(posiciones)) {
+      if (!sk.startsWith(pref)) continue;
+      const o = ensure(splitKey(sk).tarea);
+      o.fila = p.fila;
+      o.orden = p.orden;
     }
-    return acc;
+    const requisitosCodes = aysRequisitos
+      .filter((r) => r.subproyectoUid === seleccion)
+      .map((r) => r.requisito);
+    return construirCartasPorFila({
+      esGlobal: seleccion === "global",
+      requisitosCodes,
+      estado,
+    }) as Map<string, CardModel[]>;
   }
   const columnas = construirColumnas();
   function cartasColumna(fila: string, comp: ComponenteCode): CardModel[] {

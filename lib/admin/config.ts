@@ -120,7 +120,7 @@ export const TABLES: Record<string, TableConfig> = {
     flagFields: ["confidencial", "publicar"],
     arrayFields: [],
     select:
-      "uid, subproyecto_uid, titulo, orden, tipo_linea, componente, url, estado, fecha, fecha_inicio, fecha_fin, fase, confidencial, publicar",
+      "uid, subproyecto_uid, titulo, orden, tipo_linea, componente, url, estado, fecha, fecha_inicio, fecha_fin, fase, dur_valor, dur_unidad, confidencial, publicar",
     defaults: { titulo: "", confidencial: false, publicar: false, orden: 0 },
     orderField: "orden",
     orderBy: [

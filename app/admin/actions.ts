@@ -121,6 +121,27 @@ export async function updateField(
   revalidatePath("/admin");
 }
 
+const DUR_UNIDADES = new Set(["dia", "semana", "mes"]);
+
+/** Duración estimada d'une ligne de fase (peebcoolsf_gestion_lineas). */
+export async function gestionSetDuracion(
+  uid: string,
+  durValor: number | null,
+  durUnidad: string | null,
+): Promise<void> {
+  assertAdmin();
+  const v =
+    durValor == null || Number.isNaN(durValor) || durValor <= 0 ? null : Math.trunc(durValor);
+  const u = durUnidad && DUR_UNIDADES.has(durUnidad) ? durUnidad : null;
+  const sb = createServiceClient();
+  const { error } = await sb
+    .from("peebcoolsf_gestion_lineas")
+    .update({ dur_valor: v, dur_unidad: u })
+    .eq("uid", uid);
+  if (error) throw new Error(error.message);
+  revalidatePath("/admin");
+}
+
 /** Bascule un drapeau (confidencial | publicar). */
 export async function setFlag(
   tableKey: string,
