@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { COMPONENTES } from "@/lib/constants";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
+import { FilterProvider } from "./filter-context";
 
 /**
  * Cadre applicatif : sidebar + header + zone de contenu.
@@ -47,7 +48,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           filters={filters}
           onToggleFilter={toggleFilter}
         />
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">{children}</main>
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6">
+          <FilterProvider value={filters}>{children}</FilterProvider>
+        </main>
       </div>
     </div>
   );

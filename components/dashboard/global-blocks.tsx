@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { Snapshot, SnapshotMetrica } from "@/lib/snapshot";
 import { COMPONENTES } from "@/lib/constants";
+import { useComponentFilters } from "@/components/filter-context";
 import { economiaKwh, economiaPct, suma } from "@/lib/calc";
 import { fmtNumero } from "@/lib/format";
 import { ClipboardIcon, CheckIcon } from "@/components/icons";
@@ -28,6 +29,7 @@ function sumBy<T>(rows: T[], get: (x: T) => number | null): number | null {
 }
 
 export function GlobalBlocks({ data }: { data: Snapshot }) {
+  const filtros = useComponentFilters();
   const fai = useMemo<SnapshotMetrica[]>(
     () => data.metricas.filter((m) => m.escenario === "faisabilidad"),
     [data.metricas],
@@ -58,12 +60,12 @@ export function GlobalBlocks({ data }: { data: Snapshot }) {
   // Documents en lignes (ordre composante EE/AyS/G), avec couleur de liseré.
   const docRows = useMemo(
     () =>
-      DOC_SECCIONES.flatMap((c) =>
+      DOC_SECCIONES.filter((c) => filtros.has(c.code)).flatMap((c) =>
         data.docsProyecto
           .filter((d) => d.componente === c.code)
           .map((d) => ({ ...d, color: c.color })),
       ),
-    [data.docsProyecto],
+    [data.docsProyecto, filtros],
   );
 
   const datos: { label: string; value: number | null; unit: string }[] = [

@@ -11,6 +11,7 @@ import type {
   Escenario,
 } from "@/lib/snapshot";
 import { COMPONENTES, FASES, ESTADOS, getTipologia, UI } from "@/lib/constants";
+import { useComponentFilters, pasaFiltro } from "@/components/filter-context";
 import { DatosCard } from "./datos-card";
 import { useEscenarioToggle } from "./use-escenario";
 import { GlobalBlocks } from "./global-blocks";
@@ -259,7 +260,9 @@ function Hint({ children }: { children: ReactNode }) {
 
 /** Documents en lignes : séparateurs gris clair + liseré couleur de composante à gauche. */
 function DocumentosBlock({ docs }: { docs: SnapshotDocumento[] }) {
-  if (docs.length === 0) return <Hint>Sin documentos.</Hint>;
+  const filtros = useComponentFilters();
+  const visibles = docs.filter((d) => pasaFiltro(filtros, d.componente));
+  if (visibles.length === 0) return <Hint>Sin documentos.</Hint>;
 
   const colorOf = (code: string | null) =>
     COMPONENTES.find((c) => c.code === code)?.color ?? UI.border;
@@ -268,7 +271,7 @@ function DocumentosBlock({ docs }: { docs: SnapshotDocumento[] }) {
     return i === -1 ? COMPONENTES.length : i;
   };
   // Tri par composante (GP/EE/AyS/G puis sans composante) ; ordre `orden` préservé dans chaque groupe.
-  const ordered = [...docs].sort((a, b) => rank(a.componente) - rank(b.componente));
+  const ordered = [...visibles].sort((a, b) => rank(a.componente) - rank(b.componente));
 
   return (
     <ul className="divide-y divide-[var(--border)]">

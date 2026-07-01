@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { SnapshotEvento } from "@/lib/snapshot";
 import { cn } from "@/lib/cn";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
+import { useComponentFilters, pasaFiltro } from "@/components/filter-context";
 import { MonthGrid } from "./month-grid";
 import { EventoModal } from "./evento-modal";
 import { EventoForm } from "./evento-form";
@@ -29,6 +30,7 @@ export function CalendarioClient() {
   const [refreshKey, setRefreshKey] = useState(0);
   const snap = useSnapshot(refreshKey);
   const bumpRefresh = () => setRefreshKey((k) => k + 1);
+  const filtros = useComponentFilters();
 
   // Mois affiché (month 0-based). Init sur le mois courant (local).
   const [cursor, setCursor] = useState(() => {
@@ -157,7 +159,11 @@ export function CalendarioClient() {
         <MonthGrid
           year={cursor.year}
           month={cursor.month}
-          eventos={snap.status === "ready" ? snap.data.eventos : []}
+          eventos={
+            snap.status === "ready"
+              ? snap.data.eventos.filter((e) => pasaFiltro(filtros, e.componente))
+              : []
+          }
           hoy={hoyStr()}
           zona={zona}
           onSelect={setSel}

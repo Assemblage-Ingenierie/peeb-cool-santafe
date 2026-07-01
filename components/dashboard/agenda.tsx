@@ -4,6 +4,7 @@ import { useEffect, useRef, type PointerEvent } from "react";
 import type { SnapshotEvento } from "@/lib/snapshot";
 import { getComponente } from "@/lib/constants";
 import { cn } from "@/lib/cn";
+import { useComponentFilters, pasaFiltro } from "@/components/filter-context";
 
 // Date du jour (locale), au format YYYY-MM-DD pour comparer aux `fecha` brutes.
 function todayStr(): string {
@@ -49,10 +50,12 @@ interface AgendaProps {
 export function Agenda({ eventos, loading, error, labelClassName, labelFooter }: AgendaProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const today = todayStr();
+  const filtros = useComponentFilters();
 
-  // Événements nommés uniquement (on ignore les brouillons sans titre), triés.
+  // Événements nommés uniquement (on ignore les brouillons sans titre), filtrés
+  // par composante active, triés.
   const items = eventos
-    .filter((e) => (e.nombre ?? "").trim() !== "")
+    .filter((e) => (e.nombre ?? "").trim() !== "" && pasaFiltro(filtros, e.componente))
     .slice()
     .sort((a, b) =>
       a.fecha < b.fecha

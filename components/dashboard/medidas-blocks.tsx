@@ -3,6 +3,7 @@
 import { MEDIDAS, getComponente, type Medida, type ComponenteCode } from "@/lib/constants";
 import { MedidaIcon } from "@/components/medida-icons";
 import { fmtNumero, GUION } from "@/lib/format";
+import { useComponentFilters, pasaFiltro } from "@/components/filter-context";
 import type { SnapshotMedida } from "@/lib/snapshot";
 
 // ============================================================
@@ -43,14 +44,17 @@ export function MedidaLogos({ medidas }: { medidas: SnapshotMedida[] }) {
 /** Blocs détaillés des mesures cochées (logo + nom + texto + kWh/año ; AyS sans kWh). */
 export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
   const active = activeByCode(medidas);
-  const grupos = GRUPOS.map((g) => ({
-    titulo: g.titulo,
-    comp: g.comp,
-    items: MEDIDAS.filter((m) => g.match(m) && active.has(m.code)).map((meta) => ({
-      meta,
-      row: active.get(meta.code)!,
-    })),
-  })).filter((g) => g.items.length > 0);
+  const filtros = useComponentFilters();
+  const grupos = GRUPOS.filter((g) => pasaFiltro(filtros, g.comp))
+    .map((g) => ({
+      titulo: g.titulo,
+      comp: g.comp,
+      items: MEDIDAS.filter((m) => g.match(m) && active.has(m.code)).map((meta) => ({
+        meta,
+        row: active.get(meta.code)!,
+      })),
+    }))
+    .filter((g) => g.items.length > 0);
 
   if (grupos.length === 0) return null;
 

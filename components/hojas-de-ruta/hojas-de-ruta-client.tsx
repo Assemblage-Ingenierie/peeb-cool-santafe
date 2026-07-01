@@ -13,6 +13,7 @@ import {
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import { formatDuracion } from "@/lib/format";
+import { useComponentFilters } from "@/components/filter-context";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
@@ -146,6 +147,7 @@ type PanelTipo = "comentario" | "editar";
 export function HojasDeRutaClient() {
   const snap = useSnapshot();
   const admin = isAdmin(getCurrentUser());
+  const filtros = useComponentFilters();
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
   const [vista, setVista] = useState<Vista>("admin");
   const esAdmin = admin && vista === "admin";
@@ -541,6 +543,7 @@ export function HojasDeRutaClient() {
     posiciones,
     creadas,
     ocultas,
+    filtros,
   ]);
 
   function renderCard(card: CardModel) {
@@ -628,9 +631,15 @@ export function HojasDeRutaClient() {
   // Grille des 3 colonnes (EE / Género / AyS) d'une fila (phase ou semestre),
   // partagée par les sous-projets et « Proyecto global ». Bouton d'ajout (admin).
   function columnasGrid(filaCode: string) {
+    // Filtre par composante active (boutons « Filtrar »). Colonnes réduites en
+    // conséquence ; la grille s'ajuste au nombre de composantes visibles.
+    const cols = COLUMNAS.filter((c) => filtros.has(c));
     return (
-      <div className="grid flex-1 grid-cols-3 items-start gap-x-4">
-        {COLUMNAS.map((comp) => {
+      <div
+        className="grid flex-1 items-start gap-x-4"
+        style={{ gridTemplateColumns: `repeat(${cols.length || 1}, minmax(0,1fr))` }}
+      >
+        {cols.map((comp) => {
           const cards = cartasColumna(filaCode, comp);
           const activo = drag?.comp === comp; // composante fixe : drop dans la même colonne
           const showAt =
