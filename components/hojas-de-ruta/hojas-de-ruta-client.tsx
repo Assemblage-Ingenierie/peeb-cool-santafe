@@ -57,6 +57,11 @@ const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
 
+// Colonnes de la feuille de route, par composante (gauche → droite). Chaque
+// colonne conserve sa place même vide (alignement des cartes par composante).
+// GP (Gestión de proyecto) à ajouter ici lorsque son contenu sera défini.
+const COLUMNAS: ComponenteCode[] = ["EE", "G", "AyS"];
+
 // Clé spéciale = case « No objeción AFD recibida » (persistée comme une tâche).
 const ANO_KEY = "__ano_afd__";
 
@@ -338,6 +343,60 @@ export function HojasDeRutaClient() {
     setOverlay({ w: br.width, h: br.height, flechas });
   }, [enlaces, seleccion, vista, realizadas, comentarios, ediciones, panel, tick, snap.status]);
 
+  function renderCard(card: CardModel) {
+    const k = `${seleccion}::${card.key}`;
+    return (
+      <TareaCard
+        key={card.key}
+        statKey={k}
+        card={card}
+        realizada={realizadas.has(k)}
+        comentario={comentarios[k] ?? ""}
+        edicion={ediciones[k]}
+        esAdmin={esAdmin}
+        panel={panel && panel.key === k ? panel.tipo : null}
+        linking={linking}
+        esFuente={linkFrom === k}
+        onToggleRealizada={() => {
+          const nuevo = !realizadas.has(k);
+          toggleRealizada(k);
+          roadmapSetRealizada(seleccion, card.key, nuevo).catch(() => {});
+        }}
+        onPanel={(tipo) => togglePanel(k, tipo)}
+        onComentario={(v) => {
+          setComentarios((prev) => ({ ...prev, [k]: v }));
+          debouncedSave(`com:${k}`, () =>
+            roadmapSetComentario(seleccion, card.key, v).catch(() => {}),
+          );
+        }}
+        onEdicion={(patch) => {
+          const next = { ...ediciones[k], ...patch };
+          setEdiciones((prev) => ({ ...prev, [k]: next }));
+          debouncedSave(`edi:${k}`, () =>
+            roadmapSetEdicion(
+              seleccion,
+              card.key,
+              next.nombre ?? "",
+              next.descripcion ?? "",
+              next.responsable ?? "",
+            ).catch(() => {}),
+          );
+        }}
+        onReset={() => {
+          setEdiciones((prev) => {
+            const n = { ...prev };
+            delete n[k];
+            return n;
+          });
+          roadmapSetEdicion(seleccion, card.key, "", "", "").catch(() => {});
+        }}
+        onStartLink={() => startLink(k)}
+        onCompleteLink={() => completeLink(k)}
+        onCancelLink={() => setLinkFrom(null)}
+      />
+    );
+  }
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -468,60 +527,14 @@ export function HojasDeRutaClient() {
                     {fila.nombre}
                   </div>
                 </div>
-                <div className="flex flex-1 flex-wrap content-start items-start gap-2.5">
-                  {cardsDeFase(fila.code).map((card) => {
-                    const k = `${seleccion}::${card.key}`;
-                    return (
-                      <TareaCard
-                        key={card.key}
-                        statKey={k}
-                        card={card}
-                        realizada={realizadas.has(k)}
-                        comentario={comentarios[k] ?? ""}
-                        edicion={ediciones[k]}
-                        esAdmin={esAdmin}
-                        panel={panel && panel.key === k ? panel.tipo : null}
-                        linking={linking}
-                        esFuente={linkFrom === k}
-                        onToggleRealizada={() => {
-                          const nuevo = !realizadas.has(k);
-                          toggleRealizada(k);
-                          roadmapSetRealizada(seleccion, card.key, nuevo).catch(() => {});
-                        }}
-                        onPanel={(tipo) => togglePanel(k, tipo)}
-                        onComentario={(v) => {
-                          setComentarios((prev) => ({ ...prev, [k]: v }));
-                          debouncedSave(`com:${k}`, () =>
-                            roadmapSetComentario(seleccion, card.key, v).catch(() => {}),
-                          );
-                        }}
-                        onEdicion={(patch) => {
-                          const next = { ...ediciones[k], ...patch };
-                          setEdiciones((prev) => ({ ...prev, [k]: next }));
-                          debouncedSave(`edi:${k}`, () =>
-                            roadmapSetEdicion(
-                              seleccion,
-                              card.key,
-                              next.nombre ?? "",
-                              next.descripcion ?? "",
-                              next.responsable ?? "",
-                            ).catch(() => {}),
-                          );
-                        }}
-                        onReset={() => {
-                          setEdiciones((prev) => {
-                            const n = { ...prev };
-                            delete n[k];
-                            return n;
-                          });
-                          roadmapSetEdicion(seleccion, card.key, "", "", "").catch(() => {});
-                        }}
-                        onStartLink={() => startLink(k)}
-                        onCompleteLink={() => completeLink(k)}
-                        onCancelLink={() => setLinkFrom(null)}
-                      />
-                    );
-                  })}
+                <div className="grid flex-1 grid-cols-3 items-start gap-x-4">
+                  {COLUMNAS.map((comp) => (
+                    <div key={comp} className="flex flex-col items-start gap-2.5">
+                      {cardsDeFase(fila.code)
+                        .filter((card) => card.componente === comp)
+                        .map(renderCard)}
+                    </div>
+                  ))}
                 </div>
               </div>
             ),
@@ -674,7 +687,7 @@ function TareaCard({
       data-cardkey={statKey}
       data-comp={card.componente}
       className={cn(
-        "relative w-[232px] rounded-md border",
+        "relative w-full max-w-[264px] rounded-md border",
         esFuente && "ring-2 ring-[var(--accent)]",
       )}
       style={{ borderColor: tono.border }}
@@ -728,7 +741,6 @@ function TareaCard({
             className="border-t px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]"
             style={{ backgroundColor: "var(--app-bg)", borderColor: tono.border }}
           >
-            <span className="font-medium">Comentario: </span>
             {comentarioEff}
           </div>
         )}

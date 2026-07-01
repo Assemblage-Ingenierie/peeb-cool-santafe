@@ -68,7 +68,7 @@ export const CARD_TONOS: Record<ComponenteCode, CardTono> = {
   GP:  { head: "#434343", headText: "#ffffff", body: "#ededed", bodyText: "#444444", foot: "#1f1f1f", footText: "#ffffff", border: "#bdbdbd" },
   EE:  { head: "#ffe599", headText: "#5b4708", body: "#fff8e1", bodyText: "#7a6100", foot: "#bf9000", footText: "#ffffff", border: "#f1c232" },
   AyS: { head: "#d9ead3", headText: "#274e13", body: "#eaf3e5", bodyText: "#3b6d11", foot: "#38761d", footText: "#ffffff", border: "#b6d7a8" },
-  G:   { head: "#b4a7d6", headText: "#2b1a5e", body: "#ede9f4", bodyText: "#4b3b86", foot: "#674ea7", footText: "#ffffff", border: "#b4a7d6" },
+  G:   { head: "#d9d2e9", headText: "#2b1a5e", body: "#ede9f4", bodyText: "#4b3b86", foot: "#674ea7", footText: "#ffffff", border: "#b4a7d6" },
 };
 
 // Couleur de la pilule « realizada » (tâche réalisée) — vert foncé, coche blanche.
