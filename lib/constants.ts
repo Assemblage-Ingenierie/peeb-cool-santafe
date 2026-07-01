@@ -66,7 +66,7 @@ export interface CardTono {
 
 export const CARD_TONOS: Record<ComponenteCode, CardTono> = {
   GP:  { head: "#434343", headText: "#ffffff", body: "#ededed", bodyText: "#444444", foot: "#1f1f1f", footText: "#ffffff", border: "#bdbdbd" },
-  EE:  { head: "#ffe599", headText: "#5b4708", body: "#fff8e1", bodyText: "#7a6100", foot: "#bf9000", footText: "#ffffff", border: "#f1c232" },
+  EE:  { head: "#fff2cc", headText: "#5b4708", body: "#fff8e1", bodyText: "#7a6100", foot: "#bf9000", footText: "#ffffff", border: "#f1c232" },
   AyS: { head: "#d9ead3", headText: "#274e13", body: "#eaf3e5", bodyText: "#3b6d11", foot: "#38761d", footText: "#ffffff", border: "#b6d7a8" },
   G:   { head: "#d9d2e9", headText: "#2b1a5e", body: "#ede9f4", bodyText: "#4b3b86", foot: "#674ea7", footText: "#ffffff", border: "#b4a7d6" },
 };
@@ -255,6 +255,14 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { id: "genero-pliegos-criterios", fase: "redaccion_pliegos", componente: "G", nombre: "Definición de criterios de evaluación específicos para valorar oferentes con políticas de género", comentario: "Impacto 9.5" },
   { id: "genero-pliegos-elm", fase: "redaccion_pliegos", componente: "G", nombre: "Revisión de documentos de licitación con respecto a Empresas Lideradas por Mujeres (ELM)", comentario: "Impacto 10" },
   { id: "genero-licitacion-evaluacion", fase: "licitacion", componente: "G", nombre: "Evaluación de ofertas con perspectiva de género", comentario: "Impacto 9 — relacionado con los criterios establecidos anteriormente" },
+
+  // --- Eficiencia energética (EE) — responsable por defecto ACEFE, salvo (AT). ---
+  { id: "ee-ep-auditoria", fase: "estudios_preliminares", componente: "EE", nombre: "Auditoría energética" },
+  { id: "ee-ep-actualizacion-modelo", fase: "estudios_preliminares", componente: "EE", nombre: "Actualización del modelo de simulación", responsable: "AT" },
+  { id: "ee-ep-aprobacion-criterio", fase: "estudios_preliminares", componente: "EE", nombre: "Aprobación del criterio PEEB Cool", responsable: "AT" },
+  { id: "ee-antep-comprobacion", fase: "anteproyecto", componente: "EE", nombre: "Comprobación del indicador PEEB Cool", responsable: "AT" },
+  { id: "ee-pe-comprobacion", fase: "proyecto_ejecutivo", componente: "EE", nombre: "Comprobación del indicador PEEB Cool", responsable: "AT" },
+  { id: "ee-pe-especificaciones", fase: "proyecto_ejecutivo", componente: "EE", nombre: "Revisión de especificaciones técnicas de los materiales y equipos relativos a la EE", responsable: "AT" },
 ];
 
 // ============================================================
