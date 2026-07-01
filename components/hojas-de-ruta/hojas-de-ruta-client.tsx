@@ -56,6 +56,16 @@ const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
 
+// Semestres du calendrier global (S2 2026 → S2 2030). La feuille « Proyecto
+// global » utilise cette décomposition en semestres au lieu des phases.
+const SEMESTRES: { code: string; label: string }[] = [];
+for (let anio = 2026; anio <= 2030; anio += 1) {
+  for (const s of [1, 2] as const) {
+    if (anio === 2026 && s === 1) continue; // démarre à S2 2026
+    SEMESTRES.push({ code: `s${s}-${anio}`, label: `S${s} ${anio}` });
+  }
+}
+
 // Colonnes de la feuille de route, par composante (gauche → droite). Chaque
 // colonne conserve sa place même vide (alignement des cartes par composante).
 // GP (Gestión de proyecto) à ajouter ici lorsque son contenu sera défini.
@@ -478,8 +488,22 @@ export function HojasDeRutaClient() {
           ref={boxRef}
           className="relative divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]"
         >
-          {FILAS_RUTA.map((fila) =>
-            fila.hito ? (
+          {seleccion === "global"
+            ? SEMESTRES.map((sem) => (
+                <div key={sem.code} className="flex items-center gap-4 p-4">
+                  <div className="w-28 shrink-0 self-center sm:w-44">
+                    <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+                      Semestre
+                    </div>
+                    <div className="mt-0.5 text-sm font-semibold leading-snug text-[var(--text)]">
+                      {sem.label}
+                    </div>
+                  </div>
+                  <div className="flex-1" />
+                </div>
+              ))
+            : FILAS_RUTA.map((fila) =>
+                fila.hito ? (
               <div
                 key={fila.code}
                 className="relative flex items-center justify-center gap-3 bg-[var(--app-bg)] px-12 py-3"
