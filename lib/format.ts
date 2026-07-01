@@ -3,8 +3,24 @@
 // pour les données manquantes (CDC : NULL → « — », jamais 0).
 // ============================================================
 
+import { DURACION_UNIDADES } from "./constants";
+
 /** Marqueur de donnée manquante (CDC). */
 export const GUION = "—";
+
+/**
+ * Durée estimée formatée (« 3 semanas », « 1 día »). `null`/valeur ≤ 0 → null
+ * (rien à afficher). L'unité prend le singulier/pluriel selon la quantité.
+ */
+export function formatDuracion(
+  valor: number | null | undefined,
+  unidad: string | null | undefined,
+): string | null {
+  if (valor == null || Number.isNaN(valor) || valor <= 0 || !unidad) return null;
+  const u = DURACION_UNIDADES.find((x) => x.code === unidad);
+  if (!u) return null;
+  return `${valor} ${valor === 1 ? u.singular : u.plural}`;
+}
 
 // Séparateur de milliers/millions : espace INSÉCABLE (U+00A0) → pas de coupure de
 // ligne au milieu d'un nombre. Décimales conservées avec la virgule (es-AR).

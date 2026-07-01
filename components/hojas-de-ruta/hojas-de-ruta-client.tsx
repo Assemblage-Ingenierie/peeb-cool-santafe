@@ -11,9 +11,11 @@ import {
   RESPONSABLE_DEFECTO,
   REQUISITOS_AYS,
   REQUISITOS_AYS_CODES,
+  DURACION_UNIDADES,
   refMgas,
   type ComponenteCode,
 } from "@/lib/constants";
+import { formatDuracion } from "@/lib/format";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
@@ -28,6 +30,7 @@ import {
   roadmapEliminarCarta,
   roadmapRestaurarOcultas,
   roadmapMoverCarta,
+  roadmapSetPlan,
 } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
@@ -120,6 +123,21 @@ interface Posicion {
   orden: number | null; // clé de tri dans la colonne ; null = ordre par défaut
 }
 
+// Planification d'une tâche (champs indépendants ; durée « estimée »).
+interface Plan {
+  fechaInicio: string | null;
+  fechaFin: string | null;
+  durValor: number | null;
+  durUnidad: string | null;
+}
+
+// Date ISO (YYYY-MM-DD) → DD/MM/YYYY (sans souci de fuseau : chaîne pure).
+function fmtFechaCorta(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
 interface Flecha {
   d: string;
   comp: ComponenteCode;
@@ -156,6 +174,7 @@ export function HojasDeRutaClient() {
   const [ocultas, setOcultas] = useState<Set<string>>(new Set()); // cartes par défaut masquées
   const [creadas, setCreadas] = useState<Record<string, ComponenteCode>>({}); // statKey → composante
   const [posiciones, setPosiciones] = useState<Record<string, Posicion>>({}); // fila/orden override
+  const [planes, setPlanes] = useState<Record<string, Plan>>({}); // planification par carte
 
   // Drag-drop vertical (composante fixe). `drag` = carte en cours ; `dropAt` =
   // emplacement d'insertion aimanté (fila × composante × index).
@@ -189,6 +208,7 @@ export function HojasDeRutaClient() {
     const ocu = new Set<string>();
     const cre: Record<string, ComponenteCode> = {};
     const pos: Record<string, Posicion> = {};
+    const pla: Record<string, Plan> = {};
     for (const r of snap.data.roadmapEstado) {
       const sk = `${r.feuille}::${r.tareaKey}`;
       if (r.tareaKey === ANO_KEY) {
@@ -207,6 +227,14 @@ export function HojasDeRutaClient() {
       if (r.oculta) ocu.add(sk);
       if (r.creada && r.componente) cre[sk] = r.componente as ComponenteCode;
       if (r.fila != null || r.orden != null) pos[sk] = { fila: r.fila, orden: r.orden };
+      if (r.fechaInicio != null || r.fechaFin != null || r.durValor != null || r.durUnidad != null) {
+        pla[sk] = {
+          fechaInicio: r.fechaInicio,
+          fechaFin: r.fechaFin,
+          durValor: r.durValor,
+          durUnidad: r.durUnidad,
+        };
+      }
     }
     setRealizadas(rz);
     setComentarios(com);
@@ -215,6 +243,7 @@ export function HojasDeRutaClient() {
     setOcultas(ocu);
     setCreadas(cre);
     setPosiciones(pos);
+    setPlanes(pla);
     setEnlaces(
       snap.data.roadmapEnlace.map((e) => ({
         from: `${e.feuille}::${e.desde}`,
@@ -632,6 +661,18 @@ export function HojasDeRutaClient() {
         onCancelLink={() => setLinkFrom(null)}
         creada={!!creadas[k]}
         onEliminar={() => eliminarCard(card, !!creadas[k])}
+        plan={planes[k]}
+        onPlan={(patch) => {
+          const base: Plan = planes[k] ?? {
+            fechaInicio: null,
+            fechaFin: null,
+            durValor: null,
+            durUnidad: null,
+          };
+          const merged: Plan = { ...base, ...patch };
+          setPlanes((prev) => ({ ...prev, [k]: merged }));
+          debouncedSave(`plan:${k}`, () => roadmapSetPlan(seleccion, card.key, merged).catch(() => {}));
+        }}
         arrastrable={esAdmin && !card.nota && !linking && !(panel !== null && panel.key === k)}
         arrastrando={drag?.key === k}
         onDragStart={(e) => onCardDragStart(e, card)}
@@ -962,6 +1003,8 @@ function TareaCard({
   onCancelLink,
   creada,
   onEliminar,
+  plan,
+  onPlan,
   arrastrable,
   arrastrando,
   onDragStart,
@@ -986,6 +1029,8 @@ function TareaCard({
   onCancelLink: () => void;
   creada: boolean;
   onEliminar: () => void;
+  plan: Plan | undefined;
+  onPlan: (patch: Partial<Plan>) => void;
   arrastrable: boolean;
   arrastrando: boolean;
   onDragStart: (e: DragEvent<HTMLElement>) => void;
@@ -1000,6 +1045,8 @@ function TareaCard({
   const comentarioEff = comentario || card.comentario || "";
   const editando = panel === "editar";
   const comentarioAbierto = panel === "comentario";
+  const inicioTexto = fmtFechaCorta(plan?.fechaInicio);
+  const durTexto = formatDuracion(plan?.durValor, plan?.durUnidad);
   const labelStyle = "block text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]";
   const inputStyle =
     "mt-0.5 w-full rounded border border-[var(--border)] p-1 text-[11px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]";
@@ -1090,6 +1137,15 @@ function TareaCard({
           </div>
         )}
 
+        {/* Planificación (inicio + duración estimada) — au-dessus du responsable. */}
+        <div className="flex items-center justify-center gap-2 border-t px-3 py-1 text-[10px] text-[var(--text-muted)]"
+          style={{ backgroundColor: "var(--app-bg)", borderColor: tono.border }}
+        >
+          <span>{inicioTexto ? `Inicio: ${inicioTexto}` : "Inicio: —"}</span>
+          <span aria-hidden="true">·</span>
+          <span>{durTexto ?? "—"}</span>
+        </div>
+
         <div
           className="px-3 py-1 text-center text-[11px] font-medium"
           style={{ backgroundColor: tono.foot, color: tono.footText }}
@@ -1125,6 +1181,41 @@ function TareaCard({
               onChange={(e) => onEdicion({ responsable: e.target.value })}
               className={inputStyle}
             />
+          </div>
+          <div>
+            <label className={labelStyle}>Fecha inicio</label>
+            <input
+              type="date"
+              value={plan?.fechaInicio ?? ""}
+              onChange={(e) => onPlan({ fechaInicio: e.target.value || null })}
+              className={inputStyle}
+            />
+          </div>
+          <div>
+            <label className={labelStyle}>Duración estimada</label>
+            <div className="mt-0.5 flex gap-1">
+              <input
+                type="number"
+                min={1}
+                value={plan?.durValor ?? ""}
+                onChange={(e) =>
+                  onPlan({ durValor: e.target.value === "" ? null : Number(e.target.value) })
+                }
+                className="w-14 rounded border border-[var(--border)] p-1 text-[11px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+              />
+              <select
+                value={plan?.durUnidad ?? ""}
+                onChange={(e) => onPlan({ durUnidad: e.target.value || null })}
+                className="flex-1 rounded border border-[var(--border)] p-1 text-[11px] text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]"
+              >
+                <option value="">—</option>
+                {DURACION_UNIDADES.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.plural}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="flex items-center justify-between pt-0.5">
             <button

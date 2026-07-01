@@ -188,6 +188,41 @@ export async function roadmapMoverCarta(
   if (error) throw new Error(error.message);
 }
 
+const UNIDADES_VALIDAS = new Set(["dia", "semana", "mes"]);
+
+/**
+ * Planification d'une tâche : fecha_inicio / fecha_fin / durée estimée
+ * (dur_valor + dur_unidad). Champs INDÉPENDANTS ; seuls ceux présents dans
+ * `patch` sont écrits (upsert partiel). Vide/null → NULL.
+ */
+export async function roadmapSetPlan(
+  feuille: string,
+  tareaKey: string,
+  patch: {
+    fechaInicio?: string | null;
+    fechaFin?: string | null;
+    durValor?: number | null;
+    durUnidad?: string | null;
+  },
+): Promise<void> {
+  assertAdmin();
+  assertFeuille(feuille);
+  assertKey(tareaKey);
+  const row: Record<string, unknown> = { feuille, tarea_key: tareaKey };
+  if ("fechaInicio" in patch) row.fecha_inicio = nullable(patch.fechaInicio);
+  if ("fechaFin" in patch) row.fecha_fin = nullable(patch.fechaFin);
+  if ("durValor" in patch) {
+    const v = patch.durValor;
+    row.dur_valor = v == null || Number.isNaN(v) || v <= 0 ? null : Math.trunc(v);
+  }
+  if ("durUnidad" in patch) {
+    row.dur_unidad = patch.durUnidad && UNIDADES_VALIDAS.has(patch.durUnidad) ? patch.durUnidad : null;
+  }
+  const sb = createServiceClient();
+  const { error } = await sb.from(ESTADO).upsert(row, { onConflict: "feuille,tarea_key" });
+  if (error) throw new Error(error.message);
+}
+
 /** Restaure toutes les cartes par défaut masquées d'une feuille. */
 export async function roadmapRestaurarOcultas(feuille: string): Promise<void> {
   assertAdmin();

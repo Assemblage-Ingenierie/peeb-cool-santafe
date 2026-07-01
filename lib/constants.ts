@@ -262,6 +262,19 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { id: "ee-pe-especificaciones", fase: "proyecto_ejecutivo", componente: "EE", nombre: "Revisión de especificaciones técnicas de los materiales y equipos relativos a la EE", responsable: "AT" },
 ];
 
+// Unités de « duración estimada » (planification des tâches/fases). Source unique
+// des libellés (singulier/pluriel) pour le menu déroulant día / semana / mes.
+export interface DuracionUnidad {
+  code: string; // stocké en DB (dur_unidad)
+  singular: string;
+  plural: string;
+}
+export const DURACION_UNIDADES: DuracionUnidad[] = [
+  { code: "dia", singular: "día", plural: "días" },
+  { code: "semana", singular: "semana", plural: "semanas" },
+  { code: "mes", singular: "mes", plural: "meses" },
+];
+
 // ============================================================
 // Référentiels de gestion (CDC §3.2) — codes alignés sur les tables
 // peebcoolsf_estados / _fases / _tipo_linea (seed). Source unique des

@@ -148,6 +148,10 @@ export interface SnapshotRoadmapEstado {
   orden: number | null; // clé de tri dans la colonne (null = ordre par défaut)
   componente: string | null; // composante d'une carte créée (null = carte par défaut)
   creada: boolean; // true = carte ajoutée à la main (tarea_key = UID)
+  fechaInicio: string | null; // planification (date ISO) — indépendante
+  fechaFin: string | null; // planification (date ISO) — indépendante (saisie en Admin)
+  durValor: number | null; // durée estimée : quantité
+  durUnidad: string | null; // durée estimée : unité (dia|semana|mes)
 }
 
 // Hojas de ruta — dépendances (flèches) persistées (table peebcoolsf_roadmap_enlace).
@@ -297,7 +301,7 @@ export async function getSnapshot(): Promise<Snapshot> {
     sb
       .from("peebcoolsf_roadmap_estado")
       .select(
-        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada",
+        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
       ),
     sb.from("peebcoolsf_roadmap_enlace").select("feuille, desde, hacia"),
   ]);
@@ -371,6 +375,10 @@ export async function getSnapshot(): Promise<Snapshot> {
       orden: number | null;
       componente: string | null;
       creada: boolean | null;
+      fecha_inicio: string | null;
+      fecha_fin: string | null;
+      dur_valor: number | null;
+      dur_unidad: string | null;
     }[]
   ).map((r) => ({
     feuille: r.feuille,
@@ -385,6 +393,10 @@ export async function getSnapshot(): Promise<Snapshot> {
     orden: r.orden,
     componente: r.componente,
     creada: !!r.creada,
+    fechaInicio: r.fecha_inicio,
+    fechaFin: r.fecha_fin,
+    durValor: r.dur_valor,
+    durUnidad: r.dur_unidad,
   }));
 
   const roadmapEnlace: SnapshotRoadmapEnlace[] = (
