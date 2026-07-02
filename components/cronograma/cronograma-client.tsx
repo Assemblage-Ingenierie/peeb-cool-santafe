@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { getComponente, type ComponenteCode } from "@/lib/constants";
+import { getComponente, FASES, type ComponenteCode } from "@/lib/constants";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useComponentFilters } from "@/components/filter-context";
 
@@ -70,6 +70,8 @@ interface Barra {
   extra?: number; // trimestres supplémentaires (hachurés) jusqu'à fecha fin
   color: string;
   etiqueta?: string;
+  dentro?: boolean; // étiquette À L'INTÉRIEUR de la barre, tronquée « … » si trop longue
+  etiquetaColor?: string; // couleur de l'étiquette interne (contraste)
 }
 interface Fila {
   label: string;
@@ -139,22 +141,28 @@ const ACTIVIDADES: { comp: ComponenteCode; titulo: string; filas: Fila[] }[] = [
   },
 ];
 
-// Section « une ligne par sous-projet » : fases en bleus progressifs (inventé).
+// Fases affichées dans le cronograma (chronologiques, hors jalon/général).
+const FASES_CRONO = FASES.filter((f) => f.code !== "general" && f.code !== "no_objecion_afd");
+const ANCHOS_FASE = [2, 2, 2, 2, 3, 4]; // durées inventées (trimestres) par fase
+
+// Section « une ligne par sous-projet » : fases en bleus progressifs, avec le nom
+// de la fase écrit sur la bande (tronqué « … » si pas la place).
 function seccionSubproyectos(nombres: string[]): Seccion {
-  const FASES_DEMO = [
-    { plena: 2 },
-    { plena: 2 },
-    { plena: 2 },
-    { plena: 3 },
-    { plena: 4 },
-  ];
   return {
     titulo: "Sub­proyectos — fases",
     filas: nombres.map((nombre, i) => {
       let cursor = 1 + (i % 3); // décalage inventé par sous-projet
-      const barras: Barra[] = FASES_DEMO.map((f, j) => {
-        const b: Barra = { desde: cursor, plena: f.plena, color: BLUES[j % BLUES.length] };
-        cursor += f.plena;
+      const barras: Barra[] = FASES_CRONO.map((f, j) => {
+        const plena = ANCHOS_FASE[j % ANCHOS_FASE.length];
+        const b: Barra = {
+          desde: cursor,
+          plena,
+          color: BLUES[j % BLUES.length],
+          etiqueta: f.nombre,
+          dentro: true,
+          etiquetaColor: j >= 3 ? "#ffffff" : "#1f2733",
+        };
+        cursor += plena;
         return b;
       });
       return { label: nombre, barras };
@@ -361,7 +369,22 @@ export function CronogramaClient() {
                               }}
                             />
                           ) : null}
-                          {b.etiqueta ? (
+                          {b.etiqueta && b.dentro ? (
+                            <span
+                              className="pointer-events-none absolute block truncate px-1 text-[10px] font-medium"
+                              style={{
+                                left,
+                                width: Math.max(0, rPlena - left),
+                                top: 5,
+                                height: ROW_H - 10,
+                                lineHeight: `${ROW_H - 10}px`,
+                                color: b.etiquetaColor ?? "#1f2733",
+                              }}
+                              title={b.etiqueta}
+                            >
+                              {b.etiqueta}
+                            </span>
+                          ) : b.etiqueta ? (
                             <span
                               className="pointer-events-none absolute whitespace-nowrap text-[11px] leading-none text-[var(--text)]"
                               style={{ left: left + 4, top: ROW_H / 2 - 5 }}
