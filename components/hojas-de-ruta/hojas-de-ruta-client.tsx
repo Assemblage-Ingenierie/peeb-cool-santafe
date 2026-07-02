@@ -664,7 +664,7 @@ export function HojasDeRutaClient() {
           {cards.map((card, i) => (
             <Fragment key={card.key}>
               {showAt === i && <DropIndicator />}
-              <div className="flex items-stretch">
+              <div className="flex items-stretch gap-1.5">
                 <div className="w-full max-w-[264px] shrink-0">{renderCard(card)}</div>
                 <ComentariosPanel comp={compSel} texto={comentarioDe(card)} />
               </div>
@@ -938,11 +938,11 @@ export function HojasDeRutaClient() {
 // composante ; corps = commentaire de la carte (ou « — »).
 function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string }) {
   const tono = CARD_TONOS[comp];
-  // Collé à la carte (bord gauche sans arrondi ni bordure) ; polices et hauteur de
-  // bandeau alignées sur la carte (en-tête 12.5px, corps 11px).
+  // Cadre complet (contour entier), à peine détaché de la carte (écart minime) ;
+  // polices et hauteur de bandeau alignées sur la carte (en-tête 12.5px, corps 11px).
   return (
     <div
-      className="flex-1 overflow-hidden rounded-md rounded-l-none border border-l-0"
+      className="flex-1 overflow-hidden rounded-md border"
       style={{ borderColor: tono.border }}
     >
       <div
