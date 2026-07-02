@@ -9,24 +9,27 @@ interface ComponentFiltersProps {
 }
 
 /**
- * Filtres par composante (CDC §2.1) : libellé « Filtrar » + 4 boutons GP/EE/AyS/G.
- * Persistants dans le header sur toutes les pages. État actif/inactif uniquement —
- * l'effet du filtre sur le contenu sera implémenté plus tard.
- * Actif = rempli de la couleur composante ; inactif = neutre + pastille de couleur.
+ * Vista / Rol par composante : libellé + 4 boutons GP/EE/AyS/G (header, toutes pages).
+ *  • GP = « Todo » : tout visible. Actif par défaut ; grisé dès qu'une composante
+ *    est cochée (c'est lui qui réinitialise l'affichage complet).
+ *  • EE / AyS / G : n'affiche que la (les) composante(s) cochée(s).
+ * Bouton actif = texte blanc sur fond foncé + pastille de couleur ; inactif = neutre.
  */
 export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) {
+  const esTodo = selected.size === COMPONENTES.length;
   return (
     <div className="flex items-center gap-2">
       <span className="hidden text-xs font-medium uppercase tracking-wide text-[var(--text-muted)] sm:inline">
-        Filtrar
+        Vista / Rol
       </span>
       <div
         className="flex flex-wrap items-center gap-1"
         role="group"
-        aria-label="Filtrar por componente"
+        aria-label="Vista por componente"
       >
         {COMPONENTES.map((c) => {
-          const on = selected.has(c.code);
+          // GP actif = mode « Todo » ; autres actifs = cochés hors mode Todo.
+          const on = c.code === "GP" ? esTodo : !esTodo && selected.has(c.code);
           return (
             <button
               key={c.code}
@@ -36,18 +39,16 @@ export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) 
               onClick={() => onToggle(c.code)}
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                !on &&
-                  "border border-[var(--border)] bg-[var(--app-bg)] text-[var(--text-muted)] hover:text-[var(--text)]",
+                on
+                  ? "bg-[var(--text)] text-white"
+                  : "border border-[var(--border)] bg-[var(--app-bg)] text-[var(--text-muted)] hover:text-[var(--text)]",
               )}
-              style={on ? { backgroundColor: c.color, color: c.onColor } : undefined}
             >
-              {!on && (
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: c.color }}
-                  aria-hidden="true"
-                />
-              )}
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: c.color }}
+                aria-hidden="true"
+              />
               {c.code}
             </button>
           );

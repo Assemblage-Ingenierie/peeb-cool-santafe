@@ -12,17 +12,25 @@ import { FilterProvider } from "./filter-context";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  // Filtres composante : tous actifs par défaut (= aucune restriction), comme la capture.
+  // Vista / Rol : le Set des composantes visibles.
+  //  • GP = « Todo » (réinitialise → tout visible). Actif par défaut.
+  //  • EE / AyS / G : vue d'une (ou plusieurs) composante(s). Depuis « Todo »,
+  //    un clic passe à cette composante seule ; sinon on ajoute/retire ; vide → Todo.
   const [filters, setFilters] = useState<Set<string>>(
     () => new Set(COMPONENTES.map((c) => c.code)),
   );
 
   const toggleFilter = useCallback((code: string) => {
     setFilters((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
+      const todas = COMPONENTES.map((c) => c.code);
+      if (code === "GP") return new Set(todas); // GP = reset → todo visible
+      const esTodo = prev.size === todas.length;
+      const next = esTodo ? new Set<string>([code]) : new Set(prev);
+      if (!esTodo) {
+        if (next.has(code)) next.delete(code);
+        else next.add(code);
+      }
+      return next.size === 0 ? new Set(todas) : next;
     });
   }, []);
 

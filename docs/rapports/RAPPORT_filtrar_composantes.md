@@ -36,7 +36,18 @@ Application :
 - `npm run lint` + `tsc --noEmit` verts. Aucune écriture DB.
 
 ## Notes
-- Défaut : toutes les composantes actives (aucune restriction). Désactiver un bouton
-  masque sa composante. Tout désactivé → rien (sauf éléments sans composante).
 - Règle « sans composante = toujours visible » appliquée partout (documentos/eventos
   sans composante, « Otras medidas »). Ajustable si tu préfères les masquer en vue filtrée.
+
+## Ajustes (retour utilisateur)
+- **En-têtes de medidas** : bar de couleur en **plein-bord** (flush haut/gauche/droite,
+  plus de marge blanche) — bloc `overflow-hidden`, en-tête sans arrondi ni marge, liste
+  avec padding.
+- **Modèle « Vista / Rol »** (renommage de « Filtrar ») :
+  - **GP = Todo** : tout visible ; **actif par défaut**. Clic sur GP = réinitialise
+    (tout réapparaît). Grisé dès qu'une autre composante est cochée.
+  - **EE / AyS / G** : clic → n'affiche que cette (ces) composante(s) — depuis « Todo »,
+    un clic passe à la composante seule ; clics suivants ajoutent/retirent ; vide → Todo.
+  - Bouton **actif = texte blanc sur fond foncé** (+ pastille de couleur) ; inactif = gris.
+  Logique dans `app-shell.tsx` (`toggleFilter`), rendu dans `component-filters.tsx`.
+  Les pages sont inchangées (elles lisent le Set de composantes visibles).

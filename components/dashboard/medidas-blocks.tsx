@@ -63,14 +63,14 @@ export function MedidasBlocks({ medidas }: { medidas: SnapshotMedida[] }) {
       {grupos.map((g) => {
         const c = g.comp ? getComponente(g.comp) : undefined;
         return (
-        <div key={g.titulo} className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div key={g.titulo} className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
           <h2
-            className="rounded-md px-3 py-1.5 text-sm font-semibold text-[var(--text)]"
+            className="px-4 py-2 text-sm font-semibold text-[var(--text)]"
             style={c ? { backgroundColor: c.color, color: c.onColor } : { backgroundColor: "var(--app-bg)" }}
           >
             {g.titulo}
           </h2>
-          <ul className="mt-2 divide-y divide-[var(--border)]">
+          <ul className="divide-y divide-[var(--border)] px-4 pb-3 pt-1">
             {g.items.map(({ meta, row }) => (
               <li key={meta.code} className="flex items-start gap-2.5 py-2.5 first:pt-1">
                 <MedidaIcon code={meta.code} size={22} className="mt-0.5 shrink-0" />
