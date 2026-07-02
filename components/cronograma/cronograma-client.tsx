@@ -83,6 +83,17 @@ interface Seccion {
   filas: Fila[];
 }
 
+// Numéro de semaine ISO (1..53).
+function isoWeek(ms: number): number {
+  const d = new Date(ms);
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = (date.getUTCDay() + 6) % 7; // lundi = 0
+  date.setUTCDate(date.getUTCDate() - day + 3); // jeudi de la semaine
+  const firstThu = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const diff = (date.getTime() - firstThu.getTime()) / 86400000;
+  return 1 + Math.round((diff - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
+}
+
 // Index de trimestre (0..19) → ms du début de ce trimestre.
 function qMs(qi: number): number {
   const y = ANIO_INI + Math.floor(qi / 4);
@@ -240,6 +251,43 @@ export function CronogramaClient() {
     anios.push({ anio: y, left: l, width: r - l });
   }
 
+  // Segments d'unités (T1-4 / mois) positionnés par date.
+  const segsUnidad = unidades.map((u, i) => {
+    const l = x(u.start);
+    const r = x(unidades[i + 1]?.start ?? END);
+    return { key: u.start, left: l, width: r - l, label: u.label };
+  });
+
+  // Vue semana : frise des mois (regroupement) + numéros de semaine.
+  const enSemana = gran === "semana";
+  const segsSemana = enSemana
+    ? unidades.map((u, i) => ({
+        key: u.start,
+        left: x(u.start),
+        width: x(unidades[i + 1]?.start ?? END) - x(u.start),
+        num: isoWeek(u.start),
+      }))
+    : [];
+  const segsMes: { key: number; left: number; width: number; label: string }[] = [];
+  if (enSemana) {
+    let cur: { y: number; m: number; startMs: number } | null = null;
+    for (const u of unidades) {
+      const d = new Date(u.start);
+      if (!cur || cur.y !== d.getFullYear() || cur.m !== d.getMonth()) {
+        if (cur) {
+          const l = x(cur.startMs);
+          segsMes.push({ key: cur.startMs, left: l, width: x(u.start) - l, label: MES_ABBR[cur.m] });
+        }
+        cur = { y: d.getFullYear(), m: d.getMonth(), startMs: u.start };
+      }
+    }
+    if (cur) {
+      const l = x(cur.startMs);
+      segsMes.push({ key: cur.startMs, left: l, width: x(END) - l, label: MES_ABBR[cur.m] });
+    }
+  }
+  const headH = enSemana ? 20 + 18 + 16 : 40;
+
   const gridStyle = {
     backgroundImage: `repeating-linear-gradient(90deg, transparent 0 ${UNIT_W[gran] - 1}px, var(--border) ${UNIT_W[gran] - 1}px ${UNIT_W[gran]}px)`,
   };
@@ -311,28 +359,54 @@ export function CronogramaClient() {
               aria-hidden="true"
             />
           )}
-          {/* En-tête : années + unités */}
+          {/* En-tête : années + (mois/semaines en vue semana, sinon T1-4/mois). */}
           <div className="flex border-b border-[var(--border)]">
             <div className="sticky left-0 z-10 shrink-0 bg-[var(--surface)]" style={{ width: LABEL_W }} />
-            <div className="relative" style={{ width: totalW, height: 40 }}>
+            <div className="relative" style={{ width: totalW, height: headH }}>
+              {/* Années */}
               {anios.map((a) => (
                 <div
                   key={a.anio}
-                  className="absolute top-0 border-l border-[var(--border)] text-center text-xs font-semibold text-[var(--text)]"
-                  style={{ left: a.left, width: a.width }}
+                  className="absolute top-0 flex items-center justify-center border-l border-[var(--border)] text-xs font-semibold text-[var(--text)]"
+                  style={{ left: a.left, width: a.width, height: 20 }}
                 >
-                  <div className="py-1">{a.anio}</div>
-                  <div className="flex border-t border-[var(--border)] text-[10px] font-medium text-[var(--text-muted)]">
-                    {unidades
-                      .filter((u) => u.anio === a.anio)
-                      .map((u) => (
-                        <div key={u.start} className="flex-1 border-l border-[var(--border)] first:border-l-0">
-                          {u.label}
-                        </div>
-                      ))}
-                  </div>
+                  {a.anio}
                 </div>
               ))}
+              {enSemana ? (
+                <>
+                  {/* Frise des mois */}
+                  {segsMes.map((m) => (
+                    <div
+                      key={m.key}
+                      className="absolute overflow-hidden truncate border-l border-t border-[var(--border)] px-1 text-[10px] font-medium text-[var(--text-muted)]"
+                      style={{ left: m.left, width: m.width, top: 20, height: 18, lineHeight: "18px" }}
+                    >
+                      {m.width > 16 ? m.label : ""}
+                    </div>
+                  ))}
+                  {/* Numéros de semaine */}
+                  {segsSemana.map((w) => (
+                    <div
+                      key={w.key}
+                      className="absolute overflow-hidden border-l border-t border-[var(--border)] text-center text-[9px] text-[var(--text-muted)]"
+                      style={{ left: w.left, width: w.width, top: 38, height: 16, lineHeight: "16px" }}
+                    >
+                      {w.width >= 11 ? w.num : ""}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                segsUnidad.map((u) => (
+                  <div
+                    key={u.key}
+                    className="absolute border-l border-t border-[var(--border)] text-center text-[10px] font-medium text-[var(--text-muted)]"
+                    style={{ left: u.left, width: u.width, top: 20, height: 20, lineHeight: "20px" }}
+                  >
+                    {u.label}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
