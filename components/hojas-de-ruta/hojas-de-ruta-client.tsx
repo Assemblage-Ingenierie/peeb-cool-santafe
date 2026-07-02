@@ -946,7 +946,7 @@ function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string
       style={{ borderColor: tono.border }}
     >
       <div
-        className="px-3 py-2 text-[12.5px] font-semibold leading-snug"
+        className="px-3 py-1.5 text-[12.5px] font-semibold leading-snug"
         style={{ backgroundColor: tono.foot, color: tono.footText }}
       >
         Comentarios
