@@ -20,18 +20,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     () => new Set(COMPONENTES.map((c) => c.code)),
   );
 
+  // Sélection unique : GP = « Todo » (tout visible) ; une composante = elle seule.
   const toggleFilter = useCallback((code: string) => {
-    setFilters((prev) => {
-      const todas = COMPONENTES.map((c) => c.code);
-      if (code === "GP") return new Set(todas); // GP = reset → todo visible
-      const esTodo = prev.size === todas.length;
-      const next = esTodo ? new Set<string>([code]) : new Set(prev);
-      if (!esTodo) {
-        if (next.has(code)) next.delete(code);
-        else next.add(code);
-      }
-      return next.size === 0 ? new Set(todas) : next;
-    });
+    setFilters(() =>
+      code === "GP" ? new Set(COMPONENTES.map((c) => c.code)) : new Set([code]),
+    );
   }, []);
 
   return (

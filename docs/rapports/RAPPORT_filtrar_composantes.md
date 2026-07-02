@@ -46,8 +46,9 @@ Application :
 - **Modèle « Vista / Rol »** (renommage de « Filtrar ») :
   - **GP = Todo** : tout visible ; **actif par défaut**. Clic sur GP = réinitialise
     (tout réapparaît). Grisé dès qu'une autre composante est cochée.
-  - **EE / AyS / G** : clic → n'affiche que cette (ces) composante(s) — depuis « Todo »,
-    un clic passe à la composante seule ; clics suivants ajoutent/retirent ; vide → Todo.
-  - Bouton **actif = texte blanc sur fond foncé** (+ pastille de couleur) ; inactif = gris.
+  - **EE / AyS / G** : clic → n'affiche que cette composante.
+  - **Sélection UNIQUE** : un seul bouton coché à la fois (GP ou une composante).
+  - Bouton **coché = texte blanc sur fond foncé** ; **non coché = rempli de la couleur
+    de sa composante** (pas de gris).
   Logique dans `app-shell.tsx` (`toggleFilter`), rendu dans `component-filters.tsx`.
   Les pages sont inchangées (elles lisent le Set de composantes visibles).

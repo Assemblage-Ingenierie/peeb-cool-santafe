@@ -10,10 +10,9 @@ interface ComponentFiltersProps {
 
 /**
  * Vista / Rol par composante : libellé + 4 boutons GP/EE/AyS/G (header, toutes pages).
- *  • GP = « Todo » : tout visible. Actif par défaut ; grisé dès qu'une composante
- *    est cochée (c'est lui qui réinitialise l'affichage complet).
- *  • EE / AyS / G : n'affiche que la (les) composante(s) cochée(s).
- * Bouton actif = texte blanc sur fond foncé + pastille de couleur ; inactif = neutre.
+ * Sélection UNIQUE : GP = « Todo » (tout visible, actif par défaut) ; une composante
+ * n'affiche qu'elle-même. Bouton coché = texte blanc sur fond foncé ; bouton non coché
+ * = rempli de la couleur de sa composante.
  */
 export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) {
   const esTodo = selected.size === COMPONENTES.length;
@@ -28,7 +27,7 @@ export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) 
         aria-label="Vista por componente"
       >
         {COMPONENTES.map((c) => {
-          // GP actif = mode « Todo » ; autres actifs = cochés hors mode Todo.
+          // Sélection unique : GP coché = mode « Todo » ; sinon la composante seule.
           const on = c.code === "GP" ? esTodo : !esTodo && selected.has(c.code);
           return (
             <button
@@ -38,17 +37,11 @@ export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) 
               title={c.nombre}
               onClick={() => onToggle(c.code)}
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                on
-                  ? "bg-[var(--text)] text-white"
-                  : "border border-[var(--border)] bg-[var(--app-bg)] text-[var(--text-muted)] hover:text-[var(--text)]",
+                "inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                on && "bg-[var(--text)] text-white",
               )}
+              style={on ? undefined : { backgroundColor: c.color, color: c.onColor }}
             >
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: c.color }}
-                aria-hidden="true"
-              />
               {c.code}
             </button>
           );
