@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { getComponente, FASES, type ComponenteCode } from "@/lib/constants";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
@@ -225,6 +225,13 @@ export function CronogramaClient() {
   const totalW = unidades.length * UNIT_W[gran];
   const x = (ms: number) => ((ms - START) / SPAN) * totalW;
 
+  // Repère « hoy » (barre verticale rouge). Calculé APRÈS montage (client) pour
+  // éviter un décalage d'hydratation (new Date() diffère SSR/client).
+  const [hoyMs, setHoyMs] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) pour éviter le décalage d'hydratation
+  useEffect(() => setHoyMs(Date.now()), []);
+  const hoyEnRango = hoyMs != null && hoyMs >= START && hoyMs < END;
+
   // Groupes d'années (en-tête supérieur).
   const anios: { anio: number; left: number; width: number }[] = [];
   for (let y = ANIO_INI; y <= ANIO_FIN; y += 1) {
@@ -295,7 +302,15 @@ export function CronogramaClient() {
 
       {/* Gantt */}
       <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-        <div style={{ width: LABEL_W + totalW }}>
+        <div className="relative" style={{ width: LABEL_W + totalW }}>
+          {/* Repère « hoy » : barre verticale rouge sur toute la hauteur. */}
+          {hoyEnRango && hoyMs != null && (
+            <div
+              className="pointer-events-none absolute bottom-0 top-0 z-20 w-0.5 bg-[var(--accent)]"
+              style={{ left: LABEL_W + x(hoyMs) }}
+              aria-hidden="true"
+            />
+          )}
           {/* En-tête : années + unités */}
           <div className="flex border-b border-[var(--border)]">
             <div className="sticky left-0 z-10 shrink-0 bg-[var(--surface)]" style={{ width: LABEL_W }} />
