@@ -48,7 +48,14 @@ Application :
     (tout réapparaît). Grisé dès qu'une autre composante est cochée.
   - **EE / AyS / G** : clic → n'affiche que cette composante.
   - **Sélection UNIQUE** : un seul bouton coché à la fois (GP ou une composante).
-  - Bouton **coché = texte blanc sur fond foncé** ; **non coché = rempli de la couleur
-    de sa composante** (pas de gris).
+  - Bouton **coché = texte blanc sur fond rouge (accent `#E30513`)** ; **non coché =
+    rempli de la couleur de sa composante** (pas de gris).
   Logique dans `app-shell.tsx` (`toggleFilter`), rendu dans `component-filters.tsx`.
-  Les pages sont inchangées (elles lisent le Set de composantes visibles).
+
+## Commentaires des cartes (Hojas de ruta)
+- Le commentaire n'apparaît **plus sur la carte**.
+- **Vue « Todo » (GP)** : commentaires masqués.
+- **Vue par composante** (une seule cochée) : chaque carte est accompagnée d'un
+  **panneau latéral « Comentarios »** (en-tête de la couleur de la composante) qui
+  affiche son commentaire. `columnasGrid` bascule en layout carte + panneau ;
+  composant `ComentariosPanel` dans `hojas-de-ruta-client.tsx`.

@@ -11,7 +11,7 @@ interface ComponentFiltersProps {
 /**
  * Vista / Rol par composante : libellé + 4 boutons GP/EE/AyS/G (header, toutes pages).
  * Sélection UNIQUE : GP = « Todo » (tout visible, actif par défaut) ; une composante
- * n'affiche qu'elle-même. Bouton coché = texte blanc sur fond foncé ; bouton non coché
+ * n'affiche qu'elle-même. Bouton coché = texte blanc sur fond rouge (accent) ; bouton non coché
  * = rempli de la couleur de sa composante.
  */
 export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) {
@@ -38,7 +38,7 @@ export function ComponentFilters({ selected, onToggle }: ComponentFiltersProps) 
               onClick={() => onToggle(c.code)}
               className={cn(
                 "inline-flex items-center rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
-                on && "bg-[var(--text)] text-white",
+                on && "bg-[var(--accent)] text-white",
               )}
               style={on ? undefined : { backgroundColor: c.color, color: c.onColor }}
             >

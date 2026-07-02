@@ -628,12 +628,54 @@ export function HojasDeRutaClient() {
     );
   }
 
-  // Grille des 3 colonnes (EE / Género / AyS) d'une fila (phase ou semestre),
-  // partagée par les sous-projets et « Proyecto global ». Bouton d'ajout (admin).
+  // Commentaire effectif d'une carte (note admin persistée, sinon défaut).
+  function comentarioDe(card: CardModel): string {
+    return comentarios[`${seleccion}::${card.key}`] || card.comentario || "";
+  }
+
+  const botonAnadir = (filaCode: string, comp: ComponenteCode) =>
+    esAdmin ? (
+      <button
+        type="button"
+        onClick={() => addCard(filaCode, comp)}
+        className="w-full max-w-[264px] rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--focus)] hover:text-[var(--text)]"
+      >
+        + Añadir tarjeta
+      </button>
+    ) : null;
+
+  // Grille des colonnes (EE / Género / AyS) d'une fila (phase ou semestre).
+  // Vue « Todo » (GP) : colonnes côte à côte, sans commentaire sur les cartes.
+  // Vue par composante (une seule cochée) : cartes + panneau latéral « Comentarios ».
   function columnasGrid(filaCode: string) {
-    // Filtre par composante active (boutons « Filtrar »). Colonnes réduites en
-    // conséquence ; la grille s'ajuste au nombre de composantes visibles.
     const cols = COLUMNAS.filter((c) => filtros.has(c));
+    // Vue filtrée sur UNE composante → cartes accompagnées du panneau Comentarios.
+    const compSel = cols.length === 1 ? cols[0] : null;
+    if (compSel) {
+      const cards = cartasColumna(filaCode, compSel);
+      const activo = drag?.comp === compSel;
+      const showAt = dropAt && dropAt.fila === filaCode && dropAt.comp === compSel ? dropAt.index : -1;
+      return (
+        <div
+          className="flex flex-1 flex-col gap-2.5"
+          onDragOver={activo ? (e) => onColumnaDragOver(e, filaCode, compSel, cards) : undefined}
+          onDrop={activo ? (e) => onColumnaDrop(e, filaCode, compSel, cards) : undefined}
+        >
+          {cards.map((card, i) => (
+            <Fragment key={card.key}>
+              {showAt === i && <DropIndicator />}
+              <div className="flex items-stretch gap-3">
+                <div className="w-full max-w-[264px] shrink-0">{renderCard(card)}</div>
+                <ComentariosPanel comp={compSel} texto={comentarioDe(card)} />
+              </div>
+            </Fragment>
+          ))}
+          {showAt === cards.length && <DropIndicator />}
+          {botonAnadir(filaCode, compSel)}
+        </div>
+      );
+    }
+    // Vue « Todo » : grille multi-colonnes ajustée au nombre de composantes.
     return (
       <div
         className="grid flex-1 items-start gap-x-4"
@@ -641,7 +683,7 @@ export function HojasDeRutaClient() {
       >
         {cols.map((comp) => {
           const cards = cartasColumna(filaCode, comp);
-          const activo = drag?.comp === comp; // composante fixe : drop dans la même colonne
+          const activo = drag?.comp === comp;
           const showAt =
             dropAt && dropAt.fila === filaCode && dropAt.comp === comp ? dropAt.index : -1;
           return (
@@ -658,15 +700,7 @@ export function HojasDeRutaClient() {
                 </Fragment>
               ))}
               {showAt === cards.length && <DropIndicator />}
-              {esAdmin && (
-                <button
-                  type="button"
-                  onClick={() => addCard(filaCode, comp)}
-                  className="w-full max-w-[264px] rounded-md border border-dashed border-[var(--border)] px-2 py-1.5 text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:border-[var(--focus)] hover:text-[var(--text)]"
-                >
-                  + Añadir tarjeta
-                </button>
-              )}
+              {botonAnadir(filaCode, comp)}
             </div>
           );
         })}
@@ -900,6 +934,25 @@ export function HojasDeRutaClient() {
   );
 }
 
+// Panneau latéral « Comentarios » (vue par composante). En-tête coloré de la
+// composante ; corps = commentaire de la carte (ou « — »).
+function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string }) {
+  const tono = CARD_TONOS[comp];
+  return (
+    <div className="flex-1 self-start overflow-hidden rounded-md border" style={{ borderColor: tono.border }}>
+      <div
+        className="px-3 py-2 text-sm font-semibold"
+        style={{ backgroundColor: tono.foot, color: tono.footText }}
+      >
+        Comentarios
+      </div>
+      <div className="min-h-[3rem] px-3 py-2 text-sm leading-snug text-[var(--text)]">
+        {texto ? texto : <span className="text-[var(--text-muted)]">—</span>}
+      </div>
+    </div>
+  );
+}
+
 function RutaButton({
   activo,
   onClick,
@@ -1071,14 +1124,8 @@ function TareaCard({
           </div>
         )}
 
-        {comentarioEff && (
-          <div
-            className="border-t px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]"
-            style={{ backgroundColor: "var(--app-bg)", borderColor: tono.border }}
-          >
-            {comentarioEff}
-          </div>
-        )}
+        {/* Le commentaire n'est plus affiché sur la carte : masqué en vue « Todo »,
+            montré dans le panneau latéral « Comentarios » en vue par composante. */}
 
         {/* Planificación (inicio + duración estimada) — au-dessus du responsable. */}
         <div className="flex items-center justify-center gap-2 border-t px-3 py-1 text-[10px] text-[var(--text-muted)]"
