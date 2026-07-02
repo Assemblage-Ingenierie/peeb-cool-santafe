@@ -24,6 +24,11 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M11 6h9M11 12h9M11 18h6" />
     </>
   ),
+  cronograma: (
+    <>
+      <path d="M4 6.5h8M9 12h9M6 17.5h7" />
+    </>
+  ),
   calendario: (
     <>
       <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
