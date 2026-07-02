@@ -664,7 +664,7 @@ export function HojasDeRutaClient() {
           {cards.map((card, i) => (
             <Fragment key={card.key}>
               {showAt === i && <DropIndicator />}
-              <div className="flex items-stretch gap-3">
+              <div className="flex items-stretch">
                 <div className="w-full max-w-[264px] shrink-0">{renderCard(card)}</div>
                 <ComentariosPanel comp={compSel} texto={comentarioDe(card)} />
               </div>
@@ -938,15 +938,20 @@ export function HojasDeRutaClient() {
 // composante ; corps = commentaire de la carte (ou « — »).
 function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string }) {
   const tono = CARD_TONOS[comp];
+  // Collé à la carte (bord gauche sans arrondi ni bordure) ; polices et hauteur de
+  // bandeau alignées sur la carte (en-tête 12.5px, corps 11px).
   return (
-    <div className="flex-1 self-start overflow-hidden rounded-md border" style={{ borderColor: tono.border }}>
+    <div
+      className="flex-1 overflow-hidden rounded-md rounded-l-none border border-l-0"
+      style={{ borderColor: tono.border }}
+    >
       <div
-        className="px-3 py-2 text-sm font-semibold"
+        className="px-3 py-2 text-[12.5px] font-semibold leading-snug"
         style={{ backgroundColor: tono.foot, color: tono.footText }}
       >
         Comentarios
       </div>
-      <div className="min-h-[3rem] px-3 py-2 text-sm leading-snug text-[var(--text)]">
+      <div className="px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]">
         {texto ? texto : <span className="text-[var(--text-muted)]">—</span>}
       </div>
     </div>
