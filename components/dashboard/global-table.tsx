@@ -24,7 +24,7 @@ const HEAD_BORDER = UI.sidebarBorder;
 const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
 const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
 const COL_TRACK = "#e6e8ec"; // fase sin iniciar : rail gris clair de la barre de progression
-const MED_OFF = "#c7ccd3"; // mesure inactive : logo gris clair
+const MED_OFF = "#e9ebef"; // mesure inactive : logo gris très clair (quasi invisible)
 
 const PROG_W = 26; // colonnes Progresión (initiales horizontales)
 const MED_W = 30; // colonnes Medidas (logos)

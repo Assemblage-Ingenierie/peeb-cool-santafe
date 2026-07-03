@@ -58,6 +58,12 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M17 19.5a5.5 5.5 0 0 0-2.6-4.7" />
     </>
   ),
+  notas: (
+    <>
+      <path d="M5 4h14v10l-5 5H5V4Z" />
+      <path d="M19 14h-5v5" />
+    </>
+  ),
 };
 
 interface IconProps {

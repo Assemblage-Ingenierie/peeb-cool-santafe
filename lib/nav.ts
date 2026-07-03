@@ -9,7 +9,8 @@ export type IconName =
   | "calendario"
   | "capacitaciones"
   | "admin"
-  | "roles";
+  | "roles"
+  | "notas";
 
 export interface NavItem {
   href: string;
@@ -27,4 +28,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/capacitaciones",  label: "Capacitaciones",    icon: "capacitaciones", adminOnly: false },
   { href: "/admin",           label: "Admin",             icon: "admin",          adminOnly: true  },
   { href: "/roles",           label: "Gestión de roles",  icon: "roles",          adminOnly: true  },
+  { href: "/notas",           label: "Notas",             icon: "notas",          adminOnly: true  },
 ];
