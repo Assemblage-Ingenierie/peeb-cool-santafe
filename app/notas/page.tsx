@@ -23,7 +23,7 @@ export default async function NotasPage() {
   const sb = createServiceClient();
   const { data } = await sb
     .from("peebcoolsf_notas")
-    .select("id, contenido, color, x, y")
+    .select("id, titulo, contenido, color, x, y")
     .order("creado_en", { ascending: true });
 
   return <NotasClient initial={(data ?? []) as NotaRow[]} />;

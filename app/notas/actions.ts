@@ -18,6 +18,7 @@ function assertAdmin() {
 
 export interface NotaRow {
   id: string;
+  titulo: string;
   contenido: string;
   color: string;
   x: number;
@@ -32,20 +33,21 @@ export async function notaCrear(color: string, x: number, y: number): Promise<No
   const sb = createServiceClient();
   const { data, error } = await sb
     .from(TABLE)
-    .insert({ id, color: col, x: Math.round(x), y: Math.round(y), contenido: "" })
-    .select("id, contenido, color, x, y")
+    .insert({ id, color: col, x: Math.round(x), y: Math.round(y), titulo: "", contenido: "" })
+    .select("id, titulo, contenido, color, x, y")
     .single();
   if (error) throw new Error(error.message);
   return data as NotaRow;
 }
 
-/** Met à jour une nota (contenu / couleur / position). Champs partiels. */
+/** Met à jour une nota (titre / contenu / couleur / position). Champs partiels. */
 export async function notaActualizar(
   id: string,
-  patch: { contenido?: string; color?: string; x?: number; y?: number },
+  patch: { titulo?: string; contenido?: string; color?: string; x?: number; y?: number },
 ): Promise<void> {
   assertAdmin();
   const row: Record<string, unknown> = {};
+  if ("titulo" in patch) row.titulo = patch.titulo ?? "";
   if ("contenido" in patch) row.contenido = patch.contenido ?? "";
   if ("color" in patch) row.color = patch.color && COLORES.has(patch.color) ? patch.color : "blanco";
   if ("x" in patch) row.x = Math.round(patch.x ?? 0);

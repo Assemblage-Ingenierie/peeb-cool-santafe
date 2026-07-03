@@ -31,6 +31,13 @@ body {
   outline: none;
 }
 
+/* Placeholder pour un éditeur enrichi vide (contenteditable) — ex. corps des notas. */
+[contenteditable][data-ph]:empty::before {
+  content: attr(data-ph);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 /* Conteneur défilable au drag, sans barre de défilement visible (agenda). */
 .no-scrollbar {
   -ms-overflow-style: none;
