@@ -385,6 +385,14 @@ export function HojasDeRutaClient() {
   function cartasColumna(fila: string, comp: ComponenteCode): CardModel[] {
     return columnas.get(`${fila}|${comp}`) ?? [];
   }
+  // Cartes affichées dans une colonne. La colonne EE agrège aussi les cartes GP
+  // (Gestión de proyecto, noir/gris), en tête — alignées sur la colonne EE.
+  function cartasColumnaVista(fila: string, comp: ComponenteCode): CardModel[] {
+    if (comp !== "EE") return cartasColumna(fila, comp);
+    const gp = filtros.has("GP") ? cartasColumna(fila, "GP") : [];
+    const ee = filtros.has("EE") ? cartasColumna(fila, "EE") : [];
+    return [...gp, ...ee];
+  }
   const ocultasFeuille = [...ocultas].filter((sk) => splitKey(sk).feuille === seleccion).length;
 
   // Libellé d'une tâche (statKey) — pour le panneau de liaison. Gère les nœuds de
@@ -858,11 +866,12 @@ export function HojasDeRutaClient() {
   // Vue « Todo » (GP) : colonnes côte à côte, sans commentaire sur les cartes.
   // Vue par composante (une seule cochée) : cartes + panneau latéral « Comentarios ».
   function columnasGrid(filaCode: string) {
-    const cols = COLUMNAS.filter((c) => filtros.has(c));
+    // La colonne EE apparaît aussi si seul le filtre GP est actif (cartes GP y logent).
+    const cols = COLUMNAS.filter((c) => filtros.has(c) || (c === "EE" && filtros.has("GP")));
     // Vue filtrée sur UNE composante → cartes accompagnées du panneau Comentarios.
     const compSel = cols.length === 1 ? cols[0] : null;
     if (compSel) {
-      const cards = cartasColumna(filaCode, compSel);
+      const cards = cartasColumnaVista(filaCode, compSel);
       const activo = drag?.comp === compSel;
       const showAt = dropAt && dropAt.fila === filaCode && dropAt.comp === compSel ? dropAt.index : -1;
       return (
@@ -892,7 +901,7 @@ export function HojasDeRutaClient() {
         style={{ gridTemplateColumns: `repeat(${cols.length || 1}, minmax(0,1fr))` }}
       >
         {cols.map((comp) => {
-          const cards = cartasColumna(filaCode, comp);
+          const cards = cartasColumnaVista(filaCode, comp);
           const activo = drag?.comp === comp;
           const showAt =
             dropAt && dropAt.fila === filaCode && dropAt.comp === comp ? dropAt.index : -1;

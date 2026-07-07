@@ -261,6 +261,12 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { id: "ee-antep-comprobacion", fase: "anteproyecto", componente: "EE", nombre: "Comprobación del indicador PEEB Cool", responsable: "AT" },
   { id: "ee-pe-comprobacion", fase: "proyecto_ejecutivo", componente: "EE", nombre: "Comprobación del indicador PEEB Cool", responsable: "AT" },
   { id: "ee-pe-especificaciones", fase: "proyecto_ejecutivo", componente: "EE", nombre: "Revisión de especificaciones técnicas de los materiales y equipos relativos a la EE", responsable: "AT" },
+
+  // --- Gestión de proyecto (GP) — étapes de processus (palette noir/gris),
+  // rendues dans la colonne EE. Timing géré par liaisons (Excel Hojaruta). ---
+  { id: "gp-lic-publicacion", fase: "licitacion", componente: "GP", nombre: "Publicación del pliego" },
+  { id: "gp-lic-analisis", fase: "licitacion", componente: "GP", nombre: "Análisis y atribución" },
+  { id: "gp-lic-negociacion", fase: "licitacion", componente: "GP", nombre: "Negociación y firma del contrato" },
 ];
 
 // Unités de « duración estimada » (planification des tâches/fases). Source unique
