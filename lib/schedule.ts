@@ -21,6 +21,11 @@
 export type Unidad = "dia" | "semana" | "mes";
 export type Punto = "inicio" | "fin";
 
+// Clé d'un nœud de phase (les Fases sont planifiables et enlazables comme les
+// cartes). Préfixe réservé, distinct des clés de carte. Ex. « __fase__licitacion ».
+export const FASE_NODE_PREFIX = "__fase__";
+export const faseNodeKey = (code: string): string => FASE_NODE_PREFIX + code;
+
 // Tâche planifiable (une carte de la feuille de route, hors cartes « nota »).
 export interface ScheduleTask {
   key: string;
@@ -146,8 +151,16 @@ export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResul
       }
       if (candidatos.length > 0) {
         startMs = Math.max(...candidatos);
+      } else if (key.startsWith(FASE_NODE_PREFIX)) {
+        // Nœud de phase sans date ni liaison → repli projet (pas d'auto-chaînage).
+        startMs = projMs;
       } else {
-        startMs = toMs(faseInicio[t.fase] ?? null) ?? projMs;
+        // Carte : ancre = début CALCULÉ de son nœud de phase (qui peut lui-même
+        // découler d'une liaison) ; à défaut, date de phase brute, puis projet.
+        const faseNode = taskMap.has(FASE_NODE_PREFIX + t.fase)
+          ? resolve(FASE_NODE_PREFIX + t.fase)
+          : null;
+        startMs = faseNode ? toMs(faseNode.start)! : toMs(faseInicio[t.fase] ?? null) ?? projMs;
       }
     }
 

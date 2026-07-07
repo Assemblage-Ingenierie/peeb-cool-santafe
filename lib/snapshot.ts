@@ -54,6 +54,8 @@ export interface SnapshotFase {
   estado: string | null; // en_proceso | terminado | null
   fecha_inicio: string | null;
   fecha_fin: string | null;
+  dur_valor: number | null; // durée estimée de la phase (planning Hojas de ruta)
+  dur_unidad: string | null;
 }
 
 // Document (tipo_linea='documento' ou vide) d'un sous-projet — bloc « Documentos ».
@@ -211,6 +213,8 @@ type RawGestion = {
   tipo_linea: string | null;
   orden: number | null;
   publicar: boolean | null;
+  dur_valor: number | null;
+  dur_unidad: string | null;
 };
 type RawDocGp = {
   uid: string;
@@ -233,7 +237,7 @@ const SUB_COLS =
 const METRICA_COLS =
   "subproyecto_uid, escenario, demanda_kwh, demanda_despues_kwh, gei_antes_tco2, gei_despues_tco2, costo_ee_eur, costo_otras_eur, benef_personal, benef_personal_pct_muj, benef_usuarios, benef_usuarios_pct_muj, benef_indirectos, benef_indirectos_pct_muj";
 const GESTION_COLS =
-  "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden, publicar";
+  "uid, subproyecto_uid, titulo, url, componente, estado, fecha_inicio, fecha_fin, fase, tipo_linea, orden, publicar, dur_valor, dur_unidad";
 const DOCGP_COLS = "uid, nombre_documento, url, componente, publicar, orden";
 const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anual, orden";
 
@@ -453,6 +457,8 @@ export async function getSnapshot(): Promise<Snapshot> {
       estado: r.estado,
       fecha_inicio: r.fecha_inicio,
       fecha_fin: r.fecha_fin,
+      dur_valor: r.dur_valor,
+      dur_unidad: r.dur_unidad,
     }));
   // Documents de sous-projet : seuls les publiés (publicar=true) sont exposés
   // publiquement, comme la « Documentación de proyecto » ci-dessus.

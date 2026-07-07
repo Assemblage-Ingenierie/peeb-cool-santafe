@@ -15,6 +15,8 @@ import {
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import {
   computeSchedule,
+  faseNodeKey,
+  FASE_NODE_PREFIX,
   type ScheduleResult,
   type Punto,
   type Unidad,
@@ -96,6 +98,16 @@ const FILAS_RUTA: FilaRuta[] = [];
       FILAS_RUTA.push({ code: h.code, nombre: h.nombre, hito: true, numero: null, anoKey: h.anoKey });
     }
   }
+}
+
+// Nom d'affichage d'une phase (pour le panneau de liaison quand la source/cible
+// est un nœud de phase).
+const FASE_NOMBRE = new Map(FILAS_RUTA.map((f) => [f.code, f.nombre]));
+
+// Couleur (pied) d'une composante pour les flèches ; neutre pour les nœuds de phase.
+const COLOR_FASE = "#646b78"; // = UI.textMuted
+function footColor(comp: string): string {
+  return (CARD_TONOS as Record<string, { foot: string }>)[comp]?.foot ?? COLOR_FASE;
 }
 
 // Semestres du calendrier global (S2 2026 → S2 2030). La feuille « Proyecto
@@ -211,7 +223,7 @@ function resumenEnlace(punto: Punto, valor: number, unidad: Unidad): string {
 
 interface Flecha {
   d: string;
-  comp: ComponenteCode;
+  comp: string; // ComponenteCode ou "fase" (nœud de phase) → couleur via footColor
   mx: number;
   my: number;
   idx: number;
@@ -377,9 +389,13 @@ export function HojasDeRutaClient() {
   }
   const ocultasFeuille = [...ocultas].filter((sk) => splitKey(sk).feuille === seleccion).length;
 
-  // Libellé d'une tâche (statKey) — pour le panneau de liaison.
+  // Libellé d'une tâche (statKey) — pour le panneau de liaison. Gère les nœuds de
+  // phase (clé `__fase__<code>`) → nom de la phase.
   function nombreTarea(statKey: string): string {
     const tarea = splitKey(statKey).tarea;
+    if (tarea.startsWith(FASE_NODE_PREFIX)) {
+      return FASE_NOMBRE.get(tarea.slice(FASE_NODE_PREFIX.length)) ?? tarea;
+    }
     for (const cards of columnas.values()) {
       const c = cards.find((x) => x.key === tarea);
       if (c) return ediciones[statKey]?.nombre ?? c.nombre;
@@ -421,7 +437,17 @@ export function HojasDeRutaClient() {
             }));
           const faseInicio: Record<string, string | null> = {};
           for (const f of snap.data.fases) {
-            if (f.subproyecto_uid === seleccion) faseInicio[f.fase] = f.fecha_inicio;
+            if (f.subproyecto_uid !== seleccion) continue;
+            faseInicio[f.fase] = f.fecha_inicio;
+            // Nœud de phase planifiable/enlazable (dates/durée = Gestión de subproyectos).
+            tasks.push({
+              key: faseNodeKey(f.fase),
+              fase: "",
+              durValor: f.dur_valor ?? null,
+              durUnidad: asUnidad(f.dur_unidad),
+              fechaInicio: f.fecha_inicio,
+              fechaFin: f.fecha_fin,
+            });
           }
           return computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
         })();
@@ -707,7 +733,7 @@ export function HojasDeRutaClient() {
         y2 = tr.top - br.top + tr.height / 2;
         vert = false;
       }
-      const comp = (s.getAttribute("data-comp") as ComponenteCode) || "AyS";
+      const comp = s.getAttribute("data-comp") || "AyS";
       const d = vert
         ? `M ${x1},${y1} C ${x1},${(y1 + y2) / 2} ${x2},${(y1 + y2) / 2} ${x2},${y2}`
         : `M ${x1},${y1} C ${(x1 + x2) / 2},${y1} ${(x1 + x2) / 2},${y2} ${x2},${y2}`;
@@ -1014,12 +1040,62 @@ export function HojasDeRutaClient() {
                 </div>
               ))
             : FILAS_RUTA.map((fila) => {
+                // Nœud de phase : planifiable (dates/durée de Gestión) + enlazable.
+                const faseStatKey = `${seleccion}::${faseNodeKey(fila.code)}`;
+                const faseSched = schedule?.get(faseNodeKey(fila.code));
+                const esFuenteFase = linkFrom === faseStatKey;
+                const inicioF = fmtFechaCorta(faseSched?.start);
+                const finF = fmtFechaCorta(faseSched?.end);
+                const rangoF = inicioF
+                  ? finF && finF !== inicioF
+                    ? `${inicioF} → ${finF}`
+                    : inicioF
+                  : null;
+                const fechaFase = rangoF && (
+                  <span
+                    className={cn(
+                      "text-[10px] text-[var(--text-muted)]",
+                      faseSched?.startFijada && "font-medium text-[var(--accent)]",
+                    )}
+                    title={faseSched?.startFijada ? "Inicio fijado a mano (Gestión)" : "Inicio calculado"}
+                  >
+                    {rangoF}
+                    {faseSched?.startFijada ? " 📌" : ""}
+                  </span>
+                );
+                const enlazarFase =
+                  esAdmin && !linking ? (
+                    <button
+                      type="button"
+                      onClick={() => startLink(faseStatKey)}
+                      className="text-[10px] font-medium text-[var(--text-muted)] underline-offset-2 transition-colors hover:text-[var(--focus)] hover:underline"
+                    >
+                      Enlazar
+                    </button>
+                  ) : null;
+                const overlayFase = linking && (
+                  <button
+                    type="button"
+                    onClick={esFuenteFase ? () => setLinkFrom(null) : () => completeLink(faseStatKey)}
+                    className="absolute inset-0 z-30 flex items-center justify-center rounded border-2 text-[11px] font-semibold"
+                    style={
+                      esFuenteFase
+                        ? { backgroundColor: "rgba(227,5,19,0.10)", borderColor: "var(--accent)", color: "var(--accent)" }
+                        : { backgroundColor: "rgba(60,120,216,0.12)", borderColor: "var(--focus)", color: "var(--focus)" }
+                    }
+                  >
+                    {esFuenteFase ? "Cancelar" : "Elegir destino"}
+                  </button>
+                );
+
                 if (fila.hito) {
                   const anoKey = fila.anoKey ?? ANO_KEY;
                   const checked = !!anoAfd[`${seleccion}::${anoKey}`];
                   return (
               <div
                 key={fila.code}
+                data-cardkey={faseStatKey}
+                data-comp="fase"
                 className="relative flex items-center justify-center gap-3 bg-[var(--app-bg)] px-12 py-3"
               >
                 <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
@@ -1031,7 +1107,11 @@ export function HojasDeRutaClient() {
                 >
                   {fila.nombre}
                 </span>
+                {fechaFase}
                 <span className="h-px w-8 bg-[var(--border)]" aria-hidden="true" />
+                {enlazarFase && (
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2">{enlazarFase}</span>
+                )}
                 {esAdmin && (
                   <button
                     type="button"
@@ -1053,18 +1133,26 @@ export function HojasDeRutaClient() {
                     <CheckIcon className="h-3.5 w-3.5" />
                   </button>
                 )}
+                {overlayFase}
               </div>
                   );
                 }
                 return (
               <div key={fila.code} className="flex items-center gap-4 p-4">
-                <div className="w-28 shrink-0 self-center sm:w-44">
+                <div
+                  data-cardkey={faseStatKey}
+                  data-comp="fase"
+                  className="relative w-28 shrink-0 self-center sm:w-44"
+                >
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
                     Fase {String(fila.numero).padStart(2, "0")}
                   </div>
                   <div className="mt-0.5 text-sm font-semibold leading-snug text-[var(--text)]">
                     {fila.nombre}
                   </div>
+                  {fechaFase && <div className="mt-1">{fechaFase}</div>}
+                  {enlazarFase && <div className="mt-0.5">{enlazarFase}</div>}
+                  {overlayFase}
                 </div>
                 {columnasGrid(fila.code)}
               </div>
@@ -1080,17 +1168,17 @@ export function HojasDeRutaClient() {
               aria-hidden="true"
             >
               <defs>
-                {COMPONENTES.map((c) => (
+                {[...COMPONENTES.map((c) => c.code), "fase"].map((code) => (
                   <marker
-                    key={c.code}
-                    id={`ah-${c.code}`}
+                    key={code}
+                    id={`ah-${code}`}
                     markerWidth="8"
                     markerHeight="8"
                     refX="6"
                     refY="3"
                     orient="auto"
                   >
-                    <path d="M0,0 L6,3 L0,6 z" fill={CARD_TONOS[c.code].foot} />
+                    <path d="M0,0 L6,3 L0,6 z" fill={footColor(code)} />
                   </marker>
                 ))}
               </defs>
@@ -1099,7 +1187,7 @@ export function HojasDeRutaClient() {
                   key={`f-${f.idx}`}
                   d={f.d}
                   fill="none"
-                  stroke={CARD_TONOS[f.comp].foot}
+                  stroke={footColor(f.comp)}
                   strokeWidth={1.8}
                   strokeLinecap="round"
                   markerEnd={`url(#ah-${f.comp})`}
@@ -1127,7 +1215,7 @@ export function HojasDeRutaClient() {
                       y={f.my - 9}
                       textAnchor="middle"
                       fontSize="8.5"
-                      fill={CARD_TONOS[f.comp].foot}
+                      fill={footColor(f.comp)}
                     >
                       {txt}
                     </text>
@@ -1142,8 +1230,8 @@ export function HojasDeRutaClient() {
                     onClick={() => editEnlace(f.idx)}
                   >
                     <title>Editar enlace</title>
-                    <circle cx={f.mx} cy={f.my} r="7" fill="#fff" stroke={CARD_TONOS[f.comp].foot} strokeWidth="1.5" />
-                    <circle cx={f.mx} cy={f.my} r="2.5" fill={CARD_TONOS[f.comp].foot} />
+                    <circle cx={f.mx} cy={f.my} r="7" fill="#fff" stroke={footColor(f.comp)} strokeWidth="1.5" />
+                    <circle cx={f.mx} cy={f.my} r="2.5" fill={footColor(f.comp)} />
                   </g>
                 ))}
             </svg>
