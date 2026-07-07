@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useState, type ReactNode } from "react";
 import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase } from "@/lib/snapshot";
 import { TIPOLOGIAS } from "@/lib/constants";
+import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { economiaPct } from "@/lib/calc";
 import { fmtNumero, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -39,7 +40,10 @@ export function MapaClient() {
   if (snap.status === "error") return <Estado>No se pudo cargar el mapa.</Estado>;
 
   const { subproyectos, metricas, fases } = snap.data;
-  const lista = tipo === "todos" ? subproyectos : subproyectos.filter((s) => s.tipologia === tipo);
+  const reales = tipo === "todos" ? subproyectos : subproyectos.filter((s) => s.tipologia === tipo);
+  // Écoles factices (typologie E) : visibles sous « Todos » et « Escuelas ».
+  const hipoteticos = tipo === "todos" || tipo === "E" ? SUBPROYECTOS_HIPOTETICOS : [];
+  const lista = [...reales, ...hipoteticos];
 
   // % de réduction (escenario factibilidad) pour l'étiquette permanente.
   const pctFor = (sub: SnapshotSubproyecto) => {
@@ -93,11 +97,17 @@ export function MapaClient() {
         heightClass="h-[calc(100vh-13rem)] min-h-[420px]"
         initialBounds={SANTA_FE_BOUNDS}
         renderTooltip={(sub) =>
-          showPct
+          showPct && !sub.hipotetico
             ? { text: fmtPct(pctFor(sub)), permanent: true }
             : { text: sub.nombre, permanent: false }
         }
-        renderPopup={(sub) => <MarkerCard sub={sub} metricas={metricas} fases={fases} />}
+        renderPopup={(sub) =>
+          sub.hipotetico ? (
+            <HipMarkerCard sub={sub} />
+          ) : (
+            <MarkerCard sub={sub} metricas={metricas} fases={fases} />
+          )
+        }
       />
     </div>
   );
@@ -107,6 +117,18 @@ function Estado({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-[60vh] items-center justify-center text-sm text-[var(--text-muted)]">
       {children}
+    </div>
+  );
+}
+
+// Fiche d'un sous-projet FACTICE (hypothétique) : minimale, aucun indicateur.
+function HipMarkerCard({ sub }: { sub: SnapshotSubproyecto }) {
+  return (
+    <div className="w-52">
+      <h3 className="text-sm font-semibold text-[var(--text)]">{sub.nombre}</h3>
+      <p className="mt-1 text-xs italic text-[var(--text-muted)]">
+        Subproyecto hipotético — por definir.
+      </p>
     </div>
   );
 }

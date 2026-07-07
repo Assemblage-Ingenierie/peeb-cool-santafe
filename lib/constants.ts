@@ -50,6 +50,11 @@ export const getComponente = (code: string): Componente | undefined =>
 export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
+// Couleur associée aux sous-projets « hipotéticos » (factices, à définir plus
+// tard) : gris clair, distinct des typologies A/H/E. Sert aux marqueurs de carte
+// et aux badges/lignes grisées. Voir lib/subproyectos-hipoteticos.ts.
+export const COLOR_HIPOTETICO = "#c3c9d4";
+
 // --- Tons des cartes de la feuille de route (Hojas de ruta) ---
 // Format de carte validé : EN-TÊTE (nom) / CORPS (description) / PIED (responsable),
 // par composante. Nuances DÉRIVÉES des couleurs §2.3 (mêmes familles) — pas de

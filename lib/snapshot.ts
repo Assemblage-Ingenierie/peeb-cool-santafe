@@ -25,6 +25,10 @@ export interface SnapshotSubproyecto {
   superficie_m2: number | null;
   notas: string | null; // HTML restreint déjà assaini en écriture
   ays_texto: string | null; // texte libre « Requisitos AyS » (CDC §4.5)
+  // Sous-projet FACTICE (hypothétique, hors DB) : jamais rempli par le snapshot
+  // réel. Injecté côté client via lib/subproyectos-hipoteticos.ts pour tester
+  // l'app avec une longue liste. Rendu grisé / bouton désactivé selon la surface.
+  hipotetico?: boolean;
 }
 
 export interface SnapshotMetrica {

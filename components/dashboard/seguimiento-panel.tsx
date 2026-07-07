@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import type { SnapshotSubproyecto } from "@/lib/snapshot";
-import { TIPOLOGIAS, getTipologia } from "@/lib/constants";
+import { TIPOLOGIAS, getTipologia, COLOR_HIPOTETICO, UI } from "@/lib/constants";
+import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { cn } from "@/lib/cn";
 
 // Carte chargée uniquement côté client (Leaflet touche `window`) et seulement
@@ -47,8 +48,12 @@ export function SeguimientoPanel({
   selected,
   onSelect,
 }: SeguimientoPanelProps) {
-  const lista =
+  const reales =
     tipo === "todos" ? subproyectos : subproyectos.filter((s) => s.tipologia === tipo);
+  // Écoles factices (typologie E) : visibles sous « Todos » et « Escuelas ».
+  // Affichées en lignes DÉSACTIVÉES (non sélectionnables) + marqueurs gris clair.
+  const hipoteticos = tipo === "todos" || tipo === "E" ? SUBPROYECTOS_HIPOTETICOS : [];
+  const lista = [...reales, ...hipoteticos];
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -75,62 +80,81 @@ export function SeguimientoPanel({
         })}
       </nav>
 
-      {/* Tableau central — placeholders de colonnes */}
-      <div className="min-w-0 flex-1 overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--text-muted)]">
-              <th className="py-2 pr-3 font-medium">Subproyecto</th>
-              <th className="px-3 py-2 font-medium">—</th>
-              <th className="px-3 py-2 font-medium">—</th>
-              <th className="px-3 py-2 font-medium">—</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lista.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="py-6 text-center text-[var(--text-muted)]">
-                  No hay subproyectos.
-                </td>
+      {/* Tableau central — placeholders de colonnes. Scrollable (max-height) pour
+          ne pas agrandir la fenêtre quand la liste s'allonge ; en-tête collant. */}
+      <div className="min-w-0 flex-1">
+        <div className="max-h-[320px] overflow-auto rounded-md border border-[var(--border)]">
+          <table className="w-full border-collapse text-sm">
+            <thead className="sticky top-0 z-10 bg-[var(--surface)]">
+              <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--text-muted)]">
+                <th className="py-2 pl-3 pr-3 font-medium">Subproyecto</th>
+                <th className="px-3 py-2 font-medium">—</th>
+                <th className="px-3 py-2 font-medium">—</th>
+                <th className="px-3 py-2 font-medium">—</th>
               </tr>
-            ) : (
-              lista.map((s) => {
-                const tp = getTipologia(s.tipologia);
-                const sel = s.uid === selected;
-                return (
-                  <tr
-                    key={s.uid}
-                    onClick={() => onSelect(s.uid)}
-                    aria-selected={sel}
-                    className={cn(
-                      "cursor-pointer border-b border-[var(--border)] transition-colors hover:bg-[var(--app-bg)]",
-                      sel && "bg-[var(--app-bg)]",
-                    )}
-                    style={sel ? { boxShadow: "inset 3px 0 0 var(--focus)" } : undefined}
-                  >
-                    <td className="py-2 pr-3">
-                      <span className="flex items-center gap-2">
-                        {tp && (
-                          <span
-                            className="inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[10px] font-bold"
-                            style={{ backgroundColor: tp.color, color: tp.onColor }}
-                            title={tp.nombre}
-                          >
-                            {tp.code}
+            </thead>
+            <tbody>
+              {lista.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-6 text-center text-[var(--text-muted)]">
+                    No hay subproyectos.
+                  </td>
+                </tr>
+              ) : (
+                lista.map((s) => {
+                  const tp = getTipologia(s.tipologia);
+                  const hip = !!s.hipotetico;
+                  const sel = !hip && s.uid === selected;
+                  // Ligne factice : désactivée (non cliquable), grisée, badge gris clair.
+                  return (
+                    <tr
+                      key={s.uid}
+                      onClick={hip ? undefined : () => onSelect(s.uid)}
+                      aria-selected={sel}
+                      aria-disabled={hip || undefined}
+                      className={cn(
+                        "border-b border-[var(--border)] transition-colors",
+                        hip
+                          ? "cursor-not-allowed italic text-[var(--text-muted)]"
+                          : "cursor-pointer hover:bg-[var(--app-bg)]",
+                        sel && "bg-[var(--app-bg)]",
+                      )}
+                      style={sel ? { boxShadow: "inset 3px 0 0 var(--focus)" } : undefined}
+                    >
+                      <td className="py-2 pl-3 pr-3">
+                        <span className="flex items-center gap-2">
+                          {tp && (
+                            <span
+                              className="inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[10px] font-bold"
+                              style={{
+                                backgroundColor: hip ? COLOR_HIPOTETICO : tp.color,
+                                color: hip ? UI.text : tp.onColor,
+                              }}
+                              title={hip ? `${tp.nombre} (hipotético)` : tp.nombre}
+                            >
+                              {tp.code}
+                            </span>
+                          )}
+                          <span className={cn(!hip && "font-medium text-[var(--text)]")}>
+                            {s.nombre}
                           </span>
-                        )}
-                        <span className="font-medium text-[var(--text)]">{s.nombre}</span>
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-[var(--text-muted)]">—</td>
-                    <td className="px-3 py-2 text-[var(--text-muted)]">—</td>
-                    <td className="px-3 py-2 text-[var(--text-muted)]">—</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                          {hip && (
+                            <span className="rounded-full bg-[var(--app-bg)] px-1.5 py-0.5 text-[10px] not-italic text-[var(--text-muted)]">
+                              hipotético
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-[var(--text-muted)]">—</td>
+                      <td className="px-3 py-2 text-[var(--text-muted)]">—</td>
+                      <td className="px-3 py-2 text-[var(--text-muted)]">—</td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
         <p className="mt-2 text-xs text-[var(--text-muted)]">Columnas de datos por definir.</p>
       </div>
 

@@ -13,6 +13,7 @@ import {
   type ComponenteCode,
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import {
   computeSchedule,
   faseNodeKey,
@@ -977,6 +978,12 @@ export function HojasDeRutaClient() {
             {s.nombre}
           </RutaButton>
         ))}
+        {/* Écoles factices : boutons DÉSACTIVÉS (feuille de route à définir). */}
+        {SUBPROYECTOS_HIPOTETICOS.map((s) => (
+          <RutaButton key={s.uid} activo={false} disabled onClick={() => {}}>
+            {s.nombre}
+          </RutaButton>
+        ))}
         {snap.status === "loading" && (
           <span className="self-center text-sm text-[var(--text-muted)]">
             Cargando subproyectos…
@@ -1297,21 +1304,27 @@ function RutaButton({
   activo,
   onClick,
   children,
+  disabled = false,
 }: {
   activo: boolean;
   onClick: () => void;
   children: ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={activo}
+      title={disabled ? "Subproyecto hipotético — por definir" : undefined}
       className={cn(
         "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        activo
-          ? "bg-[var(--text)] text-white"
-          : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
+        disabled
+          ? "cursor-not-allowed border border-dashed border-[var(--border)] bg-[var(--app-bg)] italic text-[var(--text-muted)] opacity-60"
+          : activo
+            ? "bg-[var(--text)] text-white"
+            : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
       )}
     >
       {children}

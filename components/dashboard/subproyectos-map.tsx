@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup, useMap } from "r
 import type { LatLngTuple, LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { SnapshotSubproyecto } from "@/lib/snapshot";
-import { getTipologia, UI } from "@/lib/constants";
+import { getTipologia, UI, COLOR_HIPOTETICO } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 
 // Carte OSM réutilisable (tuiles directes, CDC §6) : un point par sous-projet
@@ -124,8 +124,11 @@ export function SubproyectosMap({
       {wheelZoom === "ctrl" && <CtrlWheelZoom />}
       {puntos.map((s) => {
         const tp = getTipologia(s.tipologia);
-        const sel = s.uid === selected;
-        const color = tp?.color ?? UI.textMuted;
+        // Sous-projet factice : gris clair, jamais « sélectionné » (non lié à la
+        // sélection du panneau), mais sa popup reste ouvrable au clic.
+        const hip = !!s.hipotetico;
+        const sel = !hip && s.uid === selected;
+        const color = hip ? COLOR_HIPOTETICO : tp?.color ?? UI.textMuted;
         const tip = renderTooltip ? renderTooltip(s) : { text: s.nombre, permanent: false };
         return (
           <CircleMarker
@@ -137,9 +140,9 @@ export function SubproyectosMap({
               color: sel ? UI.surface : color,
               weight: sel ? 3 : 1.5,
               fillColor: color,
-              fillOpacity: 1,
+              fillOpacity: hip ? 0.85 : 1,
             }}
-            eventHandlers={{ click: () => onSelect?.(s.uid) }}
+            eventHandlers={hip ? undefined : { click: () => onSelect?.(s.uid) }}
           >
             <Tooltip
               key={tip.permanent ? "perm" : "hover"}

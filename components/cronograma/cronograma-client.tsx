@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { getComponente, FASES, type ComponenteCode } from "@/lib/constants";
+import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useComponentFilters } from "@/components/filter-context";
 
@@ -343,6 +344,12 @@ export function CronogramaClient() {
               {s.nombre}
             </SelBtn>
           ))}
+          {/* Écoles factices : boutons DÉSACTIVÉS (cronograma à définir). */}
+          {SUBPROYECTOS_HIPOTETICOS.map((s) => (
+            <SelBtn key={s.uid} activo={false} disabled onClick={() => {}}>
+              {s.nombre}
+            </SelBtn>
+          ))}
         </nav>
       )}
 
@@ -499,21 +506,27 @@ function SelBtn({
   activo,
   onClick,
   children,
+  disabled = false,
 }: {
   activo: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={activo}
+      title={disabled ? "Subproyecto hipotético — por definir" : undefined}
       className={cn(
         "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        activo
-          ? "bg-[var(--text)] text-white"
-          : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
+        disabled
+          ? "cursor-not-allowed border border-dashed border-[var(--border)] bg-[var(--app-bg)] italic text-[var(--text-muted)] opacity-60"
+          : activo
+            ? "bg-[var(--text)] text-white"
+            : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
       )}
     >
       {children}
