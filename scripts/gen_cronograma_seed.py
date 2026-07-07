@@ -115,6 +115,10 @@ REF_MAP = {
  'precategorizacion provincial digital':('card',K_PRECAT),
 }
 
+# Correction d'année : l'Excel date mars en 2026 par erreur → 2027 (confirmé client).
+def fixyear(d):
+    return '2027-03-01' if d == '2026-03-01' else d
+
 def unit(u):
     u=norm(u)
     if u.startswith('mes') or u.startswith('mois'): return 'mes'
@@ -182,7 +186,7 @@ plans=[]; enl=[]
 for uid,rows in data.items():
     enl.append(f"delete from public.peebcoolsf_roadmap_enlace where feuille='{uid}';")
     for kind,key,dv,du,st in rows:
-        fi = f"'{st[1]}'" if (st and st[0]=='abs') else 'null'
+        fi = f"'{fixyear(st[1])}'" if (st and st[0]=='abs') else 'null'
         dvs = str(dv) if dv is not None else 'null'
         dus = f"'{du}'" if du else 'null'
         if kind=='phase':
@@ -213,7 +217,7 @@ if '--report' not in sys.argv:
     for uid in NONAIR:
         for kind,key,dv,du,st in data[uid]:
             dvs=str(dv) if dv is not None else 'null'; dus=f"'{du}'" if du else 'null'
-            fi=f"'{st[1]}'" if (st and st[0]=='abs') else 'null'
+            fi=f"'{fixyear(st[1])}'" if (st and st[0]=='abs') else 'null'
             if kind=='phase':
                 gest.append(f"update public.peebcoolsf_gestion_lineas set dur_valor={dvs}, dur_unidad={dus}, fecha_inicio={fi} where subproyecto_uid='{uid}' and tipo_linea='etapa' and fase='{key.replace('__fase__','')}';")
             else:
