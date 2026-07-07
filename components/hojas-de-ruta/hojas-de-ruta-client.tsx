@@ -12,6 +12,12 @@ import {
   type ComponenteCode,
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import {
+  computeSchedule,
+  type ScheduleResult,
+  type Punto,
+  type Unidad,
+} from "@/lib/schedule";
 import { formatDuracion } from "@/lib/format";
 import { useComponentFilters } from "@/components/filter-context";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
@@ -129,8 +135,21 @@ interface Edicion {
 }
 
 interface Enlace {
-  from: string; // statKey source
-  to: string; // statKey cible
+  from: string; // statKey source (préalable)
+  to: string; // statKey cible (qui en découle)
+  punto: Punto; // point d'accroche sur la source (inicio | fin)
+  desfaseValor: number; // décalage signé (négatif = avant, positif = après)
+  desfaseUnidad: Unidad;
+}
+
+// Brouillon d'édition d'une liaison (panneau de choix accroche + décalage).
+interface LiaisonDraft {
+  from: string;
+  to: string;
+  punto: Punto;
+  desfaseValor: number;
+  desfaseUnidad: Unidad;
+  editing: boolean; // true = liaison existante en cours d'édition
 }
 
 // Override de position d'une carte (drag-drop / cartes créées).
@@ -152,6 +171,25 @@ function fmtFechaCorta(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+// Début du projet — ancre de repli du planning quand une phase n'a pas de date.
+const PROJECT_START = "2026-01-01";
+
+// Valide une unité de durée (persistée en texte) vers le type du moteur.
+function asUnidad(u: string | null | undefined): Unidad | null {
+  return u === "dia" || u === "semana" || u === "mes" ? u : null;
+}
+
+const UNIDAD_ABBR: Record<Unidad, string> = { dia: "d", semana: "sem", mes: "mes" };
+
+// Résumé compact d'une liaison pour l'étiquette de la flèche. La dépendance
+// simple (fin + 0) ne renvoie rien (l'arête suffit) ; « ∥ » = parallèle.
+function resumenEnlace(punto: Punto, valor: number, unidad: Unidad): string {
+  if (valor === 0) return punto === "inicio" ? "∥" : "";
+  const sign = valor > 0 ? "+" : "−";
+  const base = punto === "inicio" ? "ini" : "fin";
+  return `${base} ${sign}${Math.abs(valor)}${UNIDAD_ABBR[unidad]}`;
 }
 
 interface Flecha {
@@ -185,6 +223,7 @@ export function HojasDeRutaClient() {
   // Dépendances (flèches) + mode liaison — LOCAUX.
   const [enlaces, setEnlaces] = useState<Enlace[]>([]);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
+  const [liaisonDraft, setLiaisonDraft] = useState<LiaisonDraft | null>(null);
   const linking = esAdmin && linkFrom !== null;
 
   // Gestionnaire de cartes (migration 015). Clés = statKey `${feuille}::${key}`.
@@ -265,6 +304,9 @@ export function HojasDeRutaClient() {
       snap.data.roadmapEnlace.map((e) => ({
         from: `${e.feuille}::${e.desde}`,
         to: `${e.feuille}::${e.hacia}`,
+        punto: e.punto,
+        desfaseValor: e.desfaseValor,
+        desfaseUnidad: e.desfaseUnidad,
       })),
     );
     setHydrated(true);
@@ -318,6 +360,55 @@ export function HojasDeRutaClient() {
   }
   const ocultasFeuille = [...ocultas].filter((sk) => splitKey(sk).feuille === seleccion).length;
 
+  // Libellé d'une tâche (statKey) — pour le panneau de liaison.
+  function nombreTarea(statKey: string): string {
+    const tarea = splitKey(statKey).tarea;
+    for (const cards of columnas.values()) {
+      const c = cards.find((x) => x.key === tarea);
+      if (c) return ediciones[statKey]?.nombre ?? c.nombre;
+    }
+    return tarea;
+  }
+
+  // Planning calculé (moteur partagé lib/schedule). Sous-projets uniquement :
+  // le Proyecto global n'a pas d'ancre de phase (semestres). Recalculé à chaque
+  // rendu (peu de tâches) ; les dates ne sont jamais stockées (convention projet).
+  const schedule =
+    seleccion === "global" || snap.status !== "ready"
+      ? null
+      : (() => {
+          const tasks = [];
+          for (const [colKey, cards] of columnas) {
+            const fila = colKey.split("|")[0];
+            for (const card of cards) {
+              if (card.nota) continue;
+              const p = planes[`${seleccion}::${card.key}`];
+              tasks.push({
+                key: card.key,
+                fase: fila,
+                durValor: p?.durValor ?? null,
+                durUnidad: asUnidad(p?.durUnidad),
+                fechaInicio: p?.fechaInicio ?? null,
+                fechaFin: p?.fechaFin ?? null,
+              });
+            }
+          }
+          const links = enlaces
+            .filter((e) => splitKey(e.from).feuille === seleccion)
+            .map((e) => ({
+              desde: splitKey(e.from).tarea,
+              hacia: splitKey(e.to).tarea,
+              punto: e.punto,
+              desfaseValor: e.desfaseValor,
+              desfaseUnidad: e.desfaseUnidad,
+            }));
+          const faseInicio: Record<string, string | null> = {};
+          for (const f of snap.data.fases) {
+            if (f.subproyecto_uid === seleccion) faseInicio[f.fase] = f.fecha_inicio;
+          }
+          return computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
+        })();
+
   function toggleRealizada(k: string) {
     setRealizadas((prev) => {
       const n = new Set(prev);
@@ -337,16 +428,62 @@ export function HojasDeRutaClient() {
 
   function completeLink(toKey: string) {
     if (linkFrom && linkFrom !== toKey) {
-      setEnlaces((prev) =>
-        prev.some((e) => e.from === linkFrom && e.to === toKey)
-          ? prev
-          : [...prev, { from: linkFrom, to: toKey }],
-      );
-      const a = splitKey(linkFrom);
-      const b = splitKey(toKey);
-      roadmapAddEnlace(a.feuille, a.tarea, b.tarea).catch(() => {});
+      // Ne crée pas tout de suite : ouvre le panneau de choix (accroche + décalage).
+      const existente = enlaces.find((e) => e.from === linkFrom && e.to === toKey);
+      setLiaisonDraft({
+        from: linkFrom,
+        to: toKey,
+        punto: existente?.punto ?? "fin",
+        desfaseValor: existente?.desfaseValor ?? 0,
+        desfaseUnidad: existente?.desfaseUnidad ?? "dia",
+        editing: !!existente,
+      });
     }
     setLinkFrom(null);
+  }
+
+  // Applique le brouillon de liaison (création ou mise à jour) → état + DB (upsert).
+  function applyLiaison() {
+    const d = liaisonDraft;
+    if (!d) return;
+    const item: Enlace = {
+      from: d.from,
+      to: d.to,
+      punto: d.punto,
+      desfaseValor: d.desfaseValor,
+      desfaseUnidad: d.desfaseUnidad,
+    };
+    setEnlaces((prev) => {
+      const i = prev.findIndex((e) => e.from === d.from && e.to === d.to);
+      if (i >= 0) {
+        const n = [...prev];
+        n[i] = item;
+        return n;
+      }
+      return [...prev, item];
+    });
+    const a = splitKey(d.from);
+    const b = splitKey(d.to);
+    roadmapAddEnlace(a.feuille, a.tarea, b.tarea, {
+      punto: d.punto,
+      desfaseValor: d.desfaseValor,
+      desfaseUnidad: d.desfaseUnidad,
+    }).catch(() => {});
+    setLiaisonDraft(null);
+  }
+
+  // Ouvre le panneau sur une liaison existante (clic sur la poignée de la flèche).
+  function editEnlace(idx: number) {
+    const e = enlaces[idx];
+    if (!e) return;
+    setLiaisonDraft({
+      from: e.from,
+      to: e.to,
+      punto: e.punto,
+      desfaseValor: e.desfaseValor,
+      desfaseUnidad: e.desfaseUnidad,
+      editing: true,
+    });
   }
 
   function removeEnlace(idx: number) {
@@ -357,6 +494,15 @@ export function HojasDeRutaClient() {
       const b = splitKey(e.to);
       roadmapRemoveEnlace(a.feuille, a.tarea, b.tarea).catch(() => {});
     }
+  }
+
+  // Supprime la liaison en cours d'édition depuis le panneau.
+  function eliminarLiaisonDraft() {
+    const d = liaisonDraft;
+    if (!d) return;
+    const idx = enlaces.findIndex((e) => e.from === d.from && e.to === d.to);
+    if (idx >= 0) removeEnlace(idx);
+    setLiaisonDraft(null);
   }
 
   // Crée une carte dans la colonne (fila × composante) et ouvre son édition.
@@ -575,6 +721,7 @@ export function HojasDeRutaClient() {
         key={card.key}
         statKey={k}
         card={card}
+        sched={schedule?.get(card.key)}
         realizada={realizadas.has(k)}
         comentario={comentarios[k] ?? ""}
         edicion={ediciones[k]}
@@ -792,7 +939,7 @@ export function HojasDeRutaClient() {
 
       {linking && (
         <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--focus)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)]">
-          <span>Modo enlace: elegí la tarea de destino de la dependencia.</span>
+          <span>Modo enlace: elegí la tarea de destino del enlace.</span>
           <button
             type="button"
             onClick={() => setLinkFrom(null)}
@@ -801,6 +948,18 @@ export function HojasDeRutaClient() {
             Cancelar
           </button>
         </div>
+      )}
+
+      {esAdmin && liaisonDraft && (
+        <LiaisonPanel
+          draft={liaisonDraft}
+          desde={nombreTarea(liaisonDraft.from)}
+          hacia={nombreTarea(liaisonDraft.to)}
+          onChange={(patch) => setLiaisonDraft((d) => (d ? { ...d, ...patch } : d))}
+          onApply={applyLiaison}
+          onCancel={() => setLiaisonDraft(null)}
+          onDelete={eliminarLiaisonDraft}
+        />
       )}
 
       {/* Hoja de ruta activa */}
@@ -929,21 +1088,45 @@ export function HojasDeRutaClient() {
                   markerEnd={`url(#ah-${f.comp})`}
                 />
               ))}
+              {/* Étiquette compacte du type de liaison (parallèle / décalage). */}
+              {overlay.flechas.map((f) => {
+                const e = enlaces[f.idx];
+                if (!e) return null;
+                const txt = resumenEnlace(e.punto, e.desfaseValor, e.desfaseUnidad);
+                if (!txt) return null;
+                return (
+                  <g key={`lbl-${f.idx}`}>
+                    <rect
+                      x={f.mx - (txt.length * 3.2 + 4)}
+                      y={f.my - 18}
+                      width={txt.length * 6.4 + 8}
+                      height={12}
+                      rx={2}
+                      fill="#fff"
+                      opacity={0.85}
+                    />
+                    <text
+                      x={f.mx}
+                      y={f.my - 9}
+                      textAnchor="middle"
+                      fontSize="8.5"
+                      fill={CARD_TONOS[f.comp].foot}
+                    >
+                      {txt}
+                    </text>
+                  </g>
+                );
+              })}
               {esAdmin &&
                 overlay.flechas.map((f) => (
                   <g
-                    key={`x-${f.idx}`}
+                    key={`h-${f.idx}`}
                     className="pointer-events-auto cursor-pointer"
-                    onClick={() => removeEnlace(f.idx)}
+                    onClick={() => editEnlace(f.idx)}
                   >
-                    <title>Eliminar dependencia</title>
-                    <circle cx={f.mx} cy={f.my} r="8" fill="#fff" stroke={CARD_TONOS[f.comp].foot} strokeWidth="1.5" />
-                    <path
-                      d={`M ${f.mx - 3},${f.my - 3} L ${f.mx + 3},${f.my + 3} M ${f.mx + 3},${f.my - 3} L ${f.mx - 3},${f.my + 3}`}
-                      stroke={CARD_TONOS[f.comp].foot}
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
+                    <title>Editar enlace</title>
+                    <circle cx={f.mx} cy={f.my} r="7" fill="#fff" stroke={CARD_TONOS[f.comp].foot} strokeWidth="1.5" />
+                    <circle cx={f.mx} cy={f.my} r="2.5" fill={CARD_TONOS[f.comp].foot} />
                   </g>
                 ))}
             </svg>
@@ -1011,9 +1194,142 @@ function RutaButton({
   );
 }
 
+// Panneau de choix d'une liaison : raccourcis Paralela / Dependencia, ou réglage
+// fin de la source, décalage signé (antes/después) et unité.
+function LiaisonPanel({
+  draft,
+  desde,
+  hacia,
+  onChange,
+  onApply,
+  onCancel,
+  onDelete,
+}: {
+  draft: LiaisonDraft;
+  desde: string;
+  hacia: string;
+  onChange: (patch: Partial<LiaisonDraft>) => void;
+  onApply: () => void;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  const esParalela = draft.punto === "inicio" && draft.desfaseValor === 0;
+  const esDependencia = draft.punto === "fin" && draft.desfaseValor === 0;
+  const abs = Math.abs(draft.desfaseValor);
+  const sentido = draft.desfaseValor < 0 ? "antes" : "despues";
+  const sel =
+    "rounded border border-[var(--border)] bg-[var(--surface)] p-1 text-xs text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]";
+  const presetCls = (on: boolean) =>
+    cn(
+      "rounded-md border px-3 py-1 text-xs font-medium transition-colors",
+      on
+        ? "border-[var(--focus)] bg-[var(--focus)] text-white"
+        : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]",
+    );
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-[var(--focus)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)]">
+      <div className="flex items-center justify-between gap-3">
+        <span className="font-medium">{draft.editing ? "Editar enlace" : "Nuevo enlace"}</span>
+        <span className="truncate text-xs text-[var(--text-muted)]">
+          {desde} → {hacia}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onChange({ punto: "inicio", desfaseValor: 0 })}
+          className={presetCls(esParalela)}
+        >
+          Paralela
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange({ punto: "fin", desfaseValor: 0 })}
+          className={presetCls(esDependencia)}
+        >
+          Dependencia
+        </button>
+
+        <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden="true" />
+
+        <span className="text-xs text-[var(--text-muted)]">Empieza al</span>
+        <select
+          value={draft.punto}
+          onChange={(e) => onChange({ punto: e.target.value as Punto })}
+          className={sel}
+        >
+          <option value="inicio">inicio</option>
+          <option value="fin">fin</option>
+        </select>
+        <span className="text-xs text-[var(--text-muted)]">de la tarea previa,</span>
+        <input
+          type="number"
+          min={0}
+          value={abs}
+          onChange={(e) => {
+            const n = Number(e.target.value);
+            const val = Number.isNaN(n) ? 0 : Math.max(0, Math.trunc(n));
+            onChange({ desfaseValor: sentido === "antes" ? -val : val });
+          }}
+          className={cn(sel, "w-14")}
+        />
+        <select
+          value={draft.desfaseUnidad}
+          onChange={(e) => onChange({ desfaseUnidad: e.target.value as Unidad })}
+          className={sel}
+        >
+          {DURACION_UNIDADES.map((u) => (
+            <option key={u.code} value={u.code}>
+              {u.plural}
+            </option>
+          ))}
+        </select>
+        <select
+          value={sentido}
+          onChange={(e) => onChange({ desfaseValor: e.target.value === "antes" ? -abs : abs })}
+          className={sel}
+          disabled={abs === 0}
+        >
+          <option value="despues">después</option>
+          <option value="antes">antes</option>
+        </select>
+      </div>
+
+      <div className="flex items-center justify-end gap-2">
+        {draft.editing && (
+          <button
+            type="button"
+            onClick={onDelete}
+            className="mr-auto rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:border-red-500 hover:bg-red-500 hover:text-white"
+          >
+            Eliminar
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text)]"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={onApply}
+          className="rounded-md border border-[var(--focus)] bg-[var(--focus)] px-3 py-1 text-xs font-medium text-white"
+        >
+          {draft.editing ? "Guardar" : "Crear"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TareaCard({
   statKey,
   card,
+  sched,
   realizada,
   comentario,
   edicion,
@@ -1040,6 +1356,7 @@ function TareaCard({
 }: {
   statKey: string;
   card: CardModel;
+  sched: ScheduleResult | undefined;
   realizada: boolean;
   comentario: string;
   edicion: Edicion | undefined;
@@ -1073,7 +1390,11 @@ function TareaCard({
   const comentarioEff = comentario || card.comentario || "";
   const editando = panel === "editar";
   const comentarioAbierto = panel === "comentario";
-  const inicioTexto = fmtFechaCorta(plan?.fechaInicio);
+  // Début affiché = date CALCULÉE par le moteur (sinon, faute de planning — ex.
+  // Proyecto global —, la date fixée à la main). `startFijada` = ancre manuelle.
+  const inicioTexto = fmtFechaCorta(sched ? sched.start : plan?.fechaInicio);
+  const finTexto = fmtFechaCorta(sched?.end);
+  const inicioFijada = sched ? sched.startFijada : !!plan?.fechaInicio;
   const durTexto = formatDuracion(plan?.durValor, plan?.durUnidad);
   const labelStyle = "block text-[10px] font-medium uppercase tracking-wide text-[var(--text-muted)]";
   const inputStyle =
@@ -1159,13 +1480,40 @@ function TareaCard({
         {/* Le commentaire n'est plus affiché sur la carte : masqué en vue « Todo »,
             montré dans le panneau latéral « Comentarios » en vue par composante. */}
 
-        {/* Planificación (inicio + duración estimada) — au-dessus du responsable. */}
-        <div className="flex items-center justify-center gap-2 border-t px-3 py-1 text-[10px] text-[var(--text-muted)]"
+        {/* Planificación (inicio calculado + duración estimada) — au-dessus du
+            responsable. Début en accent + repère si fijado a mano ; « ⚠ » si la
+            tâche est prise dans une boucle de dépendances (enlace ignoré). */}
+        <div className="flex flex-wrap items-center justify-center gap-x-2 border-t px-3 py-1 text-[10px] text-[var(--text-muted)]"
           style={{ backgroundColor: "var(--app-bg)", borderColor: tono.border }}
         >
-          <span>{inicioTexto ? `Inicio: ${inicioTexto}` : "Inicio: —"}</span>
+          <span
+            className={cn(inicioFijada && "font-medium text-[var(--accent)]")}
+            title={
+              inicioFijada
+                ? "Inicio fijado a mano"
+                : sched
+                  ? "Inicio calculado (duración y enlaces)"
+                  : undefined
+            }
+          >
+            {inicioTexto ? `Inicio: ${inicioTexto}` : "Inicio: —"}
+            {inicioFijada ? " 📌" : ""}
+          </span>
+          {sched && finTexto && sched.end !== sched.start && (
+            <>
+              <span aria-hidden="true">→</span>
+              <span title={sched.finFijada ? "Fin fijado a mano (excedente)" : "Fin calculado"}>
+                {finTexto}
+              </span>
+            </>
+          )}
           <span aria-hidden="true">·</span>
           <span>{durTexto ?? "—"}</span>
+          {sched?.enCiclo && (
+            <span className="text-amber-600" title="En un ciclo de dependencias: se ignoró un enlace">
+              ⚠
+            </span>
+          )}
         </div>
 
         <div
