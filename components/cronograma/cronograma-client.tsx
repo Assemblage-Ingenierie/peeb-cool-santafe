@@ -2,48 +2,72 @@
 
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
-import { getComponente, FASES, type ComponenteCode } from "@/lib/constants";
+import {
+  getComponente,
+  CARD_TONOS,
+  GESTION_FASES,
+  type ComponenteCode,
+} from "@/lib/constants";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
+import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
+import type { Snapshot } from "@/lib/snapshot";
 import { useComponentFilters } from "@/components/filter-context";
 
 // ============================================================
-// Cronograma (Gantt) — CDC. PROTOTYPE : dates/durées INVENTÉES pour travailler
-// le rendu (barres par composante, excédent hachuré, fases en bleus progressifs).
-// La vue réagit à « Vista / Rol » (filtre header) et au sélecteur de sous-projet.
-// Granularité de l'axe : semana / mes / trimestre.
+// Cronograma (Gantt) — branché sur le MOTEUR de planning (lib/schedule) : les
+// barres sont positionnées par les dates CALCULÉES (durées + liaisons + ancres de
+// phase), identiques à la feuille de route. Barre PLEINE = durée estimée ;
+// excédent HACHURÉ = jusqu'à la fecha_fin. Axe : semana / mes / trimestre.
+//   • Sous-projet : section « Fases » (barres de phase) + une section par
+//     composante (cartes), filtrées par « Vista / Rol ».
+//   • Proyecto global : une ligne par sous-projet (durée totale calculée).
 // ============================================================
 
 type Gran = "semana" | "mes" | "trimestre";
 type Seleccion = "global" | string;
 
-// Fenêtre temporelle du projet (inventée) : 2026 → 2030 inclus.
+const PROJECT_START = "2026-01-01";
+
+// Fenêtre temporelle affichée : 2026 → 2030 inclus.
 const ANIO_INI = 2026;
 const ANIO_FIN = 2030;
 const START = new Date(ANIO_INI, 0, 1).getTime();
 const END = new Date(ANIO_FIN + 1, 0, 1).getTime();
 const SPAN = END - START;
 
-const LABEL_W = 240; // largeur de la colonne de libellés (gelée)
+const LABEL_W = 240;
 const ROW_H = 26;
-
 const UNIT_W: Record<Gran, number> = { semana: 12, mes: 26, trimestre: 66 };
 const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-// Bleus progressifs pour les fases (clair → foncé).
+// Bleus progressifs pour les barres de phase (clair → foncé).
 const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"];
-// Gris (pliegos / licitación) + rouge (obras) pour les segments d'obra.
-const GRIS_CLARO = "#d9d9d9";
-const GRIS = "#999999";
 
-interface Unidad {
-  start: number; // ms
+// Phases affichées (ordre chronologique canonique, hors « general »).
+const FASES_ORD = GESTION_FASES.filter((f) => f.code !== "general");
+// Composantes en sections (ordre d'affichage).
+const COMPS: ComponenteCode[] = ["GP", "EE", "AyS", "G"];
+
+const asUnidad = (u: string | null | undefined): Unidad | null =>
+  u === "dia" || u === "semana" || u === "mes" ? u : null;
+
+// Date ISO (YYYY-MM-DD) → ms locaux.
+function isoMs(iso: string | null | undefined): number | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime() : null;
+}
+
+interface UnidadEje {
+  start: number;
   label: string;
   anio: number;
 }
 
-function construirUnidades(gran: Gran): Unidad[] {
-  const out: Unidad[] = [];
+function construirUnidades(gran: Gran): UnidadEje[] {
+  const out: UnidadEje[] = [];
   if (gran === "trimestre") {
     for (let y = ANIO_INI; y <= ANIO_FIN; y += 1)
       for (let q = 0; q < 4; q += 1)
@@ -63,16 +87,26 @@ function construirUnidades(gran: Gran): Unidad[] {
   return out;
 }
 
-// --- Modèle du Gantt --------------------------------------------------------
+function isoWeek(ms: number): number {
+  const d = new Date(ms);
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - day + 3);
+  const firstThu = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
+  const diff = (date.getTime() - firstThu.getTime()) / 86400000;
+  return 1 + Math.round((diff - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
+}
+
+// --- Modèle du Gantt (positions en ms absolus) ------------------------------
 
 interface Barra {
-  desde: number; // index de trimestre (0 = 2026 T1)
-  plena: number; // nombre de trimestres pleins
-  extra?: number; // trimestres supplémentaires (hachurés) jusqu'à fecha fin
+  startMs: number;
+  solidMs: number; // fin de la barre pleine (début + durée)
+  endMs: number; // fin réelle (hachures de solidMs → endMs si > solidMs)
   color: string;
   etiqueta?: string;
-  dentro?: boolean; // étiquette À L'INTÉRIEUR de la barre, tronquée « … » si trop longue
-  etiquetaColor?: string; // couleur de l'étiquette interne (contraste)
+  dentro?: boolean;
+  etiquetaColor?: string;
 }
 interface Fila {
   label: string;
@@ -84,167 +118,183 @@ interface Seccion {
   filas: Fila[];
 }
 
-// Numéro de semaine ISO (1..53).
-function isoWeek(ms: number): number {
-  const d = new Date(ms);
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const day = (date.getUTCDay() + 6) % 7; // lundi = 0
-  date.setUTCDate(date.getUTCDate() - day + 3); // jeudi de la semaine
-  const firstThu = new Date(Date.UTC(date.getUTCFullYear(), 0, 4));
-  const diff = (date.getTime() - firstThu.getTime()) / 86400000;
-  return 1 + Math.round((diff - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
+function barraDe(
+  sr: ScheduleResult | undefined,
+  color: string,
+  etiqueta: string,
+  dentro: boolean,
+  etiquetaColor?: string,
+): Barra | null {
+  if (!sr) return null;
+  const s = isoMs(sr.start);
+  if (s == null) return null;
+  const so = isoMs(sr.solidEnd) ?? s;
+  const e = isoMs(sr.end) ?? so;
+  return { startMs: s, solidMs: so, endMs: e, color, etiqueta, dentro, etiquetaColor };
 }
 
-// Index de trimestre (0..19) → ms du début de ce trimestre.
-function qMs(qi: number): number {
-  const y = ANIO_INI + Math.floor(qi / 4);
-  const q = qi % 4;
-  return new Date(y, q * 3, 1).getTime();
-}
-
-// ============================================================
-// Données INVENTÉES (prototype). Reproduisent l'esprit de l'exemple.
-// ============================================================
-const G = "G" as ComponenteCode;
-const EE = "EE" as ComponenteCode;
-const AyS = "AyS" as ComponenteCode;
-const GP = "GP" as ComponenteCode;
-
-function colorComp(c: ComponenteCode): string {
-  return getComponente(c)?.color ?? "#ccc";
-}
-
-// Sections « activités » par composante (feuille de route générale, inventé).
-const ACTIVIDADES: { comp: ComponenteCode; titulo: string; filas: Fila[] }[] = [
-  {
-    comp: GP,
-    titulo: "Gestión de proyecto",
-    filas: [
-      { label: "Elaboración del plan de comunicaciones", barras: [{ desde: 1, plena: 2, color: colorComp(GP), etiqueta: "Elaboración del plan de comunicaciones" }] },
-      { label: "Auditorías del proyecto", barras: [{ desde: 9, plena: 1, color: colorComp(GP), etiqueta: "Auditorías" }, { desde: 17, plena: 1, color: colorComp(GP), etiqueta: "Auditorías" }] },
-      { label: "Evaluación final del proyecto", barras: [{ desde: 19, plena: 1, color: colorComp(GP), etiqueta: "Evaluación" }] },
-    ],
-  },
-  {
-    comp: EE,
-    titulo: "Eficiencia energética",
-    filas: [
-      { label: "Auditorías energéticas", barras: [{ desde: 2, plena: 3, color: colorComp(EE), etiqueta: "Auditorías energéticas" }] },
-      { label: "Comprobación del indicador PEEB Cool", barras: [{ desde: 5, plena: 2, extra: 2, color: colorComp(EE), etiqueta: "Comprobación PEEB Cool" }] },
-    ],
-  },
-  {
-    comp: AyS,
-    titulo: "Ambiental y social",
-    filas: [
-      { label: "Estudios de asbestos", barras: [{ desde: 2, plena: 1, color: colorComp(AyS), etiqueta: "Estudios de asbestos" }] },
-      { label: "Plan de gestión de desechos", barras: [{ desde: 3, plena: 1, color: colorComp(AyS), etiqueta: "Plan de gestión de desechos" }] },
-      { label: "Gestión AyS por la ACEFE", barras: [{ desde: 2, plena: 4, extra: 12, color: colorComp(AyS), etiqueta: "Gestión AyS por la ACEFE" }] },
-    ],
-  },
-  {
-    comp: G,
-    titulo: "Género",
-    filas: [
-      { label: "Diagnóstico de género", barras: [{ desde: 4, plena: 3, color: colorComp(G), etiqueta: "Diagnóstico de género" }] },
-      { label: "Capacitaciones en temáticas de género", barras: [{ desde: 3, plena: 2, color: colorComp(G), etiqueta: "Capacitaciones de género" }] },
-      { label: "Revisión de pliegos", barras: [{ desde: 6, plena: 1, color: colorComp(G), etiqueta: "Revisión de pliegos" }] },
-    ],
-  },
-];
-
-// Fases affichées dans le cronograma (chronologiques, hors jalon/général).
-const FASES_CRONO = FASES.filter((f) => f.code !== "general" && f.code !== "no_objecion_afd");
-const ANCHOS_FASE = [2, 2, 2, 2, 3, 4]; // durées inventées (trimestres) par fase
-
-// Section « une ligne par sous-projet » : fases en bleus progressifs, avec le nom
-// de la fase écrit sur la bande (tronqué « … » si pas la place).
-function seccionSubproyectos(nombres: string[]): Seccion {
-  return {
-    titulo: "Sub­proyectos — fases",
-    filas: nombres.map((nombre, i) => {
-      let cursor = 1 + (i % 3); // décalage inventé par sous-projet
-      const barras: Barra[] = FASES_CRONO.map((f, j) => {
-        const plena = ANCHOS_FASE[j % ANCHOS_FASE.length];
-        const b: Barra = {
-          desde: cursor,
-          plena,
-          color: BLUES[j % BLUES.length],
-          etiqueta: f.nombre,
-          dentro: true,
-          etiquetaColor: j >= 3 ? "#ffffff" : "#1f2733",
-        };
-        cursor += plena;
-        return b;
+// Assemble le planning d'un sous-projet (mêmes entrées que la feuille de route).
+function armar(uid: string, tipologia: string, d: Snapshot) {
+  const estado = new Map<string, RoadmapOverride>();
+  const planes = new Map<
+    string,
+    { durValor: number | null; durUnidad: string | null; fechaInicio: string | null; fechaFin: string | null }
+  >();
+  for (const r of d.roadmapEstado) {
+    if (r.feuille !== uid) continue;
+    estado.set(r.tareaKey, {
+      oculta: r.oculta,
+      creada: r.creada,
+      componente: (r.componente as ComponenteCode | null) ?? null,
+      fila: r.fila,
+      orden: r.orden,
+      nombre: r.nombre,
+    });
+    planes.set(r.tareaKey, {
+      durValor: r.durValor,
+      durUnidad: r.durUnidad,
+      fechaInicio: r.fechaInicio,
+      fechaFin: r.fechaFin,
+    });
+  }
+  const columnas = construirCartasPorFila({ esGlobal: false, tipologia, uid, estado });
+  const tasks: {
+    key: string;
+    fase: string;
+    durValor: number | null;
+    durUnidad: Unidad | null;
+    fechaInicio: string | null;
+    fechaFin: string | null;
+  }[] = [];
+  for (const [colKey, cards] of columnas) {
+    const fila = colKey.split("|")[0];
+    for (const c of cards) {
+      if (c.nota) continue;
+      const p = planes.get(c.key);
+      tasks.push({
+        key: c.key,
+        fase: fila,
+        durValor: p?.durValor ?? null,
+        durUnidad: asUnidad(p?.durUnidad),
+        fechaInicio: p?.fechaInicio ?? null,
+        fechaFin: p?.fechaFin ?? null,
       });
-      return { label: nombre, barras };
+    }
+  }
+  const faseInicio: Record<string, string | null> = {};
+  for (const f of d.fases) {
+    if (f.subproyecto_uid !== uid) continue;
+    faseInicio[f.fase] = f.fecha_inicio;
+    tasks.push({
+      key: faseNodeKey(f.fase),
+      fase: "",
+      durValor: f.dur_valor,
+      durUnidad: asUnidad(f.dur_unidad),
+      fechaInicio: f.fecha_inicio,
+      fechaFin: f.fecha_fin,
+    });
+  }
+  const links = d.roadmapEnlace
+    .filter((e) => e.feuille === uid)
+    .map((e) => ({
+      desde: e.desde,
+      hacia: e.hacia,
+      punto: e.punto,
+      desfaseValor: e.desfaseValor,
+      desfaseUnidad: e.desfaseUnidad,
+    }));
+  const sched = computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
+  return { columnas, sched };
+}
+
+// Sections d'un sous-projet : Fases (barres de phase) + une section par composante.
+function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<string>): Seccion[] {
+  const { columnas, sched } = armar(uid, tipologia, d);
+  const out: Seccion[] = [];
+
+  const filasFase: Fila[] = FASES_ORD.map((f, i) => {
+    const b = barraDe(
+      sched.get(faseNodeKey(f.code)),
+      BLUES[i % BLUES.length],
+      f.nombre,
+      true,
+      i >= 3 ? "#ffffff" : "#1f2733",
+    );
+    return { label: f.nombre, bold: true, barras: b ? [b] : [] };
+  });
+  out.push({ titulo: "Fases", filas: filasFase });
+
+  for (const comp of COMPS) {
+    if (!filtros.has(comp)) continue;
+    const cards: { key: string; nombre: string }[] = [];
+    for (const [colKey, arr] of columnas) {
+      if (!colKey.endsWith(`|${comp}`)) continue;
+      for (const c of arr) if (!c.nota) cards.push({ key: c.key, nombre: c.nombre });
+    }
+    if (cards.length === 0) continue;
+    const filas = cards
+      .map((c) => {
+        const b = barraDe(sched.get(c.key), CARD_TONOS[comp].foot, c.nombre, false, CARD_TONOS[comp].footText);
+        return { label: c.nombre, barras: b ? [b] : [], _s: b ? b.startMs : Infinity };
+      })
+      .sort((a, b) => a._s - b._s)
+      .map(({ label, barras }) => ({ label, barras }));
+    out.push({ titulo: getComponente(comp)?.nombre ?? comp, filas });
+  }
+  return out;
+}
+
+// Vue globale : une ligne par sous-projet (durée totale calculée = min→max).
+function seccionGlobal(subs: Snapshot["subproyectos"], d: Snapshot): Seccion {
+  return {
+    titulo: "Subproyectos — duración total",
+    filas: subs.map((s) => {
+      const { sched } = armar(s.uid, s.tipologia, d);
+      let min = Infinity;
+      let max = -Infinity;
+      for (const r of sched.values()) {
+        const a = isoMs(r.start);
+        const b = isoMs(r.end);
+        if (a != null) min = Math.min(min, a);
+        if (b != null) max = Math.max(max, b);
+      }
+      if (!Number.isFinite(min)) return { label: s.nombre, barras: [] };
+      return {
+        label: s.nombre,
+        barras: [
+          { startMs: min, solidMs: max, endMs: max, color: BLUES[3], etiqueta: s.nombre, dentro: true, etiquetaColor: "#ffffff" },
+        ],
+      };
     }),
   };
 }
-
-// Section d'obras : segments Pliegos │ Licitación │ Obras (gris/gris/rouge).
-const SECCION_OBRAS: Seccion = {
-  titulo: "Obras de renovación",
-  filas: [
-    {
-      label: "Obras de aeropuertos",
-      barras: [
-        { desde: 5, plena: 1, color: GRIS_CLARO, etiqueta: "Pliegos" },
-        { desde: 6, plena: 1, color: GRIS, etiqueta: "Licitación" },
-        { desde: 7, plena: 3, extra: 4, color: "#e69999", etiqueta: "Obras" },
-      ],
-    },
-    {
-      label: "Obras de hospitales",
-      barras: [
-        { desde: 7, plena: 1, color: GRIS_CLARO, etiqueta: "Pliegos" },
-        { desde: 8, plena: 1, color: GRIS, etiqueta: "Licitación" },
-        { desde: 9, plena: 4, extra: 6, color: "#e06666", etiqueta: "Obras" },
-      ],
-    },
-  ],
-};
 
 // ============================================================
 
 export function CronogramaClient() {
   const snap = useSnapshot();
   const filtros = useComponentFilters();
-  const [gran, setGran] = useState<Gran>("trimestre");
+  const [gran, setGran] = useState<Gran>("mes");
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
-  const esTodo = filtros.size >= 4;
-  const compSel = filtros.size === 1 ? ([...filtros][0] as ComponenteCode) : null;
 
-  // Sections selon Vista/Rol + sélecteur. PROTOTYPE : données inventées.
   const secciones: Seccion[] = (() => {
-    // Filtrer les sections d'activités selon la composante active (ou toutes).
-    const acts = ACTIVIDADES.filter((a) => esTodo || a.comp === compSel);
-    const out: Seccion[] = acts.map((a) => ({ titulo: a.titulo, filas: a.filas }));
-    if (seleccion === "global") {
-      out.push(SECCION_OBRAS);
-      out.push(
-        seccionSubproyectos(
-          subproyectos.length > 0 ? subproyectos.map((s) => s.nombre) : ["Sub­proyecto 1", "Sub­proyecto 2"],
-        ),
-      );
-    }
-    return out;
+    if (snap.status !== "ready") return [];
+    if (seleccion === "global") return [seccionGlobal(subproyectos, snap.data)];
+    const sub = subproyectos.find((s) => s.uid === seleccion);
+    return seccionesSub(seleccion, sub?.tipologia ?? "", snap.data, filtros);
   })();
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * UNIT_W[gran];
   const x = (ms: number) => ((ms - START) / SPAN) * totalW;
 
-  // Repère « hoy » (barre verticale rouge). Calculé APRÈS montage (client) pour
-  // éviter un décalage d'hydratation (new Date() diffère SSR/client).
   const [hoyMs, setHoyMs] = useState<number | null>(null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) pour éviter le décalage d'hydratation
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) anti-décalage d'hydratation
   useEffect(() => setHoyMs(Date.now()), []);
   const hoyEnRango = hoyMs != null && hoyMs >= START && hoyMs < END;
 
-  // Groupes d'années (en-tête supérieur).
   const anios: { anio: number; left: number; width: number }[] = [];
   for (let y = ANIO_INI; y <= ANIO_FIN; y += 1) {
     const l = x(new Date(y, 0, 1).getTime());
@@ -252,14 +302,12 @@ export function CronogramaClient() {
     anios.push({ anio: y, left: l, width: r - l });
   }
 
-  // Segments d'unités (T1-4 / mois) positionnés par date.
   const segsUnidad = unidades.map((u, i) => {
     const l = x(u.start);
     const r = x(unidades[i + 1]?.start ?? END);
     return { key: u.start, left: l, width: r - l, label: u.label };
   });
 
-  // Vue semana : frise des mois (regroupement) + numéros de semaine.
   const enSemana = gran === "semana";
   const segsSemana = enSemana
     ? unidades.map((u, i) => ({
@@ -304,11 +352,10 @@ export function CronogramaClient() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">Cronograma</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            Vista: <span className="font-medium text-[var(--text)]">{esTodo ? "Todo (GP)" : compSel}</span> · datos de
-            ejemplo (fechas y duración inventadas).
+            Fechas calculadas a partir de las duraciones y enlaces (barra llena = duración; rayado =
+            hasta la fecha de fin).
           </p>
         </div>
-        {/* Granularité */}
         <div
           className="inline-flex rounded-lg border border-[var(--border)] bg-[var(--app-bg)] p-0.5"
           role="group"
@@ -333,32 +380,27 @@ export function CronogramaClient() {
         </div>
       </div>
 
-      {/* Sélecteur de feuille (global / sous-projets) — masqué en vue composante. */}
-      {esTodo && (
-        <nav aria-label="Cronograma" className="flex flex-wrap items-center gap-2">
-          <SelBtn activo={seleccion === "global"} onClick={() => setSeleccion("global")}>
-            Proyecto global
+      {/* Sélecteur de feuille (global / sous-projets réels / hypothétiques désactivés). */}
+      <nav aria-label="Cronograma" className="flex flex-wrap items-center gap-2">
+        <SelBtn activo={seleccion === "global"} onClick={() => setSeleccion("global")}>
+          Proyecto global
+        </SelBtn>
+        {subproyectos.map((s) => (
+          <SelBtn key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
+            {s.nombre}
           </SelBtn>
-          {subproyectos.map((s) => (
-            <SelBtn key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
-              {s.nombre}
-            </SelBtn>
-          ))}
-          {/* Écoles factices : boutons DÉSACTIVÉS (cronograma à définir). */}
-          {SUBPROYECTOS_HIPOTETICOS.map((s) => (
-            <SelBtn key={s.uid} activo={false} disabled onClick={() => {}}>
-              {s.nombre}
-            </SelBtn>
-          ))}
-        </nav>
-      )}
+        ))}
+        {SUBPROYECTOS_HIPOTETICOS.map((s) => (
+          <SelBtn key={s.uid} activo={false} disabled onClick={() => {}}>
+            {s.nombre}
+          </SelBtn>
+        ))}
+      </nav>
 
       <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
 
-      {/* Gantt */}
       <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
         <div className="relative" style={{ width: LABEL_W + totalW }}>
-          {/* Repère « hoy » : barre verticale rouge sur toute la hauteur. */}
           {hoyEnRango && hoyMs != null && (
             <div
               className="pointer-events-none absolute bottom-0 top-0 z-20 w-0.5 bg-[var(--accent)]"
@@ -366,11 +408,9 @@ export function CronogramaClient() {
               aria-hidden="true"
             />
           )}
-          {/* En-tête : années + (mois/semaines en vue semana, sinon T1-4/mois). */}
           <div className="flex border-b border-[var(--border)]">
             <div className="sticky left-0 z-10 shrink-0 bg-[var(--surface)]" style={{ width: LABEL_W }} />
             <div className="relative" style={{ width: totalW, height: headH }}>
-              {/* Années */}
               {anios.map((a) => (
                 <div
                   key={a.anio}
@@ -382,7 +422,6 @@ export function CronogramaClient() {
               ))}
               {enSemana ? (
                 <>
-                  {/* Frise des mois */}
                   {segsMes.map((m) => (
                     <div
                       key={m.key}
@@ -392,7 +431,6 @@ export function CronogramaClient() {
                       {m.width > 16 ? m.label : ""}
                     </div>
                   ))}
-                  {/* Numéros de semaine */}
                   {segsSemana.map((w) => (
                     <div
                       key={w.key}
@@ -417,10 +455,8 @@ export function CronogramaClient() {
             </div>
           </div>
 
-          {/* Sections + filas */}
           {secciones.map((sec) => (
             <div key={sec.titulo}>
-              {/* En-tête de section (bandeau noir) */}
               <div className="flex">
                 <div
                   className="sticky left-0 z-10 shrink-0 truncate px-3 py-1.5 text-xs font-semibold text-white"
@@ -444,16 +480,16 @@ export function CronogramaClient() {
                   </div>
                   <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
                     {fila.barras.map((b, bi) => {
-                      const left = x(qMs(b.desde));
-                      const rPlena = x(qMs(b.desde + b.plena));
-                      const rFin = x(qMs(b.desde + b.plena + (b.extra ?? 0)));
+                      const left = x(b.startMs);
+                      const rPlena = x(b.solidMs);
+                      const rFin = x(b.endMs);
                       return (
                         <div key={bi}>
                           <div
                             className="absolute rounded-sm"
-                            style={{ left, width: rPlena - left, top: 5, height: ROW_H - 10, backgroundColor: b.color }}
+                            style={{ left, width: Math.max(2, rPlena - left), top: 5, height: ROW_H - 10, backgroundColor: b.color }}
                           />
-                          {b.extra ? (
+                          {b.endMs > b.solidMs ? (
                             <div
                               className="absolute rounded-sm"
                               style={{
@@ -483,7 +519,7 @@ export function CronogramaClient() {
                           ) : b.etiqueta ? (
                             <span
                               className="pointer-events-none absolute whitespace-nowrap text-[11px] leading-none text-[var(--text)]"
-                              style={{ left: left + 4, top: ROW_H / 2 - 5 }}
+                              style={{ left: rFin + 4, top: ROW_H / 2 - 5 }}
                             >
                               {b.etiqueta}
                             </span>
