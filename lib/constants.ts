@@ -209,29 +209,21 @@ export interface RoadmapTarea {
 // requisitos cochés de chaque sous-projet.
 export const ROADMAP_TAREAS: RoadmapTarea[] = [
   // --- Ambiental y social (AyS) ---
-  { fase: "estudios_preliminares", componente: "AyS", nombre: "Elegibilidad y nivel de riesgo · Ficha de evaluación (Anexo 5)" },
-  { fase: "anteproyecto", componente: "AyS", nombre: "Pre-categorización provincial digital" },
-  { fase: "anteproyecto", componente: "AyS", nombre: "Memoria descriptiva / anteproyecto" },
+  // Anteproyecto
+  { fase: "anteproyecto", componente: "AyS", nombre: "Redacción de memoria descriptiva del anteproyecto" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Identificación de los otros planes de gestión relevantes para el proyecto" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Plan preliminar de continuidad de los servicios" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Plan de gestión del Patrimonio" },
+  // Proyecto ejecutivo
+  { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Pre-categorización provincial digital" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Categorización provincial" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Plan de continuidad de los servicios" },
-  {
-    fase: "proyecto_ejecutivo",
-    componente: "AyS",
-    nombre: "Lineamientos para otros planes necesarios según proyecto",
-    dinamica: true,
-  },
-  {
-    fase: "redaccion_pliegos",
-    componente: "AyS",
-    nombre: "Participación de experto AyS en la redacción del pliego",
-  },
-  {
-    fase: "redaccion_pliegos",
-    componente: "AyS",
-    nombre: "Asegurar la integración de los lineamientos establecidos en la fase anterior",
-  },
+  { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Lineamientos de los planes para la gestión de los aspectos ambientales" },
+  { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Lineamientos de los programas/planes para la gestión de trabajo, condiciones laborales y SST" },
+  // Redacción de pliegos
+  { fase: "redaccion_pliegos", componente: "AyS", nombre: "Participación de experto AyS en la redacción del pliego" },
+  { fase: "redaccion_pliegos", componente: "AyS", nombre: "Asegurar la integración de los lineamientos establecidos en la fase anterior" },
+  // Licitación (Análisis y atribución)
   { fase: "licitacion", componente: "AyS", nombre: "Verificación de las ofertas AyS según criterios AyS" },
   { fase: "licitacion", componente: "AyS", nombre: "Verificación de los Planes de Gestión AyS propuestos" },
   { fase: "obra", componente: "AyS", nombre: "Aprobación y seguimiento del PGASC" },
@@ -240,7 +232,6 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { fase: "obra", componente: "AyS", nombre: "Gestión de reclamos" },
 
   // --- Género (G) — responsable por defecto ACEFE, salvo indicación (AT). ---
-  { id: "genero-ep-diagnostico", fase: "estudios_preliminares", componente: "G", nombre: "Diagnóstico con perspectiva de género" },
   { id: "genero-ep-formacion", fase: "estudios_preliminares", componente: "G", nombre: "Formación a los equipos de la UG / Ministerio de línea sobre la incorporación de la perspectiva de género", responsable: "AT", comentario: "Impacto 4" },
   { id: "genero-antep-revision", fase: "anteproyecto", componente: "G", nombre: "Revisión de proyecto con perspectiva de género", responsable: "AT" },
   { id: "genero-antep-validacion", fase: "anteproyecto", componente: "G", nombre: "Validación de las medidas con mujeres beneficiarias", comentario: "Impacto 1" },
@@ -254,7 +245,6 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { id: "genero-licitacion-evaluacion", fase: "licitacion", componente: "G", nombre: "Evaluación de ofertas con perspectiva de género", comentario: "Impacto 9 — relacionado con los criterios establecidos anteriormente" },
 
   // --- Eficiencia energética (EE) — responsable por defecto ACEFE, salvo (AT). ---
-  { id: "ee-ep-auditoria", fase: "estudios_preliminares", componente: "EE", nombre: "Auditoría energética" },
   { id: "ee-ep-actualizacion-modelo", fase: "estudios_preliminares", componente: "EE", nombre: "Actualización del modelo de simulación", responsable: "AT" },
   { id: "ee-ep-aprobacion-criterio", fase: "estudios_preliminares", componente: "EE", nombre: "Aprobación del criterio PEEB Cool", responsable: "AT" },
   { id: "ee-antep-comprobacion", fase: "anteproyecto", componente: "EE", nombre: "Comprobación del indicador PEEB Cool", responsable: "AT" },
