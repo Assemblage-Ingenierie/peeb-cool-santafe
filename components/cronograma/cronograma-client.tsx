@@ -52,6 +52,42 @@ const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"]
 // Rouge des fases « No objeción AFD » (jalons critiques mis en évidence).
 const ROJO_AFD = "#cc0000";
 
+// Sigles des fases sur les frises (comme le tableau Inicio). Règles :
+// « validacion_anteproyecto » → rien ; toutes les « No objeción AFD » → « CNO ».
+const FASE_SIGLA: Record<string, string> = {
+  estudios_preliminares: "EP",
+  anteproyecto: "AP",
+  validacion_anteproyecto: "",
+  proyecto_ejecutivo: "PE",
+  redaccion_pliegos: "PL",
+  no_objecion_afd: "CNO",
+  licitacion: "LI",
+  no_objecion_afd_atribucion: "CNO",
+  no_objecion_afd_contrato: "CNO",
+  obra: "OB",
+};
+
+// Fases affichées dans la légende (au-dessus du cronograma), dans l'ordre.
+const LEYENDA_FASES = [
+  "estudios_preliminares",
+  "anteproyecto",
+  "validacion_anteproyecto",
+  "proyecto_ejecutivo",
+  "redaccion_pliegos",
+  "no_objecion_afd",
+  "licitacion",
+  "obra",
+];
+
+// Couleur de texte lisible sur un fond donné (luminance perçue).
+function textoSobre(hex: string): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#1f2733" : "#ffffff";
+}
+
 // Phases affichées (ordre chronologique canonique, hors « general »).
 const FASES_ORD = GESTION_FASES.filter((f) => f.code !== "general");
 // Composantes en sections (ordre d'affichage).
@@ -221,19 +257,31 @@ function armar(uid: string, tipologia: string, d: Snapshot) {
 const colorFase = (code: string, i: number): string =>
   code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length];
 
+// Couleur d'une fase par son code (index dans l'ordre canonique) — pour la légende.
+const colorDeFase = (code: string): string =>
+  colorFase(code, FASES_ORD.findIndex((f) => f.code === code));
+
+// Barre d'une fase avec son sigle centré (texte lisible selon le fond).
+function barraFase(sr: ScheduleResult | undefined, code: string, i: number, tooltip?: string): Barra | null {
+  const color = colorFase(code, i);
+  const b = barraDe(sr, color, FASE_SIGLA[code] ?? "", true, textoSobre(color));
+  return b ? { ...b, tooltip } : null;
+}
+
 // Date courte (survol des segments de fase) — ex. « 3 jun 2027 ».
 const fmtFecha = (ms: number): string => {
   const d = new Date(ms);
   return `${d.getDate()} ${MES_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 };
 
-// Enchaînement des fases d'un planning sur UNE ligne (barres colorées, sans
-// texte visible ; nom + date de démarrage au survol).
+// Enchaînement des fases d'un planning sur UNE ligne (segments colorés, sigle
+// centré ; nom + date de démarrage au survol).
 function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
   const barras: Barra[] = [];
   FASES_ORD.forEach((f, i) => {
-    const b = barraDe(sched.get(faseNodeKey(f.code)), colorFase(f.code, i), "", true);
-    if (b) barras.push({ ...b, tooltip: `${f.nombre} · inicio ${fmtFecha(b.startMs)}` });
+    const sr = sched.get(faseNodeKey(f.code));
+    const b = barraFase(sr, f.code, i, sr ? `${f.nombre} · inicio ${fmtFecha(isoMs(sr.start) ?? 0)}` : undefined);
+    if (b) barras.push(b);
   });
   return barras;
 }
@@ -247,8 +295,8 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
 
   FASES_ORD.forEach((f, i) => {
     // Barre de la fase : rendue sur la ligne du TITRE (plus de ligne dédiée).
-    // Les fases « No objeción AFD » (et ses jalons) ressortent en rouge.
-    const bFase = barraDe(sched.get(faseNodeKey(f.code)), colorFase(f.code, i), "", true);
+    // Sigle centré ; « No objeción AFD » (et ses jalons) en rouge.
+    const bFase = barraFase(sched.get(faseNodeKey(f.code)), f.code, i);
 
     // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
     const filas: Fila[] = [];
@@ -482,6 +530,26 @@ export function CronogramaClient() {
             {todasColapsadas ? "Vista detallada" : "Vista compacta"}
           </button>
         )}
+      </div>
+
+      {/* Légende des fases (sigle + couleur) au-dessus du cronograma. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[var(--text-muted)]">
+        {LEYENDA_FASES.map((code) => {
+          const color = colorDeFase(code);
+          const sigla = FASE_SIGLA[code] ?? "";
+          const nombre = GESTION_FASES.find((f) => f.code === code)?.nombre ?? code;
+          return (
+            <span key={code} className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex h-4 min-w-[22px] items-center justify-center rounded px-1 text-[10px] font-semibold"
+                style={{ backgroundColor: color, color: textoSobre(color) }}
+              >
+                {sigla}
+              </span>
+              <span>{nombre}</span>
+            </span>
+          );
+        })}
       </div>
 
       <div
