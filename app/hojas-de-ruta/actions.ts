@@ -13,7 +13,9 @@ import { getCurrentUser, isAdmin } from "@/lib/auth";
 
 const ESTADO = "peebcoolsf_roadmap_estado";
 const ENLACE = "peebcoolsf_roadmap_enlace";
-const ANO_KEY = "__ano_afd__";
+// Clés persistées des cases « No objeción AFD » (hito avant Licitación + les deux
+// jalons Atribución / Contrato après Licitación).
+const ANO_KEYS = new Set(["__ano_afd__", "__ano_afd_atribucion__", "__ano_afd_contrato__"]);
 
 function assertAdmin() {
   if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
@@ -106,15 +108,20 @@ export async function roadmapSetEdicion(
   if (error) throw new Error(error.message);
 }
 
-/** Case « No objeción AFD recibida » (par feuille). */
-export async function roadmapSetAnoAfd(feuille: string, recibida: boolean): Promise<void> {
+/** Case « No objeción AFD recibida » (par feuille et par hito AFD). */
+export async function roadmapSetAnoAfd(
+  feuille: string,
+  tareaKey: string,
+  recibida: boolean,
+): Promise<void> {
   assertAdmin();
   assertFeuille(feuille);
+  if (!ANO_KEYS.has(tareaKey)) throw new Error(`Hito AFD inválido: ${tareaKey}`);
   const sb = createServiceClient();
   const { error } = await sb
     .from(ESTADO)
     .upsert(
-      { feuille, tarea_key: ANO_KEY, realizada: recibida },
+      { feuille, tarea_key: tareaKey, realizada: recibida },
       { onConflict: "feuille,tarea_key" },
     );
   if (error) throw new Error(error.message);
@@ -236,21 +243,33 @@ export async function roadmapRestaurarOcultas(feuille: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** Ajoute une dépendance (flèche) desde → hacia. */
+/**
+ * Ajoute / met à jour une liaison desde → hacia. `hacia` démarre par rapport au
+ * `punto` (inicio|fin) de `desde`, décalé de `desfaseValor` (signé) `desfaseUnidad`.
+ * Défauts = dépendance simple (fin + 0). Upsert : réappeler met à jour les params.
+ */
 export async function roadmapAddEnlace(
   feuille: string,
   desde: string,
   hacia: string,
+  liaison?: { punto?: string; desfaseValor?: number; desfaseUnidad?: string },
 ): Promise<void> {
   assertAdmin();
   assertFeuille(feuille);
   assertKey(desde);
   assertKey(hacia);
   if (desde === hacia) return;
+  const punto = liaison?.punto === "inicio" ? "inicio" : "fin";
+  const dv = liaison?.desfaseValor;
+  const desfaseValor = dv == null || Number.isNaN(dv) ? 0 : Math.trunc(dv);
+  const desfaseUnidad = UNIDADES_VALIDAS.has(liaison?.desfaseUnidad ?? "") ? liaison!.desfaseUnidad : "dia";
   const sb = createServiceClient();
   const { error } = await sb
     .from(ENLACE)
-    .upsert({ feuille, desde, hacia }, { onConflict: "feuille,desde,hacia", ignoreDuplicates: true });
+    .upsert(
+      { feuille, desde, hacia, punto, desfase_valor: desfaseValor, desfase_unidad: desfaseUnidad },
+      { onConflict: "feuille,desde,hacia" },
+    );
   if (error) throw new Error(error.message);
 }
 

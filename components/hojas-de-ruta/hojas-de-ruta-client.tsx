@@ -40,11 +40,24 @@ import {
 
 const HITO_AFD = "no_objecion_afd";
 
+// Clé spéciale = case « No objeción AFD recibida » (persistée comme une tâche).
+const ANO_KEY = "__ano_afd__";
+
+// Hitos « No objeción AFD » supplémentaires, propres à la feuille de route et
+// insérés juste après la fase Licitación (Atribución puis Contrato). Ils ne sont
+// PAS dans FASES (constante partagée dashboard/cronograma/export) : ce sont des
+// jalons de la hoja de ruta. `anoKey` = tarea_key de persistance de leur case.
+const HITOS_POST_LICITACION: { code: string; nombre: string; anoKey: string }[] = [
+  { code: "no_objecion_afd_atribucion", nombre: "No objeción AFD — Atribución", anoKey: "__ano_afd_atribucion__" },
+  { code: "no_objecion_afd_contrato", nombre: "No objeción AFD — Contrato", anoKey: "__ano_afd_contrato__" },
+];
+
 interface FilaRuta {
   code: string;
   nombre: string;
   hito: boolean;
   numero: number | null;
+  anoKey?: string; // tarea_key de la case « No objeción AFD » (hitos uniquement)
 }
 
 const FILAS_RUTA: FilaRuta[] = [];
@@ -53,7 +66,19 @@ const FILAS_RUTA: FilaRuta[] = [];
   for (const f of FASES.filter((x) => x.code !== "general")) {
     const hito = f.code === HITO_AFD;
     if (!hito) numero += 1;
-    FILAS_RUTA.push({ code: f.code, nombre: f.nombre, hito, numero: hito ? null : numero });
+    FILAS_RUTA.push({
+      code: f.code,
+      nombre: f.nombre,
+      hito,
+      numero: hito ? null : numero,
+      anoKey: hito ? ANO_KEY : undefined,
+    });
+    // Après Licitación : deux jalons « No objeción AFD » consécutifs.
+    if (f.code === "licitacion") {
+      for (const h of HITOS_POST_LICITACION) {
+        FILAS_RUTA.push({ code: h.code, nombre: h.nombre, hito: true, numero: null, anoKey: h.anoKey });
+      }
+    }
   }
 }
 
@@ -71,9 +96,6 @@ for (let anio = 2026; anio <= 2030; anio += 1) {
 // colonne conserve sa place même vide (alignement des cartes par composante).
 // GP (Gestión de proyecto) à ajouter ici lorsque son contenu sera défini.
 const COLUMNAS: ComponenteCode[] = ["EE", "G", "AyS"];
-
-// Clé spéciale = case « No objeción AFD recibida » (persistée comme une tâche).
-const ANO_KEY = "__ano_afd__";
 
 // Découpe une clé locale `${feuille}::${tareaKey}` pour la persistance.
 function splitKey(sk: string): { feuille: string; tarea: string } {
@@ -157,8 +179,8 @@ export function HojasDeRutaClient() {
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
   const [ediciones, setEdiciones] = useState<Record<string, Edicion>>({});
   const [panel, setPanel] = useState<{ key: string; tipo: PanelTipo } | null>(null);
+  // Cases « No objeción AFD » (hitos). Clé = `${feuille}::${anoKey}`.
   const [anoAfd, setAnoAfd] = useState<Record<string, boolean>>({});
-  const anoChecked = !!anoAfd[seleccion];
 
   // Dépendances (flèches) + mode liaison — LOCAUX.
   const [enlaces, setEnlaces] = useState<Enlace[]>([]);
@@ -206,8 +228,8 @@ export function HojasDeRutaClient() {
     const pla: Record<string, Plan> = {};
     for (const r of snap.data.roadmapEstado) {
       const sk = `${r.feuille}::${r.tareaKey}`;
-      if (r.tareaKey === ANO_KEY) {
-        if (r.realizada) ano[r.feuille] = true;
+      if (r.tareaKey.startsWith("__ano_afd")) {
+        if (r.realizada) ano[`${r.feuille}::${r.tareaKey}`] = true;
         continue;
       }
       if (r.realizada) rz.add(sk);
@@ -815,8 +837,11 @@ export function HojasDeRutaClient() {
                   {columnasGrid(sem.code)}
                 </div>
               ))
-            : FILAS_RUTA.map((fila) =>
-                fila.hito ? (
+            : FILAS_RUTA.map((fila) => {
+                if (fila.hito) {
+                  const anoKey = fila.anoKey ?? ANO_KEY;
+                  const checked = !!anoAfd[`${seleccion}::${anoKey}`];
+                  return (
               <div
                 key={fila.code}
                 className="relative flex items-center justify-center gap-3 bg-[var(--app-bg)] px-12 py-3"
@@ -825,7 +850,7 @@ export function HojasDeRutaClient() {
                 <span
                   className={cn(
                     "text-xs font-semibold uppercase tracking-wide transition-colors",
-                    anoChecked ? "text-[var(--focus)]" : "text-[var(--text-muted)]",
+                    checked ? "text-[var(--focus)]" : "text-[var(--text-muted)]",
                   )}
                 >
                   {fila.nombre}
@@ -835,16 +860,16 @@ export function HojasDeRutaClient() {
                   <button
                     type="button"
                     onClick={() => {
-                      const nuevo = !anoChecked;
-                      setAnoAfd((p) => ({ ...p, [seleccion]: nuevo }));
-                      roadmapSetAnoAfd(seleccion, nuevo).catch(() => {});
+                      const nuevo = !checked;
+                      setAnoAfd((p) => ({ ...p, [`${seleccion}::${anoKey}`]: nuevo }));
+                      roadmapSetAnoAfd(seleccion, anoKey, nuevo).catch(() => {});
                     }}
-                    aria-pressed={anoChecked}
+                    aria-pressed={checked}
                     aria-label="No objeción AFD recibida"
                     title="No objeción AFD recibida"
                     className={cn(
                       "absolute right-4 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-                      anoChecked
+                      checked
                         ? "border-[var(--accent)] bg-[var(--accent)] text-white"
                         : "border-[var(--text-muted)] bg-transparent text-transparent hover:text-[var(--text-muted)]",
                     )}
@@ -853,7 +878,9 @@ export function HojasDeRutaClient() {
                   </button>
                 )}
               </div>
-            ) : (
+                  );
+                }
+                return (
               <div key={fila.code} className="flex items-center gap-4 p-4">
                 <div className="w-28 shrink-0 self-center sm:w-44">
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
@@ -865,8 +892,8 @@ export function HojasDeRutaClient() {
                 </div>
                 {columnasGrid(fila.code)}
               </div>
-            ),
-          )}
+                );
+              })}
 
           {/* Overlay des flèches de dépendance */}
           {overlay.flechas.length > 0 && (
