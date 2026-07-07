@@ -36,8 +36,8 @@ const START = new Date(ANIO_INI, 0, 1).getTime();
 const END = new Date(ANIO_FIN + 1, 0, 1).getTime();
 const SPAN = END - START;
 
-const LABEL_W = 240;
-const ROW_H = 26;
+const LABEL_W = 300;
+const ROW_H = 28;
 // Largeur d'UNE case, IDENTIQUE quelle que soit la granularité : changer de
 // vue = zoomer (une case de trimestre fait la même largeur qu'une case de mois
 // ou de semaine). Le nombre de cases change (≈20 en trimestre, 60 en mes, 260
@@ -233,7 +233,8 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
       arr
         .filter((c) => !c.nota)
         .map((c) => {
-          const b = barraDe(sched.get(c.key), CARD_TONOS[comp].foot, c.nombre, false, CARD_TONOS[comp].footText);
+          // Tons CLAIRS de composante (en-tête de carte) pour les détails.
+          const b = barraDe(sched.get(c.key), CARD_TONOS[comp].head, c.nombre, false, CARD_TONOS[comp].headText);
           return { label: c.nombre, barras: b ? [b] : [], _s: b ? b.startMs : Infinity };
         })
         .sort((a, b) => a._s - b._s)
@@ -550,7 +551,7 @@ export function CronogramaClient() {
                     disabled={!plegable}
                     aria-expanded={plegable ? !colapsada : undefined}
                     className={cn(
-                      "sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-[var(--border)] px-2 text-left text-xs font-semibold text-[var(--text)]",
+                      "sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-[var(--border)] px-2 text-left text-sm font-semibold text-[var(--text)]",
                       plegable && "cursor-pointer hover:bg-[#e2e5ea]",
                     )}
                     style={{ width: LABEL_W, height: ROW_H, backgroundColor: "#eceef2" }}
@@ -571,7 +572,7 @@ export function CronogramaClient() {
                     <div key={fi} className="flex border-b border-[var(--border)] last:border-b-0">
                       <div
                         className={cn(
-                          "sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-[11px] text-[var(--text)]",
+                          "sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs text-[var(--text)]",
                           fila.bold && "font-semibold",
                         )}
                         style={{ width: LABEL_W, height: ROW_H }}
@@ -621,12 +622,12 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
         return (
           <div key={bi}>
             <div
-              className="absolute"
+              className={cn("absolute", b.endMs > b.solidMs ? "rounded-l" : "rounded")}
               style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
             />
             {b.endMs > b.solidMs ? (
               <div
-                className="absolute"
+                className="absolute rounded-r"
                 style={{
                   left: rPlena,
                   width: rFin - rPlena,
