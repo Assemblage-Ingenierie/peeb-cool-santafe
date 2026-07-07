@@ -306,6 +306,29 @@ export const FASES: EnumOption[] = [
   { code: "general", nombre: "General" },
 ];
 
+// Jalons (« checks ») de la feuille de route, insérés APRÈS une phase. Ils sont
+// AUSSI matérialisés comme lignes « etapa » dans Gestión de subproyectos (pour
+// porter leurs dates / durées). `anoKey` = tarea_key de persistance de leur case.
+export interface HitoFase {
+  code: string;
+  nombre: string;
+  trasFase: string; // code de la phase après laquelle l'insérer
+  anoKey: string;
+}
+export const HITOS_FASE: HitoFase[] = [
+  { code: "validacion_anteproyecto", nombre: "Validación de anteproyecto", trasFase: "anteproyecto", anoKey: "__val_anteproyecto__" },
+  { code: "no_objecion_afd_atribucion", nombre: "No objeción AFD — Atribución", trasFase: "licitacion", anoKey: "__ano_afd_atribucion__" },
+  { code: "no_objecion_afd_contrato", nombre: "No objeción AFD — Contrato", trasFase: "licitacion", anoKey: "__ano_afd_contrato__" },
+];
+
+// Ordre canonique des lignes « etapa » (Gestión de subproyectos) = FASES avec les
+// jalons insérés après leur phase. Source unique pour le seed (addSchool) et
+// l'ordre d'affichage ; l'`orden` en base = index + 1.
+export const GESTION_FASES: { code: string; nombre: string }[] = FASES.flatMap((f) => [
+  { code: f.code, nombre: f.nombre },
+  ...HITOS_FASE.filter((h) => h.trasFase === f.code).map((h) => ({ code: h.code, nombre: h.nombre })),
+]);
+
 // ============================================================
 // Tokens de surface (UI neutre). NE SONT PAS des couleurs de marque :
 // implémentation du « fond gris clair » et de la sidebar #30323e (CDC §2.1).

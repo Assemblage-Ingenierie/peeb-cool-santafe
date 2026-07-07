@@ -5,6 +5,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   FASES,
+  HITOS_FASE,
   COMPONENTES,
   CARD_TONOS,
   RESPONSABLE_DEFECTO,
@@ -53,15 +54,14 @@ const ANO_KEY = "__ano_afd__";
 // route (PAS dans FASES, constante partagée dashboard/cronograma/export). Chaque
 // jalon porte une case admin persistée sous son `anoKey`, sur le même principe
 // que « No objeción AFD ». Clés = code de la phase après laquelle insérer.
-const HITOS_TRAS_FASE: Record<string, { code: string; nombre: string; anoKey: string }[]> = {
-  anteproyecto: [
-    { code: "validacion_anteproyecto", nombre: "Validación de anteproyecto", anoKey: "__val_anteproyecto__" },
-  ],
-  licitacion: [
-    { code: "no_objecion_afd_atribucion", nombre: "No objeción AFD — Atribución", anoKey: "__ano_afd_atribucion__" },
-    { code: "no_objecion_afd_contrato", nombre: "No objeción AFD — Contrato", anoKey: "__ano_afd_contrato__" },
-  ],
-};
+const HITOS_TRAS_FASE: Record<string, { code: string; nombre: string; anoKey: string }[]> =
+  HITOS_FASE.reduce(
+    (acc, h) => {
+      (acc[h.trasFase] ??= []).push({ code: h.code, nombre: h.nombre, anoKey: h.anoKey });
+      return acc;
+    },
+    {} as Record<string, { code: string; nombre: string; anoKey: string }[]>,
+  );
 
 // Toutes les clés persistées des cases de jalon (pour l'hydratation depuis le
 // snapshot) : le hito « No objeción AFD » de FASES + ceux insérés après une phase.

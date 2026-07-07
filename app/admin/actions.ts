@@ -6,7 +6,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { TABLES, type TableConfig } from "@/lib/admin/config";
 import type { Row, SubproyectoRow } from "@/lib/admin/read";
-import { FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants";
+import { GESTION_FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants";
 
 // ============================================================
 // Server Actions génériques (écriture admin, sans cache).
@@ -425,9 +425,10 @@ export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; 
   ]);
   if (mErr) throw new Error(mErr.message);
 
-  // Lignes de fase (etapa) pré-remplies, une par fase (ordre chronologique de FASES).
+  // Lignes de fase (etapa) pré-remplies, une par fase + jalon (ordre chronologique
+  // canonique GESTION_FASES = FASES avec les jalons insérés après leur phase).
   const subCode = uid.replace(/^SUB-/, "");
-  const faseRows = FASES.map((f, i) => ({
+  const faseRows = GESTION_FASES.map((f, i) => ({
     uid: `GEST-${subCode}-${f.code}`,
     subproyecto_uid: uid,
     titulo: f.nombre,
