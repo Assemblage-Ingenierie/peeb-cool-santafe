@@ -154,11 +154,15 @@ export interface SnapshotRoadmapEstado {
   durUnidad: string | null; // durée estimée : unité (dia|semana|mes)
 }
 
-// Hojas de ruta — dépendances (flèches) persistées (table peebcoolsf_roadmap_enlace).
+// Hojas de ruta — liaisons planifiantes persistées (table peebcoolsf_roadmap_enlace).
+// « hacia » démarre par rapport à `punto` (inicio|fin) de « desde », + décalage signé.
 export interface SnapshotRoadmapEnlace {
   feuille: string;
   desde: string;
   hacia: string;
+  punto: "inicio" | "fin"; // point d'accroche sur la source
+  desfaseValor: number; // décalage signé (négatif = avant, positif = après)
+  desfaseUnidad: "dia" | "semana" | "mes";
 }
 
 export interface Snapshot {
@@ -303,7 +307,9 @@ export async function getSnapshot(): Promise<Snapshot> {
       .select(
         "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
       ),
-    sb.from("peebcoolsf_roadmap_enlace").select("feuille, desde, hacia"),
+    sb
+      .from("peebcoolsf_roadmap_enlace")
+      .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad"),
   ]);
 
   const firstError =
@@ -400,8 +406,23 @@ export async function getSnapshot(): Promise<Snapshot> {
   }));
 
   const roadmapEnlace: SnapshotRoadmapEnlace[] = (
-    (rmEnlaceRes.data ?? []) as { feuille: string; desde: string; hacia: string }[]
-  ).map((r) => ({ feuille: r.feuille, desde: r.desde, hacia: r.hacia }));
+    (rmEnlaceRes.data ?? []) as {
+      feuille: string;
+      desde: string;
+      hacia: string;
+      punto: string | null;
+      desfase_valor: number | null;
+      desfase_unidad: string | null;
+    }[]
+  ).map((r) => ({
+    feuille: r.feuille,
+    desde: r.desde,
+    hacia: r.hacia,
+    punto: r.punto === "inicio" ? "inicio" : "fin",
+    desfaseValor: r.desfase_valor ?? 0,
+    desfaseUnidad:
+      r.desfase_unidad === "semana" || r.desfase_unidad === "mes" ? r.desfase_unidad : "dia",
+  }));
 
   const eventos: SnapshotEvento[] = ((evtRes.data ?? []) as RawEvento[]).map((e) => {
     const participantes = Array.isArray(e.participantes) ? e.participantes : [];
