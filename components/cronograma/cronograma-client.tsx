@@ -114,6 +114,7 @@ interface Barra {
   etiqueta?: string;
   dentro?: boolean;
   etiquetaColor?: string;
+  tooltip?: string; // survol (title) — sans texte visible sur la barre
 }
 interface Fila {
   label: string;
@@ -215,6 +216,28 @@ function armar(uid: string, tipologia: string, d: Snapshot) {
   return { columnas, sched };
 }
 
+// Couleur d'une fase (bande de temps) : bleu progressif par ordre, ROUGE pour
+// « No objeción AFD » et ses jalons. Source unique (global + détail par fase).
+const colorFase = (code: string, i: number): string =>
+  code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length];
+
+// Date courte (survol des segments de fase) — ex. « 3 jun 2027 ».
+const fmtFecha = (ms: number): string => {
+  const d = new Date(ms);
+  return `${d.getDate()} ${MES_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+// Enchaînement des fases d'un planning sur UNE ligne (barres colorées, sans
+// texte visible ; nom + date de démarrage au survol).
+function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
+  const barras: Barra[] = [];
+  FASES_ORD.forEach((f, i) => {
+    const b = barraDe(sched.get(faseNodeKey(f.code)), colorFase(f.code, i), "", true);
+    if (b) barras.push({ ...b, tooltip: `${f.nombre} · inicio ${fmtFecha(b.startMs)}` });
+  });
+  return barras;
+}
+
 // Sections d'un sous-projet : UNE section (bande noire) PAR FASE. Dans chaque
 // fase : 1re ligne = la barre de la fase elle-même (sa ligne de temps), puis les
 // tareas regroupées par composante (GP → EE → AyS → G), les unes sous les autres.
@@ -225,8 +248,7 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
   FASES_ORD.forEach((f, i) => {
     // Barre de la fase : rendue sur la ligne du TITRE (plus de ligne dédiée).
     // Les fases « No objeción AFD » (et ses jalons) ressortent en rouge.
-    const color = f.code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length];
-    const bFase = barraDe(sched.get(faseNodeKey(f.code)), color, "", true);
+    const bFase = barraDe(sched.get(faseNodeKey(f.code)), colorFase(f.code, i), "", true);
 
     // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
     const filas: Fila[] = [];
@@ -253,28 +275,15 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
   return out;
 }
 
-// Vue globale : une ligne par sous-projet (durée totale calculée = min→max).
+// Vue globale : une ligne par sous-projet, montrant l'ENCHAÎNEMENT des fases
+// (chaque fase = un segment coloré avec sa date de démarrage et sa durée).
 function seccionGlobal(subs: Snapshot["subproyectos"], d: Snapshot): Seccion {
   return {
-    titulo: "Subproyectos — duración total",
+    titulo: "Subproyectos — enlace de fases",
     barras: [],
     filas: subs.map((s) => {
       const { sched } = armar(s.uid, s.tipologia, d);
-      let min = Infinity;
-      let max = -Infinity;
-      for (const r of sched.values()) {
-        const a = isoMs(r.start);
-        const b = isoMs(r.end);
-        if (a != null) min = Math.min(min, a);
-        if (b != null) max = Math.max(max, b);
-      }
-      if (!Number.isFinite(min)) return { label: s.nombre, barras: [] };
-      return {
-        label: s.nombre,
-        barras: [
-          { startMs: min, solidMs: max, endMs: max, color: BLUES[3], etiqueta: s.nombre, dentro: true, etiquetaColor: "#ffffff" },
-        ],
-      };
+      return { label: s.nombre, barras: barrasFases(sched) };
     }),
   };
 }
@@ -628,10 +637,12 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
             <div
               className={cn("absolute", b.endMs > b.solidMs ? "rounded-l" : "rounded")}
               style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
+              title={b.tooltip}
             />
             {b.endMs > b.solidMs ? (
               <div
                 className="absolute rounded-r"
+                title={b.tooltip}
                 style={{
                   left: rPlena,
                   width: rFin - rPlena,
