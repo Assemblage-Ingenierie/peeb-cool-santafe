@@ -49,6 +49,8 @@ const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep",
 
 // Bleus progressifs pour les barres de phase (clair → foncé).
 const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"];
+// Rouge des fases « No objeción AFD » (jalons critiques mis en évidence).
+const ROJO_AFD = "#cc0000";
 
 // Phases affichées (ordre chronologique canonique, hors « general »).
 const FASES_ORD = GESTION_FASES.filter((f) => f.code !== "general");
@@ -222,7 +224,9 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
 
   FASES_ORD.forEach((f, i) => {
     // Barre de la fase : rendue sur la ligne du TITRE (plus de ligne dédiée).
-    const bFase = barraDe(sched.get(faseNodeKey(f.code)), BLUES[i % BLUES.length], "", true);
+    // Les fases « No objeción AFD » (et ses jalons) ressortent en rouge.
+    const color = f.code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length];
+    const bFase = barraDe(sched.get(faseNodeKey(f.code)), color, "", true);
 
     // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
     const filas: Fila[] = [];
