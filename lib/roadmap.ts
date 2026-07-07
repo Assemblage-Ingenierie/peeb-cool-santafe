@@ -40,6 +40,19 @@ const REQ_LABEL = new Map<string, string>(
   REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
 );
 
+// Plans dont la carte de la phase « Proyecto ejecutivo » est préfixée
+// « Lineamientos para … » (on y définit les lignes directrices du plan, pas le
+// plan final). N'affecte que la feuille de route : le libellé de REQUISITOS_AYS
+// (checklist / dashboard) reste inchangé.
+const LINEAMIENTOS_PLANES_PE = new Set(["10.5.4", "10.5.5", "10.5.7"]);
+
+function nombrePlan(fase: string, code: string): string {
+  const label = REQ_LABEL.get(code) ?? code;
+  return fase === "proyecto_ejecutivo" && LINEAMIENTOS_PLANES_PE.has(code)
+    ? `Lineamientos para ${label}`
+    : label;
+}
+
 /**
  * Cartes par défaut d'une feuille de sous-projet (jamais pour « Proyecto global »).
  * `requisitosCodes` = codes des requisitos AyS cochés (tâches `dinamica`).
@@ -77,7 +90,7 @@ export function cartasBaseSubproyecto(
       out.push({
         key: `${t.fase}-${c}`,
         componente: t.componente,
-        nombre: REQ_LABEL.get(c) ?? c,
+        nombre: nombrePlan(t.fase, c),
         descripcion: refMgas(c),
         fila: t.fase,
       });

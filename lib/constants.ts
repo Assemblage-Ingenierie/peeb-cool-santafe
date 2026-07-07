@@ -233,7 +233,7 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
     nombre: "Asegurar la integración de los lineamientos establecidos en la fase anterior",
   },
   { fase: "licitacion", componente: "AyS", nombre: "Verificación de las ofertas AyS según criterios AyS" },
-  { fase: "licitacion", componente: "AyS", nombre: "Conformidad de los planes solicitados", dinamica: true },
+  { fase: "licitacion", componente: "AyS", nombre: "Verificación de los Planes de Gestión AyS propuestos" },
   { fase: "obra", componente: "AyS", nombre: "Aprobación y seguimiento del PGASC" },
   { fase: "obra", componente: "AyS", nombre: "Conformidad del cronograma con el plan de continuidad" },
   { fase: "obra", componente: "AyS", nombre: "Coordinación y seguimiento de los planes solicitados" },
