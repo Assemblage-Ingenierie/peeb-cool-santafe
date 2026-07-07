@@ -201,23 +201,34 @@ export interface RoadmapTarea {
   nombre: string;
   responsable?: string; // défaut = RESPONSABLE_DEFECTO (ACEFE)
   comentario?: string; // commentaire par défaut de la carte (surchargé par l'édition admin)
-  dinamica?: boolean; // contenu adapté aux Requisitos AyS cochés du sous-projet
+  // Visibilité par sous-projet (cellules noires de l'Excel). Une carte s'affiche
+  // si sa typologie est dans `soloTipologias` (si défini) ET son uid dans
+  // `soloSubproyectos` (si défini). Absents = visible partout.
+  soloTipologias?: string[]; // "A" | "H" | "E"
+  soloSubproyectos?: string[]; // uids SUB-…
 }
 
-// Tâches de la feuille de route, toutes composantes (AyS, Género, …). Identiques
-// pour tous les sous-projets ; les tâches `dinamica` (AyS) se déclinent selon les
-// requisitos cochés de chaque sous-projet.
+// Sous-projets à valeur patrimoniale (carte « Plan de gestión del Patrimonio »).
+const SUBS_PATRIMONIO = ["SUB-CENTENARIO", "SUB-CULLEN", "SUB-E67", "SUB-E331"];
+
+// Tâches de la feuille de route, toutes composantes (AyS, Género, …). Communes à
+// tous les sous-projets, sauf celles restreintes par `soloTipologias` /
+// `soloSubproyectos` (cf. Excel Hojaruta — cellules noires).
 export const ROADMAP_TAREAS: RoadmapTarea[] = [
   // --- Ambiental y social (AyS) ---
   // Anteproyecto
   { fase: "anteproyecto", componente: "AyS", nombre: "Redacción de memoria descriptiva del anteproyecto" },
   { fase: "anteproyecto", componente: "AyS", nombre: "Identificación de los otros planes de gestión relevantes para el proyecto" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Identificación de requisitos para intervenciones aeroportuarias", soloTipologias: ["A"] },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Identificación de requisitos para intervenciones hospitalarias", soloTipologias: ["H"] },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Identificación de requisitos para intervenciones escolares", soloTipologias: ["E"] },
   { fase: "anteproyecto", componente: "AyS", nombre: "Plan preliminar de continuidad de los servicios" },
-  { fase: "anteproyecto", componente: "AyS", nombre: "Plan de gestión del Patrimonio" },
+  { fase: "anteproyecto", componente: "AyS", nombre: "Plan de gestión del Patrimonio - identificación de los requisitos", soloSubproyectos: SUBS_PATRIMONIO },
   // Proyecto ejecutivo
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Pre-categorización provincial digital" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Categorización provincial" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Plan de continuidad de los servicios" },
+  { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Plan de gestión patrimonial", soloSubproyectos: SUBS_PATRIMONIO },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Lineamientos de los planes para la gestión de los aspectos ambientales" },
   { fase: "proyecto_ejecutivo", componente: "AyS", nombre: "Lineamientos de los programas/planes para la gestión de trabajo, condiciones laborales y SST" },
   // Redacción de pliegos

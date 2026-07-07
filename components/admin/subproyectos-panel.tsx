@@ -295,9 +295,6 @@ export function SubproyectosPanel({
   };
 
   // --- Fases : duración estimada (gestion_lineas) + planificación des tâches ---
-  const requisitosCodesSel = aysReq
-    .filter((r) => r.subproyecto_uid === selectedUid && r.activa)
-    .map((r) => r.requisito);
 
   const onFaseDuracion = (uid: string, durValor: number | null, durUnidad: string | null) => {
     setGestion((rs) =>
@@ -580,7 +577,7 @@ export function SubproyectosPanel({
               <FasesEditor
                 fases={gestionFases}
                 feuille={selected.uid}
-                requisitosCodes={requisitosCodesSel}
+                tipologia={String(selected.tipologia ?? "")}
                 roadmapEstado={roadmap}
                 onFaseField={gestionHandlers.onCellCommit}
                 onFaseDuracion={onFaseDuracion}

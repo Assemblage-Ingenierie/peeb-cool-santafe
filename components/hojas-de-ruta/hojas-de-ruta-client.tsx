@@ -281,7 +281,6 @@ export function HojasDeRutaClient() {
   const [tick, setTick] = useState(0);
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
-  const aysRequisitos = snap.status === "ready" ? snap.data.aysRequisitos : [];
 
   // Charge l'état persisté (realizadas, comentarios, ediciones, anoAfd, enlaces)
   // depuis le snapshot, une seule fois (ajuster l'état pendant le rendu).
@@ -374,12 +373,11 @@ export function HojasDeRutaClient() {
       o.fila = p.fila;
       o.orden = p.orden;
     }
-    const requisitosCodes = aysRequisitos
-      .filter((r) => r.subproyectoUid === seleccion)
-      .map((r) => r.requisito);
+    const sub = subproyectos.find((s) => s.uid === seleccion);
     return construirCartasPorFila({
       esGlobal: seleccion === "global",
-      requisitosCodes,
+      tipologia: sub?.tipologia ?? "",
+      uid: seleccion,
       estado,
     }) as Map<string, CardModel[]>;
   }

@@ -31,7 +31,7 @@ export interface TaskPlan {
 export function FasesEditor({
   fases,
   feuille,
-  requisitosCodes,
+  tipologia,
   roadmapEstado,
   onFaseField,
   onFaseDuracion,
@@ -39,7 +39,7 @@ export function FasesEditor({
 }: {
   fases: AdminRow[];
   feuille: string;
-  requisitosCodes: string[];
+  tipologia: string;
   roadmapEstado: RoadmapEstadoRow[];
   onFaseField: (uid: string, key: string, value: string) => void;
   onFaseDuracion: (uid: string, durValor: number | null, durUnidad: string | null) => void;
@@ -74,7 +74,7 @@ export function FasesEditor({
       durUnidad: r.dur_unidad,
     });
   }
-  const columnas = construirCartasPorFila({ esGlobal: false, requisitosCodes, estado });
+  const columnas = construirCartasPorFila({ esGlobal: false, tipologia, uid: feuille, estado });
   const tareasDeFase = (code: string) =>
     COMP_ORDER.flatMap((comp) => columnas.get(`${code}|${comp}`) ?? []).filter((c) => !c.nota);
 

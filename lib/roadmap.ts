@@ -32,12 +32,18 @@ export interface RoadmapOverride {
 
 /**
  * Cartes par défaut d'une feuille de sous-projet (jamais pour « Proyecto global »).
- * Cartes STATIQUES issues de ROADMAP_TAREAS. La visibilité par sous-projet
- * (cartes par typologie / cellules noires de l'Excel) sera gérée dans un lot
- * ultérieur.
+ * Filtre la visibilité par sous-projet : `soloTipologias` (A/H/E) et
+ * `soloSubproyectos` (uids) — cf. cellules noires de l'Excel.
  */
-export function cartasBaseSubproyecto(): (RoadmapCard & { fila: string })[] {
-  return ROADMAP_TAREAS.map((t) => ({
+export function cartasBaseSubproyecto(ctx: {
+  tipologia: string;
+  uid: string;
+}): (RoadmapCard & { fila: string })[] {
+  return ROADMAP_TAREAS.filter(
+    (t) =>
+      (!t.soloTipologias || t.soloTipologias.includes(ctx.tipologia)) &&
+      (!t.soloSubproyectos || t.soloSubproyectos.includes(ctx.uid)),
+  ).map((t) => ({
     key: t.id ?? t.nombre,
     componente: t.componente,
     nombre: t.nombre,
@@ -53,10 +59,11 @@ export function cartasBaseSubproyecto(): (RoadmapCard & { fila: string })[] {
  */
 export function construirCartasPorFila(opts: {
   esGlobal: boolean;
-  requisitosCodes?: string[]; // conservé pour compat (visibilité par sous-projet à venir)
+  tipologia?: string; // typologie du sous-projet (A/H/E) — visibilité des cartes
+  uid?: string; // uid du sous-projet — visibilité des cartes par sous-projet
   estado: Map<string, RoadmapOverride>;
 }): Map<string, RoadmapCard[]> {
-  const { esGlobal, estado } = opts;
+  const { esGlobal, tipologia, uid, estado } = opts;
   const acc = new Map<string, RoadmapCard[]>();
   const add = (fila: string, comp: ComponenteCode, card: RoadmapCard, orden: number) => {
     const key = `${fila}|${comp}`;
@@ -68,7 +75,7 @@ export function construirCartasPorFila(opts: {
   // Cartes par défaut (jamais pour le global).
   if (!esGlobal) {
     let idx = 0;
-    for (const card of cartasBaseSubproyecto()) {
+    for (const card of cartasBaseSubproyecto({ tipologia: tipologia ?? "", uid: uid ?? "" })) {
       idx += 1;
       const ov = estado.get(card.key);
       if (ov?.oculta) continue;
