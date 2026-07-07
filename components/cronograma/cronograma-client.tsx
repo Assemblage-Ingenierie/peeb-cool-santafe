@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
-  getComponente,
   CARD_TONOS,
   GESTION_FASES,
   type ComponenteCode,
@@ -39,7 +38,13 @@ const SPAN = END - START;
 
 const LABEL_W = 240;
 const ROW_H = 26;
-const UNIT_W: Record<Gran, number> = { semana: 12, mes: 26, trimestre: 66 };
+// Largeur d'UNE case, IDENTIQUE quelle que soit la granularité : changer de
+// vue = zoomer (une case de trimestre fait la même largeur qu'une case de mois
+// ou de semaine). Le nombre de cases change (≈20 en trimestre, 60 en mes, 260
+// en semana) → plus la granularité est fine, plus l'échelle est « zoomée ».
+const CELL_W = 56;
+// Date à laquelle démarre la visibilité au chargement (auto-scroll horizontal).
+const VISTA_INICIO = new Date(2026, 5, 1).getTime(); // juin 2026
 const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 // Bleus progressifs pour les barres de phase (clair → foncé).
@@ -207,40 +212,40 @@ function armar(uid: string, tipologia: string, d: Snapshot) {
   return { columnas, sched };
 }
 
-// Sections d'un sous-projet : Fases (barres de phase) + une section par composante.
+// Sections d'un sous-projet : UNE section (bande noire) PAR FASE. Dans chaque
+// fase : 1re ligne = la barre de la fase elle-même (sa ligne de temps), puis les
+// tareas regroupées par composante (GP → EE → AyS → G), les unes sous les autres.
 function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<string>): Seccion[] {
   const { columnas, sched } = armar(uid, tipologia, d);
   const out: Seccion[] = [];
 
-  const filasFase: Fila[] = FASES_ORD.map((f, i) => {
-    const b = barraDe(
-      sched.get(faseNodeKey(f.code)),
-      BLUES[i % BLUES.length],
-      f.nombre,
-      true,
-      i >= 3 ? "#ffffff" : "#1f2733",
-    );
-    return { label: f.nombre, bold: true, barras: b ? [b] : [] };
-  });
-  out.push({ titulo: "Fases", filas: filasFase });
+  FASES_ORD.forEach((f, i) => {
+    const filas: Fila[] = [];
 
-  for (const comp of COMPS) {
-    if (!filtros.has(comp)) continue;
-    const cards: { key: string; nombre: string }[] = [];
-    for (const [colKey, arr] of columnas) {
-      if (!colKey.endsWith(`|${comp}`)) continue;
-      for (const c of arr) if (!c.nota) cards.push({ key: c.key, nombre: c.nombre });
+    // 1re ligne : la barre de la fase (nom porté par la colonne d'étiquettes).
+    const bFase = barraDe(sched.get(faseNodeKey(f.code)), BLUES[i % BLUES.length], "", true);
+    filas.push({ label: f.nombre, bold: true, barras: bFase ? [bFase] : [] });
+
+    // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
+    for (const comp of COMPS) {
+      if (!filtros.has(comp)) continue;
+      const arr = columnas.get(`${f.code}|${comp}`);
+      if (!arr) continue;
+      arr
+        .filter((c) => !c.nota)
+        .map((c) => {
+          const b = barraDe(sched.get(c.key), CARD_TONOS[comp].foot, c.nombre, false, CARD_TONOS[comp].footText);
+          return { label: c.nombre, barras: b ? [b] : [], _s: b ? b.startMs : Infinity };
+        })
+        .sort((a, b) => a._s - b._s)
+        .forEach(({ label, barras }) => filas.push({ label, barras }));
     }
-    if (cards.length === 0) continue;
-    const filas = cards
-      .map((c) => {
-        const b = barraDe(sched.get(c.key), CARD_TONOS[comp].foot, c.nombre, false, CARD_TONOS[comp].footText);
-        return { label: c.nombre, barras: b ? [b] : [], _s: b ? b.startMs : Infinity };
-      })
-      .sort((a, b) => a._s - b._s)
-      .map(({ label, barras }) => ({ label, barras }));
-    out.push({ titulo: getComponente(comp)?.nombre ?? comp, filas });
-  }
+
+    // On masque une fase entièrement vide (pas de barre + aucune tarea visible).
+    if (!bFase && filas.length === 1) return;
+    out.push({ titulo: f.nombre, filas });
+  });
+
   return out;
 }
 
@@ -287,8 +292,47 @@ export function CronogramaClient() {
   })();
 
   const unidades = construirUnidades(gran);
-  const totalW = unidades.length * UNIT_W[gran];
+  const totalW = unidades.length * CELL_W;
   const x = (ms: number) => ((ms - START) / SPAN) * totalW;
+
+  // --- Scroll horizontal : auto-position à juin 2026, zoom ancré, drag-to-pan.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  // Date au bord gauche du viewport (ms) — conservée à travers les zooms.
+  const anclaMsRef = useRef<number>(VISTA_INICIO);
+  // Repositionne le scroll pour aligner l'ancre sur le bord gauche.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollLeft = ((anclaMsRef.current - START) / SPAN) * totalW;
+  }, [totalW]);
+  const onScroll = () => {
+    const el = scrollRef.current;
+    if (el) anclaMsRef.current = START + (el.scrollLeft / totalW) * SPAN;
+  };
+
+  // Drag-to-pan (glisser pour faire défiler horizontalement).
+  const dragRef = useRef<{ x: number; left: number } | null>(null);
+  const [arrastrando, setArrastrando] = useState(false);
+  const onPointerDown = (e: React.PointerEvent) => {
+    // Ne pas détourner les clics sur boutons/liens.
+    if ((e.target as HTMLElement).closest("button, a")) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    dragRef.current = { x: e.clientX, left: el.scrollLeft };
+    setArrastrando(true);
+    el.setPointerCapture(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const el = scrollRef.current;
+    if (!el || !dragRef.current) return;
+    el.scrollLeft = dragRef.current.left - (e.clientX - dragRef.current.x);
+  };
+  const finDrag = (e: React.PointerEvent) => {
+    const el = scrollRef.current;
+    if (el && dragRef.current) el.releasePointerCapture(e.pointerId);
+    dragRef.current = null;
+    setArrastrando(false);
+  };
 
   const [hoyMs, setHoyMs] = useState<number | null>(null);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) anti-décalage d'hydratation
@@ -338,7 +382,7 @@ export function CronogramaClient() {
   const headH = enSemana ? 20 + 18 + 16 : 40;
 
   const gridStyle = {
-    backgroundImage: `repeating-linear-gradient(90deg, transparent 0 ${UNIT_W[gran] - 1}px, var(--border) ${UNIT_W[gran] - 1}px ${UNIT_W[gran]}px)`,
+    backgroundImage: `repeating-linear-gradient(90deg, transparent 0 ${CELL_W - 1}px, var(--border) ${CELL_W - 1}px ${CELL_W}px)`,
   };
 
   const activa =
@@ -399,7 +443,18 @@ export function CronogramaClient() {
 
       <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={finDrag}
+        onPointerCancel={finDrag}
+        className={cn(
+          "overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]",
+          arrastrando ? "cursor-grabbing select-none" : "cursor-grab",
+        )}
+      >
         <div className="relative" style={{ width: LABEL_W + totalW }}>
           {hoyEnRango && hoyMs != null && (
             <div
@@ -486,17 +541,17 @@ export function CronogramaClient() {
                       return (
                         <div key={bi}>
                           <div
-                            className="absolute rounded-sm"
-                            style={{ left, width: Math.max(2, rPlena - left), top: 5, height: ROW_H - 10, backgroundColor: b.color }}
+                            className="absolute"
+                            style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
                           />
                           {b.endMs > b.solidMs ? (
                             <div
-                              className="absolute rounded-sm"
+                              className="absolute"
                               style={{
                                 left: rPlena,
                                 width: rFin - rPlena,
-                                top: 5,
-                                height: ROW_H - 10,
+                                top: 0,
+                                height: ROW_H,
                                 backgroundImage: `repeating-linear-gradient(45deg, ${b.color} 0 5px, #fff 5px 10px)`,
                               }}
                             />
@@ -507,9 +562,9 @@ export function CronogramaClient() {
                               style={{
                                 left,
                                 width: Math.max(0, rPlena - left),
-                                top: 5,
-                                height: ROW_H - 10,
-                                lineHeight: `${ROW_H - 10}px`,
+                                top: 0,
+                                height: ROW_H,
+                                lineHeight: `${ROW_H}px`,
                                 color: b.etiquetaColor ?? "#1f2733",
                               }}
                               title={b.etiqueta}
