@@ -120,7 +120,8 @@ interface Fila {
 }
 interface Seccion {
   titulo: string;
-  filas: Fila[];
+  barras: Barra[]; // barre de la fase — rendue sur la LIGNE DU TITRE (bande grise)
+  filas: Fila[]; // tareas (masquées quand la section est repliée)
 }
 
 function barraDe(
@@ -220,13 +221,11 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
   const out: Seccion[] = [];
 
   FASES_ORD.forEach((f, i) => {
-    const filas: Fila[] = [];
-
-    // 1re ligne : la barre de la fase (nom porté par la colonne d'étiquettes).
+    // Barre de la fase : rendue sur la ligne du TITRE (plus de ligne dédiée).
     const bFase = barraDe(sched.get(faseNodeKey(f.code)), BLUES[i % BLUES.length], "", true);
-    filas.push({ label: f.nombre, bold: true, barras: bFase ? [bFase] : [] });
 
     // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
+    const filas: Fila[] = [];
     for (const comp of COMPS) {
       if (!filtros.has(comp)) continue;
       const arr = columnas.get(`${f.code}|${comp}`);
@@ -242,8 +241,8 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
     }
 
     // On masque une fase entièrement vide (pas de barre + aucune tarea visible).
-    if (!bFase && filas.length === 1) return;
-    out.push({ titulo: f.nombre, filas });
+    if (!bFase && filas.length === 0) return;
+    out.push({ titulo: f.nombre, barras: bFase ? [bFase] : [], filas });
   });
 
   return out;
@@ -253,6 +252,7 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
 function seccionGlobal(subs: Snapshot["subproyectos"], d: Snapshot): Seccion {
   return {
     titulo: "Subproyectos — duración total",
+    barras: [],
     filas: subs.map((s) => {
       const { sched } = armar(s.uid, s.tipologia, d);
       let min = Infinity;
@@ -281,6 +281,15 @@ export function CronogramaClient() {
   const filtros = useComponentFilters();
   const [gran, setGran] = useState<Gran>("mes");
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
+  // Fases repliées (titres) — par défaut tout est déplié (détails visibles).
+  const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
+  const alternarSeccion = (titulo: string) =>
+    setColapsadas((prev) => {
+      const next = new Set(prev);
+      if (next.has(titulo)) next.delete(titulo);
+      else next.add(titulo);
+      return next;
+    });
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
 
@@ -390,6 +399,12 @@ export function CronogramaClient() {
       ? "Proyecto global"
       : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
 
+  // Vue compacte = toutes les fases repliées (seulement les barres de phase).
+  const esSub = seleccion !== "global";
+  const todasColapsadas = secciones.length > 0 && secciones.every((s) => colapsadas.has(s.titulo));
+  const alternarTodas = () =>
+    setColapsadas(todasColapsadas ? new Set() : new Set(secciones.map((s) => s.titulo)));
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -441,7 +456,19 @@ export function CronogramaClient() {
         ))}
       </nav>
 
-      <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
+        {esSub && secciones.length > 0 && (
+          <button
+            type="button"
+            onClick={alternarTodas}
+            aria-pressed={todasColapsadas}
+            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          >
+            {todasColapsadas ? "Vista detallada" : "Vista compacta"}
+          </button>
+        )}
+      </div>
 
       <div
         ref={scrollRef}
@@ -510,86 +537,132 @@ export function CronogramaClient() {
             </div>
           </div>
 
-          {secciones.map((sec) => (
-            <div key={sec.titulo}>
-              <div className="flex">
-                <div
-                  className="sticky left-0 z-10 shrink-0 truncate px-3 py-1.5 text-xs font-semibold text-white"
-                  style={{ width: LABEL_W, backgroundColor: "#111318" }}
-                >
-                  {sec.titulo}
-                </div>
-                <div style={{ width: totalW, backgroundColor: "#111318" }} />
-              </div>
-              {sec.filas.map((fila, fi) => (
-                <div key={fi} className="flex border-b border-[var(--border)] last:border-b-0">
-                  <div
+          {secciones.map((sec) => {
+            const colapsada = colapsadas.has(sec.titulo);
+            const plegable = sec.filas.length > 0;
+            return (
+              <div key={sec.titulo}>
+                {/* Ligne du TITRE : bande grise + barre de la fase + collapse. */}
+                <div className="flex border-b border-[var(--border)]">
+                  <button
+                    type="button"
+                    onClick={() => plegable && alternarSeccion(sec.titulo)}
+                    disabled={!plegable}
+                    aria-expanded={plegable ? !colapsada : undefined}
                     className={cn(
-                      "sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] px-3 text-[11px] text-[var(--text)]",
-                      fila.bold && "font-semibold",
+                      "sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-[var(--border)] px-2 text-left text-xs font-semibold text-[var(--text)]",
+                      plegable && "cursor-pointer hover:bg-[#e2e5ea]",
                     )}
-                    style={{ width: LABEL_W, height: ROW_H }}
-                    title={fila.label}
+                    style={{ width: LABEL_W, height: ROW_H, backgroundColor: "#eceef2" }}
+                    title={sec.titulo}
                   >
-                    {fila.label}
-                  </div>
-                  <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
-                    {fila.barras.map((b, bi) => {
-                      const left = x(b.startMs);
-                      const rPlena = x(b.solidMs);
-                      const rFin = x(b.endMs);
-                      return (
-                        <div key={bi}>
-                          <div
-                            className="absolute"
-                            style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
-                          />
-                          {b.endMs > b.solidMs ? (
-                            <div
-                              className="absolute"
-                              style={{
-                                left: rPlena,
-                                width: rFin - rPlena,
-                                top: 0,
-                                height: ROW_H,
-                                backgroundImage: `repeating-linear-gradient(45deg, ${b.color} 0 5px, #fff 5px 10px)`,
-                              }}
-                            />
-                          ) : null}
-                          {b.etiqueta && b.dentro ? (
-                            <span
-                              className="pointer-events-none absolute block truncate px-1 text-[10px] font-medium"
-                              style={{
-                                left,
-                                width: Math.max(0, rPlena - left),
-                                top: 0,
-                                height: ROW_H,
-                                lineHeight: `${ROW_H}px`,
-                                color: b.etiquetaColor ?? "#1f2733",
-                              }}
-                              title={b.etiqueta}
-                            >
-                              {b.etiqueta}
-                            </span>
-                          ) : b.etiqueta ? (
-                            <span
-                              className="pointer-events-none absolute whitespace-nowrap text-[11px] leading-none text-[var(--text)]"
-                              style={{ left: rFin + 4, top: ROW_H / 2 - 5 }}
-                            >
-                              {b.etiqueta}
-                            </span>
-                          ) : null}
-                        </div>
-                      );
-                    })}
+                    {plegable && <Chevron abierto={!colapsada} />}
+                    <span className="truncate">{sec.titulo}</span>
+                  </button>
+                  <div
+                    className="relative"
+                    style={{ width: totalW, height: ROW_H, backgroundColor: "#eceef2" }}
+                  >
+                    <CapaBarras barras={sec.barras} x={x} />
                   </div>
                 </div>
-              ))}
-            </div>
-          ))}
+                {!colapsada &&
+                  sec.filas.map((fila, fi) => (
+                    <div key={fi} className="flex border-b border-[var(--border)] last:border-b-0">
+                      <div
+                        className={cn(
+                          "sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-[11px] text-[var(--text)]",
+                          fila.bold && "font-semibold",
+                        )}
+                        style={{ width: LABEL_W, height: ROW_H }}
+                        title={fila.label}
+                      >
+                        {fila.label}
+                      </div>
+                      <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
+                        <CapaBarras barras={fila.barras} x={x} />
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
+  );
+}
+
+// Chevron de collapse (pivote : bas = ouvert, droite = replié).
+function Chevron({ abierto }: { abierto: boolean }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className="shrink-0 transition-transform"
+      style={{ transform: abierto ? "rotate(90deg)" : "none" }}
+    >
+      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Couche des barres d'une ligne (barre pleine + hachures + étiquette).
+function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number }) {
+  return (
+    <>
+      {barras.map((b, bi) => {
+        const left = x(b.startMs);
+        const rPlena = x(b.solidMs);
+        const rFin = x(b.endMs);
+        return (
+          <div key={bi}>
+            <div
+              className="absolute"
+              style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
+            />
+            {b.endMs > b.solidMs ? (
+              <div
+                className="absolute"
+                style={{
+                  left: rPlena,
+                  width: rFin - rPlena,
+                  top: 0,
+                  height: ROW_H,
+                  backgroundImage: `repeating-linear-gradient(45deg, ${b.color} 0 5px, #fff 5px 10px)`,
+                }}
+              />
+            ) : null}
+            {b.etiqueta && b.dentro ? (
+              <span
+                className="pointer-events-none absolute block truncate px-1 text-[10px] font-medium"
+                style={{
+                  left,
+                  width: Math.max(0, rPlena - left),
+                  top: 0,
+                  height: ROW_H,
+                  lineHeight: `${ROW_H}px`,
+                  color: b.etiquetaColor ?? "#1f2733",
+                }}
+                title={b.etiqueta}
+              >
+                {b.etiqueta}
+              </span>
+            ) : b.etiqueta ? (
+              <span
+                className="pointer-events-none absolute whitespace-nowrap text-[11px] leading-none text-[var(--text)]"
+                style={{ left: rFin + 4, top: ROW_H / 2 - 5 }}
+              >
+                {b.etiqueta}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
