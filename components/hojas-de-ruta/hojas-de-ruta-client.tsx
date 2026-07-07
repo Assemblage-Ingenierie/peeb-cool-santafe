@@ -183,6 +183,13 @@ function asUnidad(u: string | null | undefined): Unidad | null {
 
 const UNIDAD_ABBR: Record<Unidad, string> = { dia: "d", semana: "sem", mes: "mes" };
 
+// Quantité + unité au bon singulier/pluriel (ex. « 1 semana » / « 2 semanas »).
+const UNIDAD_LABEL = new Map(DURACION_UNIDADES.map((u) => [u.code, u] as const));
+function cantidadTexto(abs: number, unidad: Unidad): string {
+  const u = UNIDAD_LABEL.get(unidad);
+  return u ? `${abs} ${abs === 1 ? u.singular : u.plural}` : `${abs}`;
+}
+
 // Résumé compact d'une liaison pour l'étiquette de la flèche. La dépendance
 // simple (fin + 0) ne renvoie rien (l'arête suffit) ; « ∥ » = parallèle.
 function resumenEnlace(punto: Punto, valor: number, unidad: Unidad): string {
@@ -1217,6 +1224,20 @@ function LiaisonPanel({
   const esDependencia = draft.punto === "fin" && draft.desfaseValor === 0;
   const abs = Math.abs(draft.desfaseValor);
   const sentido = draft.desfaseValor < 0 ? "antes" : "despues";
+  // Résumé en langage clair (A = 1ʳᵉ carte cliquée, B = 2ᵉ = la dépendante).
+  const frase =
+    abs === 0
+      ? draft.punto === "inicio"
+        ? "B empieza junto con A (mismo inicio)."
+        : "B empieza cuando termina A."
+      : `B empieza ${cantidadTexto(abs, draft.desfaseUnidad)} ${
+          draft.desfaseValor > 0 ? "después" : "antes"
+        } ${draft.punto === "inicio" ? "del inicio de A" : "del fin de A"}.`;
+  const badge = (letra: string) => (
+    <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[var(--text)] text-[9px] font-bold text-white">
+      {letra}
+    </span>
+  );
   const sel =
     "rounded border border-[var(--border)] bg-[var(--surface)] p-1 text-xs text-[var(--text)] focus:outline-none focus:ring-2 focus:ring-[var(--focus)]";
   const presetCls = (on: boolean) =>
@@ -1231,8 +1252,15 @@ function LiaisonPanel({
     <div className="flex flex-col gap-2 rounded-md border border-[var(--focus)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)]">
       <div className="flex items-center justify-between gap-3">
         <span className="font-medium">{draft.editing ? "Editar enlace" : "Nuevo enlace"}</span>
-        <span className="truncate text-xs text-[var(--text-muted)]">
-          {desde} → {hacia}
+      </div>
+
+      {/* Définition de A (1ʳᵉ carte cliquée) et B (2ᵉ = la dépendante). */}
+      <div className="flex flex-col gap-0.5 text-xs text-[var(--text-muted)]">
+        <span className="flex items-center gap-1.5">
+          {badge("A")} <span className="truncate text-[var(--text)]">{desde}</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          {badge("B")} <span className="truncate text-[var(--text)]">{hacia}</span>
         </span>
       </div>
 
@@ -1240,6 +1268,7 @@ function LiaisonPanel({
         <button
           type="button"
           onClick={() => onChange({ punto: "inicio", desfaseValor: 0 })}
+          title="B empieza a la vez que A"
           className={presetCls(esParalela)}
         >
           Paralela
@@ -1247,6 +1276,7 @@ function LiaisonPanel({
         <button
           type="button"
           onClick={() => onChange({ punto: "fin", desfaseValor: 0 })}
+          title="B empieza cuando termina A"
           className={presetCls(esDependencia)}
         >
           Dependencia
@@ -1254,7 +1284,9 @@ function LiaisonPanel({
 
         <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden="true" />
 
-        <span className="text-xs text-[var(--text-muted)]">Empieza al</span>
+        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+          {badge("B")} empieza al
+        </span>
         <select
           value={draft.punto}
           onChange={(e) => onChange({ punto: e.target.value as Punto })}
@@ -1263,7 +1295,9 @@ function LiaisonPanel({
           <option value="inicio">inicio</option>
           <option value="fin">fin</option>
         </select>
-        <span className="text-xs text-[var(--text-muted)]">de la tarea previa,</span>
+        <span className="flex items-center gap-1 text-xs text-[var(--text-muted)]">
+          de {badge("A")},
+        </span>
         <input
           type="number"
           min={0}
@@ -1296,6 +1330,9 @@ function LiaisonPanel({
           <option value="antes">antes</option>
         </select>
       </div>
+
+      {/* Résumé en clair du lien (se met à jour en direct). */}
+      <p className="text-xs italic text-[var(--text)]">{frase}</p>
 
       <div className="flex items-center justify-end gap-2">
         {draft.editing && (
