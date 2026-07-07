@@ -253,6 +253,8 @@ export function HojasDeRutaClient() {
   const [enlaces, setEnlaces] = useState<Enlace[]>([]);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   const [liaisonDraft, setLiaisonDraft] = useState<LiaisonDraft | null>(null);
+  // Overlay des flèches de dépendance masqué par défaut (lecture plus claire).
+  const [mostrarEnlaces, setMostrarEnlaces] = useState(false);
   const linking = esAdmin && linkFrom !== null;
 
   // Gestionnaire de cartes (migration 015). Clés = statKey `${feuille}::${key}`.
@@ -1016,15 +1018,26 @@ export function HojasDeRutaClient() {
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
-          {esAdmin && ocultasFeuille > 0 && (
-            <button
-              type="button"
-              onClick={restaurarOcultas}
-              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-            >
-              {ocultasFeuille} tarjeta(s) oculta(s) · Restaurar
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]">
+              <input
+                type="checkbox"
+                checked={mostrarEnlaces}
+                onChange={(e) => setMostrarEnlaces(e.target.checked)}
+                className="h-3.5 w-3.5 accent-[var(--focus)]"
+              />
+              Mostrar dependencias
+            </label>
+            {esAdmin && ocultasFeuille > 0 && (
+              <button
+                type="button"
+                onClick={restaurarOcultas}
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+              >
+                {ocultasFeuille} tarjeta(s) oculta(s) · Restaurar
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Estructura vertical de las fases del proyecto */}
@@ -1166,8 +1179,8 @@ export function HojasDeRutaClient() {
                 );
               })}
 
-          {/* Overlay des flèches de dépendance */}
-          {overlay.flechas.length > 0 && (
+          {/* Overlay des flèches de dépendance (masqué par défaut, via la case). */}
+          {mostrarEnlaces && overlay.flechas.length > 0 && (
             <svg
               className="pointer-events-none absolute left-0 top-0 z-20"
               width={overlay.w}
