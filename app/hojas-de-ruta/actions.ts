@@ -13,9 +13,14 @@ import { getCurrentUser, isAdmin } from "@/lib/auth";
 
 const ESTADO = "peebcoolsf_roadmap_estado";
 const ENLACE = "peebcoolsf_roadmap_enlace";
-// Clés persistées des cases « No objeción AFD » (hito avant Licitación + les deux
-// jalons Atribución / Contrato après Licitación).
-const ANO_KEYS = new Set(["__ano_afd__", "__ano_afd_atribucion__", "__ano_afd_contrato__"]);
+// Clés persistées des cases de jalon (« checks ») : Validación de anteproyecto,
+// No objeción AFD (avant Licitación) + Atribución / Contrato (après Licitación).
+const ANO_KEYS = new Set([
+  "__val_anteproyecto__",
+  "__ano_afd__",
+  "__ano_afd_atribucion__",
+  "__ano_afd_contrato__",
+]);
 
 function assertAdmin() {
   if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");

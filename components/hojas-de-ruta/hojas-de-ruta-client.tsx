@@ -49,21 +49,33 @@ const HITO_AFD = "no_objecion_afd";
 // Clé spéciale = case « No objeción AFD recibida » (persistée comme une tâche).
 const ANO_KEY = "__ano_afd__";
 
-// Hitos « No objeción AFD » supplémentaires, propres à la feuille de route et
-// insérés juste après la fase Licitación (Atribución puis Contrato). Ils ne sont
-// PAS dans FASES (constante partagée dashboard/cronograma/export) : ce sont des
-// jalons de la hoja de ruta. `anoKey` = tarea_key de persistance de leur case.
-const HITOS_POST_LICITACION: { code: string; nombre: string; anoKey: string }[] = [
-  { code: "no_objecion_afd_atribucion", nombre: "No objeción AFD — Atribución", anoKey: "__ano_afd_atribucion__" },
-  { code: "no_objecion_afd_contrato", nombre: "No objeción AFD — Contrato", anoKey: "__ano_afd_contrato__" },
-];
+// Jalons (« checks ») insérés APRÈS une phase donnée, propres à la feuille de
+// route (PAS dans FASES, constante partagée dashboard/cronograma/export). Chaque
+// jalon porte une case admin persistée sous son `anoKey`, sur le même principe
+// que « No objeción AFD ». Clés = code de la phase après laquelle insérer.
+const HITOS_TRAS_FASE: Record<string, { code: string; nombre: string; anoKey: string }[]> = {
+  anteproyecto: [
+    { code: "validacion_anteproyecto", nombre: "Validación de anteproyecto", anoKey: "__val_anteproyecto__" },
+  ],
+  licitacion: [
+    { code: "no_objecion_afd_atribucion", nombre: "No objeción AFD — Atribución", anoKey: "__ano_afd_atribucion__" },
+    { code: "no_objecion_afd_contrato", nombre: "No objeción AFD — Contrato", anoKey: "__ano_afd_contrato__" },
+  ],
+};
+
+// Toutes les clés persistées des cases de jalon (pour l'hydratation depuis le
+// snapshot) : le hito « No objeción AFD » de FASES + ceux insérés après une phase.
+const HITO_ANO_KEYS = new Set<string>([
+  ANO_KEY,
+  ...Object.values(HITOS_TRAS_FASE).flatMap((hs) => hs.map((h) => h.anoKey)),
+]);
 
 interface FilaRuta {
   code: string;
   nombre: string;
   hito: boolean;
   numero: number | null;
-  anoKey?: string; // tarea_key de la case « No objeción AFD » (hitos uniquement)
+  anoKey?: string; // tarea_key de la case du jalon (hitos uniquement)
 }
 
 const FILAS_RUTA: FilaRuta[] = [];
@@ -79,11 +91,9 @@ const FILAS_RUTA: FilaRuta[] = [];
       numero: hito ? null : numero,
       anoKey: hito ? ANO_KEY : undefined,
     });
-    // Après Licitación : deux jalons « No objeción AFD » consécutifs.
-    if (f.code === "licitacion") {
-      for (const h of HITOS_POST_LICITACION) {
-        FILAS_RUTA.push({ code: h.code, nombre: h.nombre, hito: true, numero: null, anoKey: h.anoKey });
-      }
+    // Jalons insérés juste après cette phase (Validación de anteproyecto, AFD…).
+    for (const h of HITOS_TRAS_FASE[f.code] ?? []) {
+      FILAS_RUTA.push({ code: h.code, nombre: h.nombre, hito: true, numero: null, anoKey: h.anoKey });
     }
   }
 }
@@ -274,7 +284,7 @@ export function HojasDeRutaClient() {
     const pla: Record<string, Plan> = {};
     for (const r of snap.data.roadmapEstado) {
       const sk = `${r.feuille}::${r.tareaKey}`;
-      if (r.tareaKey.startsWith("__ano_afd")) {
+      if (HITO_ANO_KEYS.has(r.tareaKey)) {
         if (r.realizada) ano[`${r.feuille}::${r.tareaKey}`] = true;
         continue;
       }
