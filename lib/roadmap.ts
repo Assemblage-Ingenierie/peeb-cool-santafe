@@ -7,13 +7,7 @@
 // (section Fases) → les tâches restent synchronisées (même DB, même logique).
 // ============================================================
 
-import {
-  ROADMAP_TAREAS,
-  REQUISITOS_AYS,
-  REQUISITOS_AYS_CODES,
-  refMgas,
-  type ComponenteCode,
-} from "./constants";
+import { ROADMAP_TAREAS, REQUISITOS_AYS, refMgas, type ComponenteCode } from "./constants";
 
 export interface RoadmapCard {
   key: string;
@@ -36,21 +30,18 @@ export interface RoadmapOverride {
   nombre?: string | null; // titre d'une carte créée
 }
 
-const REQ_LABEL = new Map<string, string>(
-  REQUISITOS_AYS.flatMap((g) => g.requisitos.map((r) => [r.code, r.label] as const)),
-);
+// Génération des cartes dynamiques de la phase « Proyecto ejecutivo » selon les
+// requisitos AyS cochés du sous-projet :
+//  • groupes 10.5 / 10.6 : UNE carte par groupe (« Lineamientos para … », d'après
+//    le nom du groupe) dès qu'au moins une de ses lignes est cochée ;
+//  • groupe 10.7 (gestión social) : UNE carte par ligne cochée (nom exact).
+// N'affecte que la feuille de route ; REQUISITOS_AYS (checklist / dashboard) reste
+// inchangé.
+const GRUPO_POR_LINEA = "10.7";
 
-// Plans dont la carte de la phase « Proyecto ejecutivo » est préfixée
-// « Lineamientos para … » (on y définit les lignes directrices du plan, pas le
-// plan final). N'affecte que la feuille de route : le libellé de REQUISITOS_AYS
-// (checklist / dashboard) reste inchangé.
-const LINEAMIENTOS_PLANES_PE = new Set(["10.5.4", "10.5.5", "10.5.7"]);
-
-function nombrePlan(fase: string, code: string): string {
-  const label = REQ_LABEL.get(code) ?? code;
-  return fase === "proyecto_ejecutivo" && LINEAMIENTOS_PLANES_PE.has(code)
-    ? `Lineamientos para ${label}`
-    : label;
+// « Planes para … » / « Programas/planes para … » → « Lineamientos para … ».
+function lineamientosGrupo(titulo: string): string {
+  return `Lineamientos para ${titulo.replace(/^(?:Programas\/planes|Planes|Programas)\s+para\s+/i, "")}`;
 }
 
 /**
@@ -74,8 +65,8 @@ export function cartasBaseSubproyecto(
       });
       continue;
     }
-    const planes = REQUISITOS_AYS_CODES.filter((c) => checked.has(c));
-    if (planes.length === 0) {
+    const algunoMarcado = REQUISITOS_AYS.some((g) => g.requisitos.some((r) => checked.has(r.code)));
+    if (!algunoMarcado) {
       out.push({
         key: `${t.fase}-vacio`,
         componente: t.componente,
@@ -86,14 +77,30 @@ export function cartasBaseSubproyecto(
       });
       continue;
     }
-    for (const c of planes) {
-      out.push({
-        key: `${t.fase}-${c}`,
-        componente: t.componente,
-        nombre: nombrePlan(t.fase, c),
-        descripcion: refMgas(c),
-        fila: t.fase,
-      });
+    for (const g of REQUISITOS_AYS) {
+      const marcados = g.requisitos.filter((r) => checked.has(r.code));
+      if (marcados.length === 0) continue;
+      if (g.code === GRUPO_POR_LINEA) {
+        // Gestión social : une carte par ligne cochée (nom exact de la ligne).
+        for (const r of marcados) {
+          out.push({
+            key: `${t.fase}-${r.code}`,
+            componente: t.componente,
+            nombre: r.label,
+            descripcion: refMgas(r.code),
+            fila: t.fase,
+          });
+        }
+      } else {
+        // Une seule carte « Lineamientos para … » pour tout le groupe.
+        out.push({
+          key: `${t.fase}-grupo-${g.code}`,
+          componente: t.componente,
+          nombre: lineamientosGrupo(g.titulo),
+          descripcion: refMgas(g.code),
+          fila: t.fase,
+        });
+      }
     }
   }
   return out;
