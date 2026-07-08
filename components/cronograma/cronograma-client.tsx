@@ -53,8 +53,10 @@ const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"]
 const ROJO_AFD = "#cc0000";
 // Couleurs spécifiques par fase (priment sur le dégradé de bleus).
 const FASE_COLOR: Record<string, string> = {
+  estudios_preliminares: "#d9d9d9", // gris clair
+  redaccion_pliegos: "#ea9999", // même rouge clair que licitación
   licitacion: "#ea9999",
-  obra: "#e69138",
+  obra: "#f6b26b",
 };
 
 // Sigles des fases sur les frises (comme le tableau Inicio). Règles :
