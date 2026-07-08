@@ -584,8 +584,11 @@ export function CronogramaClient() {
       >
         <div className="relative" style={{ width: LABEL_W + totalW }}>
           {hoyEnRango && hoyMs != null && (
+            // z sous la colonne d'étiquettes (z-10) : quand on scrolle et que la
+            // ligne « hoy » passe derrière les libellés, elle est masquée par eux
+            // (au lieu de peindre par-dessus). Reste au-dessus des barres.
             <div
-              className="pointer-events-none absolute bottom-0 top-0 z-20 w-0.5 bg-[var(--accent)]"
+              className="pointer-events-none absolute bottom-0 top-0 z-[5] w-0.5 bg-[var(--accent)]"
               style={{ left: LABEL_W + x(hoyMs) }}
               aria-hidden="true"
             />
