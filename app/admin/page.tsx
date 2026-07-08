@@ -1,4 +1,5 @@
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/auth";
 import { AdminTabs } from "@/components/admin/admin-tabs";
 import {
   listTable,
@@ -14,7 +15,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
 
   if (!isAdmin(user)) {
     return (

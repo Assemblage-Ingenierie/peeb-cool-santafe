@@ -1,4 +1,5 @@
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { NotasClient } from "@/components/notas/notas-client";
 import type { NotaRow } from "./actions";
@@ -8,7 +9,7 @@ import type { NotaRow } from "./actions";
 export const dynamic = "force-dynamic";
 
 export default async function NotasPage() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!isAdmin(user)) {
     return (
       <section className="mx-auto max-w-2xl">

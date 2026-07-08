@@ -49,6 +49,11 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 6. ✅ Requisitos AyS (checklist MGAS dédiée — n'est plus une « medida »)
 7. ✅ Hojas de ruta (feuille de route interactive : phases verticales, cartes par composante, contenu AyS + cartes dynamiques par plan ; édition admin realizada/comentario/editar/enlazar + case ANO AFD ; persistance DB)
 8. ⏳ PWA offline (lecture)
-9. ⏳ Auth Supabase + RLS productif + gestion des rôles
+9. 🟡 Auth Supabase branchée : login réel (`/login`), session par cookies
+   (`@supabase/ssr` + `proxy.ts`, ex-middleware Next 16), rôle lu depuis
+   `peebcoolsf_perfiles`, déconnexion fonctionnelle. Lecture publique conservée
+   (service_role), écritures/admin gardées par la vraie session. RLS déjà
+   verrouillée (anon = rien) = 2ᵉ couche. Bypass dev conservé.
+   Reste : provisionnement des comptes en prod + UI « Gestión de roles ».
 
 **Migrations** : dans `supabase/migrations/`, **dernière = 018**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.

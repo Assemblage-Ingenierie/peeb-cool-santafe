@@ -2,7 +2,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getCurrentUser, DEV_AUTH_BYPASS } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth-server";
 import { TABLES } from "@/lib/admin/config";
 import type { EventoInput } from "@/components/calendario/tipos";
 
@@ -10,17 +10,16 @@ import type { EventoInput } from "@/components/calendario/tipos";
 // app/calendario/actions.ts — écriture des événements depuis le Calendario.
 //
 // CONTRAIREMENT à app/admin/actions.ts (réservé admin), ces actions sont
-// destinées à TOUS (CDC §4.3, décision user : non-admins peuvent gérer les
-// réunions). Faute d'auth réelle (Étape 6), l'autorisation s'appuie sur le
-// bypass dev ; l'appli n'est pas encore publique. À l'Étape 6 : exiger un
-// utilisateur authentifié (n'importe quel rôle).
+// destinées à TOUS les utilisateurs CONNECTÉS (CDC §4.3, décision user :
+// non-admins peuvent gérer les réunions), quel que soit le rôle.
 //
 // Créations et suppressions sont journalisées dans peebcoolsf_eventos_actividad
 // → alimente l'alerte « +N » de l'Inicio (prévenir l'admin, y c. des suppressions).
 // ============================================================
 
-function assertPuedeGestionarEventos(): void {
-  if (!DEV_AUTH_BYPASS && !getCurrentUser()) throw new Error("No autorizado");
+async function assertPuedeGestionarEventos(): Promise<void> {
+  // getCurrentUser gère déjà le bypass dev (→ mock admin).
+  if (!(await getCurrentUser())) throw new Error("No autorizado");
 }
 
 const COMPONENTES_OK = new Set(["GP", "EE", "AyS", "G"]);
@@ -113,7 +112,7 @@ async function registrarActividad(
 
 /** Crée un événement (UID EVT-NNNN généré serveur) + journalise « creado ». */
 export async function crearEvento(input: EventoInput): Promise<{ uid: string }> {
-  assertPuedeGestionarEventos();
+  await assertPuedeGestionarEventos();
   const sb = createServiceClient();
   const base = normalizar(input);
   const participantes = await limpiarParticipantes(sb, input.participantes);
@@ -137,7 +136,7 @@ export async function crearEvento(input: EventoInput): Promise<{ uid: string }> 
 
 /** Met à jour un événement existant (pas de journalisation : édition non notifiée). */
 export async function actualizarEvento(uid: string, input: EventoInput): Promise<void> {
-  assertPuedeGestionarEventos();
+  await assertPuedeGestionarEventos();
   if (!/^EVT-\d+$/.test(uid)) throw new Error("UID inválido");
   const sb = createServiceClient();
   const base = normalizar(input);
@@ -152,7 +151,7 @@ export async function actualizarEvento(uid: string, input: EventoInput): Promise
 
 /** Supprime un événement. Journalise « eliminado » AVANT (pour conserver nom + fecha). */
 export async function eliminarEvento(uid: string): Promise<void> {
-  assertPuedeGestionarEventos();
+  await assertPuedeGestionarEventos();
   if (!/^EVT-\d+$/.test(uid)) throw new Error("UID inválido");
   const sb = createServiceClient();
 

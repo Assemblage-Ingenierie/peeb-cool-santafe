@@ -24,7 +24,8 @@ import {
 } from "@/lib/schedule";
 import { formatDuracion } from "@/lib/format";
 import { useComponentFilters } from "@/components/filter-context";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
+import { useCurrentUser } from "@/components/auth-context";
 import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import {
@@ -236,7 +237,7 @@ type PanelTipo = "comentario" | "editar";
 
 export function HojasDeRutaClient() {
   const snap = useSnapshot();
-  const admin = isAdmin(getCurrentUser());
+  const admin = isAdmin(useCurrentUser());
   const filtros = useComponentFilters();
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
   const [vista, setVista] = useState<Vista>("admin");
