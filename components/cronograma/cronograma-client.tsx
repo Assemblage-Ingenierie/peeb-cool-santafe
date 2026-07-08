@@ -51,6 +51,11 @@ const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep",
 const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"];
 // Rouge des fases « No objeción AFD » (jalons critiques mis en évidence).
 const ROJO_AFD = "#cc0000";
+// Couleurs spécifiques par fase (priment sur le dégradé de bleus).
+const FASE_COLOR: Record<string, string> = {
+  licitacion: "#ea9999",
+  obra: "#e69138",
+};
 
 // Sigles des fases sur les frises (comme le tableau Inicio). Règles :
 // « validacion_anteproyecto » → rien ; toutes les « No objeción AFD » → « CNO ».
@@ -255,7 +260,7 @@ function armar(uid: string, tipologia: string, d: Snapshot) {
 // Couleur d'une fase (bande de temps) : bleu progressif par ordre, ROUGE pour
 // « No objeción AFD » et ses jalons. Source unique (global + détail par fase).
 const colorFase = (code: string, i: number): string =>
-  code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length];
+  FASE_COLOR[code] ?? (code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length]);
 
 // Couleur d'une fase par son code (index dans l'ordre canonique) — pour la légende.
 const colorDeFase = (code: string): string =>
@@ -652,10 +657,7 @@ export function CronogramaClient() {
                   sec.filas.map((fila, fi) => (
                     <div key={fi} className="flex border-b border-[var(--border)] last:border-b-0">
                       <div
-                        className={cn(
-                          "sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs text-[var(--text)]",
-                          fila.bold && "font-semibold",
-                        )}
+                        className="sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
                         style={{ width: LABEL_W, height: ROW_H }}
                         title={fila.label}
                       >
