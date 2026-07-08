@@ -115,9 +115,13 @@ REF_MAP = {
  'precategorizacion provincial digital':('card',K_PRECAT),
 }
 
-# Correction d'année : l'Excel date mars en 2026 par erreur → 2027 (confirmé client).
+# Corrections d'année (l'Excel date certaines fases en 2026 par erreur → 2027) :
+#  - anteproyecto : mars 2026 → 2027 (confirmé client)
+#  - estudios preliminares des écoles : avril 2026 → 2027 (confirmé client)
 def fixyear(d):
-    return '2027-03-01' if d == '2026-03-01' else d
+    if d == '2026-03-01': return '2027-03-01'
+    if d == '2026-04-01': return '2027-04-01'
+    return d
 
 def unit(u):
     u=norm(u)
