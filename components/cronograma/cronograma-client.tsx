@@ -76,7 +76,6 @@ const FASE_SIGLA: Record<string, string> = {
 const LEYENDA_FASES = [
   "estudios_preliminares",
   "anteproyecto",
-  "validacion_anteproyecto",
   "proyecto_ejecutivo",
   "redaccion_pliegos",
   "no_objecion_afd",
@@ -93,8 +92,20 @@ function textoSobre(hex: string): string {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#1f2733" : "#ffffff";
 }
 
-// Phases affichées (ordre chronologique canonique, hors « general »).
-const FASES_ORD = GESTION_FASES.filter((f) => f.code !== "general");
+// Jalons rendus comme tareas GP (grises) DANS leur phase, et non comme des
+// phases distinctes. Clé = code de fase parente → jalon. « Validación de
+// anteproyecto » est une tarea GP de la phase Anteproyecto (pas une fase).
+const HITO_COMO_TAREA: Record<string, { code: string; nombre: string }> = {
+  anteproyecto: { code: "validacion_anteproyecto", nombre: "Validación de anteproyecto" },
+};
+// Codes de « fase » qui ne doivent PAS avoir leur propre bande (rendus en tarea).
+const FASES_OCULTAS = new Set(Object.values(HITO_COMO_TAREA).map((h) => h.code));
+
+// Phases affichées (ordre chronologique canonique, hors « general » et hors
+// jalons rendus comme tareas).
+const FASES_ORD = GESTION_FASES.filter(
+  (f) => f.code !== "general" && !FASES_OCULTAS.has(f.code),
+);
 // Composantes en sections (ordre d'affichage).
 const COMPS: ComponenteCode[] = ["GP", "EE", "AyS", "G"];
 
@@ -307,10 +318,12 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
     const filas: Fila[] = [];
     for (const comp of COMPS) {
       if (!filtros.has(comp)) continue;
-      const arr = columnas.get(`${f.code}|${comp}`);
-      if (!arr) continue;
-      arr
-        .filter((c) => !c.nota)
+      const cards = [...(columnas.get(`${f.code}|${comp}`) ?? [])].filter((c) => !c.nota);
+      // Jalon rendu comme tarea GP de la phase (ex. Validación de anteproyecto).
+      const hito = comp === "GP" ? HITO_COMO_TAREA[f.code] : undefined;
+      if (hito) cards.push({ key: faseNodeKey(hito.code), componente: "GP", nombre: hito.nombre });
+      if (cards.length === 0) continue;
+      cards
         .map((c) => {
           // Tons CLAIRS de composante (en-tête de carte) pour les détails.
           const b = barraDe(sched.get(c.key), CARD_TONOS[comp].head, c.nombre, false, CARD_TONOS[comp].headText);
