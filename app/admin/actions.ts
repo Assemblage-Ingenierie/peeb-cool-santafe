@@ -475,6 +475,13 @@ export async function deleteSubproyecto(uid: string): Promise<void> {
   if (delGest.error) throw new Error(delGest.error.message);
   const delMet = await sb.from("peebcoolsf_metricas").delete().eq("subproyecto_uid", uid);
   if (delMet.error) throw new Error(delMet.error.message);
+  // Feuille de route + liaisons du planning : rattachées par `feuille` (texte,
+  // sans FK) → jamais nettoyées par CASCADE. On les efface ici pour ne pas
+  // laisser de lignes orphelines (un trigger DB fait le même ménage en filet).
+  const delRmEst = await sb.from("peebcoolsf_roadmap_estado").delete().eq("feuille", uid);
+  if (delRmEst.error) throw new Error(delRmEst.error.message);
+  const delRmEnl = await sb.from("peebcoolsf_roadmap_enlace").delete().eq("feuille", uid);
+  if (delRmEnl.error) throw new Error(delRmEnl.error.message);
   const delSub = await sb.from("peebcoolsf_subproyectos").delete().eq("uid", uid);
   if (delSub.error) throw new Error(delSub.error.message);
 
