@@ -11,7 +11,12 @@ import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
-import type { Snapshot } from "@/lib/snapshot";
+import { useRoadmap } from "@/components/dashboard/use-roadmap";
+import type { Roadmap, Snapshot } from "@/lib/snapshot";
+
+// Données combinées consommées par le Gantt : snapshot de base + roadmap
+// (chargés par deux endpoints séparés, fusionnés côté client).
+type DatosCronograma = Snapshot & Roadmap;
 import { useComponentFilters } from "@/components/filter-context";
 
 // ============================================================
@@ -197,7 +202,7 @@ function barraDe(
 }
 
 // Assemble le planning d'un sous-projet (mêmes entrées que la feuille de route).
-function armar(uid: string, tipologia: string, d: Snapshot) {
+function armar(uid: string, tipologia: string, d: DatosCronograma) {
   const estado = new Map<string, RoadmapOverride>();
   const planes = new Map<
     string,
@@ -307,7 +312,7 @@ function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
 // Sections d'un sous-projet : UNE section (bande noire) PAR FASE. Dans chaque
 // fase : 1re ligne = la barre de la fase elle-même (sa ligne de temps), puis les
 // tareas regroupées par composante (GP → EE → AyS → G), les unes sous les autres.
-function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<string>): Seccion[] {
+function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtros: Set<string>): Seccion[] {
   const { columnas, sched } = armar(uid, tipologia, d);
   const out: Seccion[] = [];
 
@@ -345,7 +350,7 @@ function seccionesSub(uid: string, tipologia: string, d: Snapshot, filtros: Set<
 
 // Vue globale : une ligne par sous-projet, montrant l'ENCHAÎNEMENT des fases
 // (chaque fase = un segment coloré avec sa date de démarrage et sa durée).
-function seccionGlobal(subs: Snapshot["subproyectos"], d: Snapshot): Seccion {
+function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Seccion {
   return {
     titulo: "Subproyectos — enlace de fases",
     barras: [],
@@ -360,6 +365,7 @@ function seccionGlobal(subs: Snapshot["subproyectos"], d: Snapshot): Seccion {
 
 export function CronogramaClient() {
   const snap = useSnapshot();
+  const rm = useRoadmap();
   const filtros = useComponentFilters();
   const [gran, setGran] = useState<Gran>("mes");
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
@@ -378,12 +384,14 @@ export function CronogramaClient() {
   // Calcul du planning (parcours de graphe computeSchedule pour chaque sous-projet)
   // mémoïsé : ne se relance que si la donnée, la sélection ou les filtres changent —
   // pas à chaque drag-to-pan / pliage de section / changement de granularité.
+  // Nécessite les DEUX sources prêtes (snapshot de base + roadmap).
   const secciones: Seccion[] = useMemo(() => {
-    if (snap.status !== "ready") return [];
-    if (seleccion === "global") return [seccionGlobal(snap.data.subproyectos, snap.data)];
-    const sub = snap.data.subproyectos.find((s) => s.uid === seleccion);
-    return seccionesSub(seleccion, sub?.tipologia ?? "", snap.data, filtros);
-  }, [snap, seleccion, filtros]);
+    if (snap.status !== "ready" || rm.status !== "ready") return [];
+    const datos: DatosCronograma = { ...snap.data, ...rm.data };
+    if (seleccion === "global") return [seccionGlobal(datos.subproyectos, datos)];
+    const sub = datos.subproyectos.find((s) => s.uid === seleccion);
+    return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros);
+  }, [snap, rm, seleccion, filtros]);
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;

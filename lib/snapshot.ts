@@ -183,6 +183,14 @@ export interface Snapshot {
   personas: SnapshotPersona[];
   actividadEventos: SnapshotActividad[];
   aysRequisitos: SnapshotAysRequisito[];
+}
+
+// Feuille de route + planning (tables volumineuses : ~60 % du poids total).
+// SÉPARÉ du snapshot de base : servi par /api/roadmap et consommé UNIQUEMENT par
+// le Cronograma et les Hojas de ruta. Les autres pages (Inicio, Mapa, Calendario)
+// ne téléchargent pas ces données dont elles n'ont pas l'usage.
+export interface Roadmap {
+  generatedAt: string;
   roadmapEstado: SnapshotRoadmapEstado[];
   roadmapEnlace: SnapshotRoadmapEnlace[];
 }
@@ -260,8 +268,6 @@ export async function getSnapshot(): Promise<Snapshot> {
     medRes,
     actRes,
     aysReqRes,
-    rmEstadoRes,
-    rmEnlaceRes,
   ] = await Promise.all([
     sb
       .from("peebcoolsf_subproyectos")
@@ -309,15 +315,6 @@ export async function getSnapshot(): Promise<Snapshot> {
       .limit(100),
     // Requisitos AyS cochés (CDC §4.5) — seuls les actifs sortent.
     sb.from("peebcoolsf_ays_requisitos").select("subproyecto_uid, requisito").eq("activa", true),
-    // Hojas de ruta : état d'édition + dépendances (toutes lignes).
-    sb
-      .from("peebcoolsf_roadmap_estado")
-      .select(
-        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
-      ),
-    sb
-      .from("peebcoolsf_roadmap_enlace")
-      .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad"),
   ]);
 
   const firstError =
@@ -330,9 +327,7 @@ export async function getSnapshot(): Promise<Snapshot> {
     docGpRes.error ||
     medRes.error ||
     actRes.error ||
-    aysReqRes.error ||
-    rmEstadoRes.error ||
-    rmEnlaceRes.error;
+    aysReqRes.error;
   if (firstError) {
     throw new Error(`Error al construir el snapshot: ${firstError.message}`);
   }
@@ -374,63 +369,6 @@ export async function getSnapshot(): Promise<Snapshot> {
   const aysRequisitos: SnapshotAysRequisito[] = (
     (aysReqRes.data ?? []) as { subproyecto_uid: string; requisito: string }[]
   ).map((r) => ({ subproyectoUid: r.subproyecto_uid, requisito: r.requisito }));
-
-  const roadmapEstado: SnapshotRoadmapEstado[] = (
-    (rmEstadoRes.data ?? []) as {
-      feuille: string;
-      tarea_key: string;
-      realizada: boolean | null;
-      comentario: string | null;
-      nombre: string | null;
-      descripcion: string | null;
-      responsable: string | null;
-      oculta: boolean | null;
-      fila: string | null;
-      orden: number | null;
-      componente: string | null;
-      creada: boolean | null;
-      fecha_inicio: string | null;
-      fecha_fin: string | null;
-      dur_valor: number | null;
-      dur_unidad: string | null;
-    }[]
-  ).map((r) => ({
-    feuille: r.feuille,
-    tareaKey: r.tarea_key,
-    realizada: !!r.realizada,
-    comentario: r.comentario,
-    nombre: r.nombre,
-    descripcion: r.descripcion,
-    responsable: r.responsable,
-    oculta: !!r.oculta,
-    fila: r.fila,
-    orden: r.orden,
-    componente: r.componente,
-    creada: !!r.creada,
-    fechaInicio: r.fecha_inicio,
-    fechaFin: r.fecha_fin,
-    durValor: r.dur_valor,
-    durUnidad: r.dur_unidad,
-  }));
-
-  const roadmapEnlace: SnapshotRoadmapEnlace[] = (
-    (rmEnlaceRes.data ?? []) as {
-      feuille: string;
-      desde: string;
-      hacia: string;
-      punto: string | null;
-      desfase_valor: number | null;
-      desfase_unidad: string | null;
-    }[]
-  ).map((r) => ({
-    feuille: r.feuille,
-    desde: r.desde,
-    hacia: r.hacia,
-    punto: r.punto === "inicio" ? "inicio" : "fin",
-    desfaseValor: r.desfase_valor ?? 0,
-    desfaseUnidad:
-      r.desfase_unidad === "semana" || r.desfase_unidad === "mes" ? r.desfase_unidad : "dia",
-  }));
 
   const eventos: SnapshotEvento[] = ((evtRes.data ?? []) as RawEvento[]).map((e) => {
     const participantes = Array.isArray(e.participantes) ? e.participantes : [];
@@ -500,6 +438,93 @@ export async function getSnapshot(): Promise<Snapshot> {
     personas,
     actividadEventos,
     aysRequisitos,
+  };
+}
+
+/**
+ * Construit le bloc « feuille de route + planning » (tables volumineuses).
+ * Séparé de getSnapshot : servi par /api/roadmap et consommé uniquement par le
+ * Cronograma et les Hojas de ruta. Même principe : projection fidèle, NULL
+ * conservés, aucun calcul dérivé.
+ */
+export async function getRoadmap(): Promise<Roadmap> {
+  const sb = createServiceClient();
+
+  const [rmEstadoRes, rmEnlaceRes] = await Promise.all([
+    sb
+      .from("peebcoolsf_roadmap_estado")
+      .select(
+        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
+      ),
+    sb
+      .from("peebcoolsf_roadmap_enlace")
+      .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad"),
+  ]);
+
+  const firstError = rmEstadoRes.error || rmEnlaceRes.error;
+  if (firstError) {
+    throw new Error(`Error al construir el roadmap: ${firstError.message}`);
+  }
+
+  const roadmapEstado: SnapshotRoadmapEstado[] = (
+    (rmEstadoRes.data ?? []) as {
+      feuille: string;
+      tarea_key: string;
+      realizada: boolean | null;
+      comentario: string | null;
+      nombre: string | null;
+      descripcion: string | null;
+      responsable: string | null;
+      oculta: boolean | null;
+      fila: string | null;
+      orden: number | null;
+      componente: string | null;
+      creada: boolean | null;
+      fecha_inicio: string | null;
+      fecha_fin: string | null;
+      dur_valor: number | null;
+      dur_unidad: string | null;
+    }[]
+  ).map((r) => ({
+    feuille: r.feuille,
+    tareaKey: r.tarea_key,
+    realizada: !!r.realizada,
+    comentario: r.comentario,
+    nombre: r.nombre,
+    descripcion: r.descripcion,
+    responsable: r.responsable,
+    oculta: !!r.oculta,
+    fila: r.fila,
+    orden: r.orden,
+    componente: r.componente,
+    creada: !!r.creada,
+    fechaInicio: r.fecha_inicio,
+    fechaFin: r.fecha_fin,
+    durValor: r.dur_valor,
+    durUnidad: r.dur_unidad,
+  }));
+
+  const roadmapEnlace: SnapshotRoadmapEnlace[] = (
+    (rmEnlaceRes.data ?? []) as {
+      feuille: string;
+      desde: string;
+      hacia: string;
+      punto: string | null;
+      desfase_valor: number | null;
+      desfase_unidad: string | null;
+    }[]
+  ).map((r) => ({
+    feuille: r.feuille,
+    desde: r.desde,
+    hacia: r.hacia,
+    punto: r.punto === "inicio" ? "inicio" : "fin",
+    desfaseValor: r.desfase_valor ?? 0,
+    desfaseUnidad:
+      r.desfase_unidad === "semana" || r.desfase_unidad === "mes" ? r.desfase_unidad : "dia",
+  }));
+
+  return {
+    generatedAt: new Date().toISOString(),
     roadmapEstado,
     roadmapEnlace,
   };

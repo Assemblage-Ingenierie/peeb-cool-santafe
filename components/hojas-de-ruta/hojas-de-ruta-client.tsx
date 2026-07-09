@@ -27,6 +27,7 @@ import { useComponentFilters } from "@/components/filter-context";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { CheckIcon } from "@/components/icons";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
+import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import {
   roadmapSetRealizada,
   roadmapSetComentario,
@@ -236,6 +237,7 @@ type PanelTipo = "comentario" | "editar";
 
 export function HojasDeRutaClient() {
   const snap = useSnapshot();
+  const rm = useRoadmap();
   const admin = isAdmin(getCurrentUser());
   const filtros = useComponentFilters();
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
@@ -286,8 +288,9 @@ export function HojasDeRutaClient() {
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
 
   // Charge l'état persisté (realizadas, comentarios, ediciones, anoAfd, enlaces)
-  // depuis le snapshot, une seule fois (ajuster l'état pendant le rendu).
-  if (!hydrated && snap.status === "ready") {
+  // depuis le roadmap, une seule fois (ajuster l'état pendant le rendu). Attend
+  // les DEUX sources prêtes (snapshot de base + roadmap servi par /api/roadmap).
+  if (!hydrated && snap.status === "ready" && rm.status === "ready") {
     const rz = new Set<string>();
     const com: Record<string, string> = {};
     const edi: Record<string, Edicion> = {};
@@ -296,7 +299,7 @@ export function HojasDeRutaClient() {
     const cre: Record<string, ComponenteCode> = {};
     const pos: Record<string, Posicion> = {};
     const pla: Record<string, Plan> = {};
-    for (const r of snap.data.roadmapEstado) {
+    for (const r of rm.data.roadmapEstado) {
       const sk = `${r.feuille}::${r.tareaKey}`;
       if (HITO_ANO_KEYS.has(r.tareaKey)) {
         if (r.realizada) ano[`${r.feuille}::${r.tareaKey}`] = true;
@@ -332,7 +335,7 @@ export function HojasDeRutaClient() {
     setPosiciones(pos);
     setPlanes(pla);
     setEnlaces(
-      snap.data.roadmapEnlace.map((e) => ({
+      rm.data.roadmapEnlace.map((e) => ({
         from: `${e.feuille}::${e.desde}`,
         to: `${e.feuille}::${e.hacia}`,
         punto: e.punto,
