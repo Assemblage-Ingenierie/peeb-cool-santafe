@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   CARD_TONOS,
@@ -375,12 +375,15 @@ export function CronogramaClient() {
 
   const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
 
-  const secciones: Seccion[] = (() => {
+  // Calcul du planning (parcours de graphe computeSchedule pour chaque sous-projet)
+  // mémoïsé : ne se relance que si la donnée, la sélection ou les filtres changent —
+  // pas à chaque drag-to-pan / pliage de section / changement de granularité.
+  const secciones: Seccion[] = useMemo(() => {
     if (snap.status !== "ready") return [];
-    if (seleccion === "global") return [seccionGlobal(subproyectos, snap.data)];
-    const sub = subproyectos.find((s) => s.uid === seleccion);
+    if (seleccion === "global") return [seccionGlobal(snap.data.subproyectos, snap.data)];
+    const sub = snap.data.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", snap.data, filtros);
-  })();
+  }, [snap, seleccion, filtros]);
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;

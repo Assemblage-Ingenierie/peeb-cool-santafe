@@ -1,7 +1,7 @@
 "use client";
 
 import type { DragEvent, ReactNode } from "react";
-import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
   FASES,
@@ -350,8 +350,9 @@ export function HojasDeRutaClient() {
 
   // Instances de cartes par colonne (fila × composante) — modèle partagé
   // (lib/roadmap). On traduit l'état local (ocultas/creadas/posiciones/ediciones)
-  // en overrides par tarea_key pour la feuille courante.
-  function construirColumnas(): Map<string, CardModel[]> {
+  // en overrides par tarea_key pour la feuille courante. Mémoïsé : ne se relance
+  // que si la feuille ou l'état d'édition change — pas à chaque drag / hover / tick.
+  const columnas = useMemo<Map<string, CardModel[]>>(() => {
     const pref = `${seleccion}::`;
     const estado = new Map<string, RoadmapOverride>();
     const ensure = (tarea: string) => {
@@ -376,15 +377,15 @@ export function HojasDeRutaClient() {
       o.fila = p.fila;
       o.orden = p.orden;
     }
-    const sub = subproyectos.find((s) => s.uid === seleccion);
+    const subs = snap.status === "ready" ? snap.data.subproyectos : [];
+    const sub = subs.find((s) => s.uid === seleccion);
     return construirCartasPorFila({
       esGlobal: seleccion === "global",
       tipologia: sub?.tipologia ?? "",
       uid: seleccion,
       estado,
     }) as Map<string, CardModel[]>;
-  }
-  const columnas = construirColumnas();
+  }, [snap, seleccion, ocultas, creadas, posiciones, ediciones]);
   function cartasColumna(fila: string, comp: ComponenteCode): CardModel[] {
     return columnas.get(`${fila}|${comp}`) ?? [];
   }
@@ -413,10 +414,12 @@ export function HojasDeRutaClient() {
   }
 
   // Planning calculé (moteur partagé lib/schedule). Sous-projets uniquement :
-  // le Proyecto global n'a pas d'ancre de phase (semestres). Recalculé à chaque
-  // rendu (peu de tâches) ; les dates ne sont jamais stockées (convention projet).
-  const schedule =
-    seleccion === "global" || snap.status !== "ready"
+  // le Proyecto global n'a pas d'ancre de phase (semestres). Les dates ne sont
+  // jamais stockées (convention projet). Mémoïsé : ne se relance que si la donnée,
+  // la feuille, les cartes, la planification ou les liaisons changent.
+  const schedule = useMemo(
+    () =>
+      seleccion === "global" || snap.status !== "ready"
       ? null
       : (() => {
           const tasks = [];
@@ -459,7 +462,9 @@ export function HojasDeRutaClient() {
             });
           }
           return computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
-        })();
+        })(),
+    [snap, seleccion, columnas, planes, enlaces],
+  );
 
   function toggleRealizada(k: string) {
     setRealizadas((prev) => {

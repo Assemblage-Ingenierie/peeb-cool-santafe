@@ -19,8 +19,10 @@ export async function GET() {
     return Response.json(snapshot, {
       headers: {
         // stale-while-revalidate (CDC §6) : sert depuis le cache CDN, revalide
-        // en arrière-plan, sans polling côté client.
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+        // en arrière-plan, sans polling côté client. `max-age=30` : le navigateur
+        // réutilise sa copie pendant 30 s → pas de refetch à chaque navigation
+        // entre pages dans une même session (le CDN garde s-maxage=60).
+        "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
       },
     });
   } catch (err) {
