@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth-server";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 
 // ============================================================
 // Server Actions — Hojas de ruta (état d'édition admin, écriture).
@@ -22,8 +22,8 @@ const ANO_KEYS = new Set([
   "__ano_afd_contrato__",
 ]);
 
-async function assertAdmin() {
-  await requireAdmin();
+function assertAdmin() {
+  if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
 }
 
 function assertFeuille(feuille: string) {
@@ -59,7 +59,7 @@ export async function roadmapSetRealizada(
   tareaKey: string,
   realizada: boolean,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   const sb = createServiceClient();
@@ -75,7 +75,7 @@ export async function roadmapSetComentario(
   tareaKey: string,
   comentario: string,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   const sb = createServiceClient();
@@ -96,7 +96,7 @@ export async function roadmapSetEdicion(
   descripcion: string,
   responsable: string,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   const sb = createServiceClient();
@@ -119,7 +119,7 @@ export async function roadmapSetAnoAfd(
   tareaKey: string,
   recibida: boolean,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   if (!ANO_KEYS.has(tareaKey)) throw new Error(`Hito AFD inválido: ${tareaKey}`);
   const sb = createServiceClient();
@@ -140,7 +140,7 @@ export async function roadmapCrearCarta(
   nombre: string,
   orden: number,
 ): Promise<string> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertComponente(componente);
   assertFila(fila);
@@ -165,7 +165,7 @@ export async function roadmapEliminarCarta(
   tareaKey: string,
   creada: boolean,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   const sb = createServiceClient();
@@ -189,7 +189,7 @@ export async function roadmapMoverCarta(
   fila: string,
   orden: number,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   assertFila(fila);
@@ -217,7 +217,7 @@ export async function roadmapSetPlan(
     durUnidad?: string | null;
   },
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   const row: Record<string, unknown> = { feuille, tarea_key: tareaKey };
@@ -237,7 +237,7 @@ export async function roadmapSetPlan(
 
 /** Restaure toutes les cartes par défaut masquées d'une feuille. */
 export async function roadmapRestaurarOcultas(feuille: string): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   const sb = createServiceClient();
   const { error } = await sb
@@ -259,7 +259,7 @@ export async function roadmapAddEnlace(
   hacia: string,
   liaison?: { punto?: string; desfaseValor?: number; desfaseUnidad?: string },
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   assertKey(desde);
   assertKey(hacia);
@@ -284,7 +284,7 @@ export async function roadmapRemoveEnlace(
   desde: string,
   hacia: string,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   assertFeuille(feuille);
   const sb = createServiceClient();
   const { error } = await sb

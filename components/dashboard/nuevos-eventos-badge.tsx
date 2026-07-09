@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { SnapshotActividad } from "@/lib/snapshot";
-import { isAdmin } from "@/lib/auth";
-import { useCurrentUser } from "@/components/auth-context";
+import { DEV_AUTH_BYPASS } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { fmtFecha } from "@/components/calendario/fechas";
 
@@ -23,10 +22,9 @@ export function NuevosEventosBadge({ actividad }: { actividad: SnapshotActividad
     return window.localStorage.getItem(VISTOS_KEY);
   });
   const [popup, setPopup] = useState<SnapshotActividad[] | null>(null);
-  const user = useCurrentUser();
 
   // Réservé à l'admin.
-  if (!isAdmin(user)) return null;
+  if (!DEV_AUTH_BYPASS) return null;
 
   const nuevos = actividad.filter((a) => !vistos || a.creadoEn > vistos);
   const n = nuevos.length;

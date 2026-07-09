@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth-server";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { TABLES, type TableConfig } from "@/lib/admin/config";
 import type { Row, SubproyectoRow } from "@/lib/admin/read";
 import { GESTION_FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants";
@@ -14,8 +14,8 @@ import { GESTION_FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants"
 // UID des nouvelles lignes généré CÔTÉ SERVEUR (max + 1 par table).
 // ============================================================
 
-async function assertAdmin() {
-  await requireAdmin();
+function assertAdmin() {
+  if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
 }
 
 function cfgOf(tableKey: string): TableConfig {
@@ -62,7 +62,7 @@ function sanitizeNotasServer(html: string): string {
  * `presets` permet de préremplir des champs (ex. subseccion du bloc), validés par liste blanche.
  */
 export async function addRow(tableKey: string, presets?: Record<string, unknown>): Promise<Row> {
-  await assertAdmin();
+  assertAdmin();
   const cfg = cfgOf(tableKey);
   const sb = createServiceClient();
 
@@ -100,7 +100,7 @@ export async function updateField(
   field: string,
   value: string,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.textFields.includes(field)) throw new Error(`Campo no editable: ${field}`);
 
@@ -129,7 +129,7 @@ export async function gestionSetDuracion(
   durValor: number | null,
   durUnidad: string | null,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const v =
     durValor == null || Number.isNaN(durValor) || durValor <= 0 ? null : Math.trunc(durValor);
   const u = durUnidad && DUR_UNIDADES.has(durUnidad) ? durUnidad : null;
@@ -149,7 +149,7 @@ export async function setFlag(
   flag: string,
   value: boolean,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.flagFields.includes(flag)) throw new Error(`Bandera inválida: ${flag}`);
 
@@ -167,7 +167,7 @@ export async function setArrayField(
   field: string,
   values: string[],
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.arrayFields.includes(field)) throw new Error(`Campo no válido: ${field}`);
 
@@ -185,7 +185,7 @@ export async function setArrayField(
  * - entidad → equipo.entidad_uid mis à NULL (lève le blocage FK) + retirée de eventos.participantes[].
  */
 export async function deleteRow(tableKey: string, uid: string): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const cfg = cfgOf(tableKey);
   const sb = createServiceClient();
 
@@ -244,7 +244,7 @@ const TIPOLOGIAS_CODES = new Set(["A", "H", "E"]);
 
 /** Met à jour un champ de « Datos del edificio » (texte ou numérique nullable). */
 export async function updateSubproyecto(uid: string, field: string, value: string): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   let v: string | number | null;
 
   if (SUB_TEXT.has(field)) {
@@ -299,7 +299,7 @@ export async function updateMetrica(
   field: string,
   value: string,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   if (escenario !== "faisabilidad" && escenario !== "proyecto") {
     throw new Error(`Escenario inválido: ${escenario}`);
   }
@@ -341,7 +341,7 @@ export async function updateMedida(
   field: string,
   value: string,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   if (!MEDIDA_CODES.has(medida)) throw new Error(`Medida inválida: ${medida}`);
 
   let patch: Record<string, unknown>;
@@ -375,7 +375,7 @@ export async function setAysRequisito(
   requisito: string,
   activa: boolean,
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   if (!AYS_REQUISITOS_SET.has(requisito)) throw new Error(`Requisito inválido: ${requisito}`);
   const sb = createServiceClient();
   const { error } = await sb
@@ -394,7 +394,7 @@ export async function setAysRequisito(
  * Crée aussi les 2 lignes metricas (faisabilidad + proyecto) vides ; gestion_lineas démarre vide.
  */
 export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; fases: Row[] }> {
-  await assertAdmin();
+  assertAdmin();
   const sb = createServiceClient();
   const nom = (nombre ?? "").trim() || "Nueva escuela";
 
@@ -456,7 +456,7 @@ export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; 
  * écoles (seccion='Escuelas') sont supprimables — jamais aéroports/hôpitaux.
  */
 export async function deleteSubproyecto(uid: string): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const sb = createServiceClient();
 
   const { data, error: readErr } = await sb
@@ -483,7 +483,7 @@ export async function deleteSubproyecto(uid: string): Promise<void> {
 
 /** Ajoute une ligne de gestion à un sous-projet. UID `GEST-<code>-NNNN` (numéroté par sous-projet). */
 export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
-  await assertAdmin();
+  assertAdmin();
   const sb = createServiceClient();
   const code = subproyectoUid.replace(/^SUB-/, "");
   const prefix = `GEST-${code}-`;
@@ -526,7 +526,7 @@ export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
 
 /** Réécrit la colonne d'ordre (drag & drop) : orden = position+1 dans la liste fournie. */
 export async function reorderRows(tableKey: string, orderedUids: string[]): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.orderField) throw new Error(`Tabla no ordenable: ${tableKey}`);
   const sb = createServiceClient();

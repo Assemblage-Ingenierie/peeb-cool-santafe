@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/nav";
-import { isAdmin, rolLabel } from "@/lib/auth";
-import { useCurrentUser } from "./auth-context";
-import { logout } from "@/app/login/actions";
+import { getCurrentUser, isAdmin, rolLabel } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { LogoSlot } from "./logo-slot";
 import { NavIcon, LogoutIcon } from "./icons";
@@ -17,7 +15,7 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const user = useCurrentUser();
+  const user = getCurrentUser();
   const admin = isAdmin(user);
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || admin);
 
@@ -86,7 +84,7 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
           className="pointer-events-none absolute -bottom-2 right-3 h-20 w-auto opacity-[0.06] select-none"
         />
 
-        {user ? (
+        {user && (
           <div className="relative border-t border-[var(--sidebar-border)] px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -97,28 +95,15 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
                   {rolLabel(user.rol)}
                 </p>
               </div>
-              <form action={logout}>
-                <button
-                  type="submit"
-                  title="Cerrar sesión"
-                  aria-label="Cerrar sesión"
-                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-text-muted)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-text)]"
-                >
-                  <LogoutIcon className="h-[18px] w-[18px]" />
-                </button>
-              </form>
+              <button
+                type="button"
+                title="Cerrar sesión"
+                aria-label="Cerrar sesión"
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-text-muted)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-text)]"
+              >
+                <LogoutIcon className="h-[18px] w-[18px]" />
+              </button>
             </div>
-          </div>
-        ) : (
-          <div className="relative border-t border-[var(--sidebar-border)] px-4 py-3">
-            <Link
-              href="/login"
-              onClick={onNavigate}
-              className="inline-flex items-center gap-2 text-sm font-medium text-[var(--sidebar-text-muted)] transition-colors hover:text-[var(--sidebar-text)]"
-            >
-              <LogoutIcon className="h-[18px] w-[18px] rotate-180" />
-              <span>Ingresar</span>
-            </Link>
           </div>
         )}
       </div>

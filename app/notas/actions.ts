@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { requireAdmin } from "@/lib/auth-server";
+import { getCurrentUser, isAdmin } from "@/lib/auth";
 
 // ============================================================
 // Server Actions — Notas (whiteboard admin). Écriture en service_role.
@@ -12,8 +12,8 @@ import { requireAdmin } from "@/lib/auth-server";
 const TABLE = "peebcoolsf_notas";
 const COLORES = new Set(["blanco", "GP", "EE", "AyS", "G"]);
 
-async function assertAdmin() {
-  await requireAdmin();
+function assertAdmin() {
+  if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
 }
 
 export interface NotaRow {
@@ -27,7 +27,7 @@ export interface NotaRow {
 
 /** Crée une nota (couleur donnée) et retourne la ligne. */
 export async function notaCrear(color: string, x: number, y: number): Promise<NotaRow> {
-  await assertAdmin();
+  assertAdmin();
   const id = `nota-${randomUUID()}`;
   const col = COLORES.has(color) ? color : "blanco";
   const sb = createServiceClient();
@@ -45,7 +45,7 @@ export async function notaActualizar(
   id: string,
   patch: { titulo?: string; contenido?: string; color?: string; x?: number; y?: number },
 ): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const row: Record<string, unknown> = {};
   if ("titulo" in patch) row.titulo = patch.titulo ?? "";
   if ("contenido" in patch) row.contenido = patch.contenido ?? "";
@@ -60,7 +60,7 @@ export async function notaActualizar(
 
 /** Supprime une nota. */
 export async function notaEliminar(id: string): Promise<void> {
-  await assertAdmin();
+  assertAdmin();
   const sb = createServiceClient();
   const { error } = await sb.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(error.message);
