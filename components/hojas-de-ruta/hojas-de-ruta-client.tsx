@@ -386,6 +386,7 @@ export function HojasDeRutaClient() {
       esGlobal: seleccion === "global",
       tipologia: sub?.tipologia ?? "",
       uid: seleccion,
+      semestres: SEMESTRES.map((s) => s.code),
       estado,
     }) as Map<string, CardModel[]>;
   }, [snap, seleccion, ocultas, creadas, posiciones, ediciones]);

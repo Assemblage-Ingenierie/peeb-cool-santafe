@@ -54,6 +54,33 @@ export function cartasBaseSubproyecto(ctx: {
 }
 
 /**
+ * Cartes par défaut de la feuille « Proyecto global » (une entrée par semestre).
+ * GP : « Informe semestral » (semestres S1) / « Informe anual » (semestres S2).
+ * AyS : « Informe Semestral AyS » (tous les semestres). `semestres` = codes de
+ * semestre (`s1-2027`, `s2-2026`…) — la source unique reste la liste SEMESTRES
+ * de la page Hojas de ruta, passée en argument.
+ */
+export function cartasBaseGlobal(semestres: string[]): (RoadmapCard & { fila: string })[] {
+  const cards: (RoadmapCard & { fila: string })[] = [];
+  for (const code of semestres) {
+    const esS1 = code.startsWith("s1-");
+    cards.push({
+      key: `informe-gp-${code}`,
+      componente: "GP",
+      nombre: esS1 ? "Informe semestral" : "Informe anual",
+      fila: code,
+    });
+    cards.push({
+      key: `informe-ays-${code}`,
+      componente: "AyS",
+      nombre: "Informe Semestral AyS",
+      fila: code,
+    });
+  }
+  return cards;
+}
+
+/**
  * Cartes d'une feuille groupées par colonne `${fila}|${componente}`, triées par
  * orden. `estado` = overrides par tarea_key (pour CETTE feuille uniquement).
  */
@@ -61,9 +88,10 @@ export function construirCartasPorFila(opts: {
   esGlobal: boolean;
   tipologia?: string; // typologie du sous-projet (A/H/E) — visibilité des cartes
   uid?: string; // uid du sous-projet — visibilité des cartes par sous-projet
+  semestres?: string[]; // codes de semestre (feuille globale uniquement)
   estado: Map<string, RoadmapOverride>;
 }): Map<string, RoadmapCard[]> {
-  const { esGlobal, tipologia, uid, estado } = opts;
+  const { esGlobal, tipologia, uid, semestres, estado } = opts;
   const acc = new Map<string, RoadmapCard[]>();
   const add = (fila: string, comp: ComponenteCode, card: RoadmapCard, orden: number) => {
     const key = `${fila}|${comp}`;
@@ -72,10 +100,13 @@ export function construirCartasPorFila(opts: {
     if (arr) arr.push(c);
     else acc.set(key, [c]);
   };
-  // Cartes par défaut (jamais pour le global).
-  if (!esGlobal) {
+  // Cartes par défaut : informes por semestre (global) ou tâches par fase (sous-projet).
+  {
+    const base = esGlobal
+      ? cartasBaseGlobal(semestres ?? [])
+      : cartasBaseSubproyecto({ tipologia: tipologia ?? "", uid: uid ?? "" });
     let idx = 0;
-    for (const card of cartasBaseSubproyecto({ tipologia: tipologia ?? "", uid: uid ?? "" })) {
+    for (const card of base) {
       idx += 1;
       const ov = estado.get(card.key);
       if (ov?.oculta) continue;
