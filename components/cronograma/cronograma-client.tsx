@@ -48,14 +48,21 @@ const ROW_H = 28;
 // ou de semaine). Le nombre de cases change (≈20 en trimestre, 60 en mes, 260
 // en semana) → plus la granularité est fine, plus l'échelle est « zoomée ».
 const CELL_W = 56;
-// Date à laquelle démarre la visibilité au chargement (auto-scroll horizontal).
+// Repli de visibilité au chargement si « hoy » est hors fenêtre (auto-scroll).
 const VISTA_INICIO = new Date(2026, 5, 1).getTime(); // juin 2026
+// Espacement par défaut de la barre rouge « hoy » depuis la colonne des titres,
+// exprimé en cases (laisse un court passé visible à gauche au chargement).
+const OFFSET_HOY_CASES = 3.5;
 const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
 // Bleus progressifs pour les barres de phase (clair → foncé).
 const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"];
 // Rouge des fases « No objeción AFD » (jalons critiques mis en évidence).
 const ROJO_AFD = "#cc0000";
+// Gris des barres GP dans le Gantt : plus clair que le noir des cartes GP de la
+// feuille de route (CARD_TONOS.GP.head = #434343), pour alléger la lecture du
+// cronograma. Spécifique au Gantt (n'affecte pas les cartes des Hojas de ruta).
+const GP_BARRA = "#808080";
 // Couleurs spécifiques par fase (priment sur le dégradé de bleus).
 const FASE_COLOR: Record<string, string> = {
   estudios_preliminares: "#d9d9d9", // gris clair
@@ -318,8 +325,11 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
       if (cards.length === 0) continue;
       cards
         .map((c) => {
-          // Tons CLAIRS de composante (en-tête de carte) pour les détails.
-          const b = barraDe(sched.get(c.key), CARD_TONOS[comp].head, c.nombre, false, CARD_TONOS[comp].headText);
+          // Tons CLAIRS de composante (en-tête de carte) pour les détails ;
+          // GP en gris moyen (GP_BARRA) plutôt que le noir des cartes.
+          const color = comp === "GP" ? GP_BARRA : CARD_TONOS[comp].head;
+          const txtColor = comp === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[comp].headText;
+          const b = barraDe(sched.get(c.key), color, c.nombre, false, txtColor);
           return { label: c.nombre, barras: b ? [b] : [], _s: b ? b.startMs : Infinity };
         })
         .sort((a, b) => a._s - b._s)
@@ -383,14 +393,15 @@ export function CronogramaClient() {
   const totalW = unidades.length * CELL_W;
   const x = (ms: number) => ((ms - START) / SPAN) * totalW;
 
-  // --- Scroll horizontal : auto-position à juin 2026, zoom ancré, drag-to-pan.
+  // --- Scroll horizontal : vue par défaut calée sur « hoy », zoom ancré, drag-to-pan.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Date au bord gauche du viewport (ms) — conservée à travers les zooms.
-  const anclaMsRef = useRef<number>(VISTA_INICIO);
-  // Repositionne le scroll pour aligner l'ancre sur le bord gauche.
+  // null tant que la position initiale (basée sur « hoy ») n'a pas été posée.
+  const anclaMsRef = useRef<number | null>(null);
+  // Repositionne le scroll pour conserver l'ancre au bord gauche lors d'un zoom.
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || anclaMsRef.current == null) return;
     el.scrollLeft = ((anclaMsRef.current - START) / SPAN) * totalW;
   }, [totalW]);
   const onScroll = () => {
@@ -426,6 +437,21 @@ export function CronogramaClient() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) anti-décalage d'hydratation
   useEffect(() => setHoyMs(Date.now()), []);
   const hoyEnRango = hoyMs != null && hoyMs >= START && hoyMs < END;
+
+  // Position initiale (1×, une fois « hoy » connu) : la barre rouge « hoy » est
+  // placée à OFFSET_HOY_CASES cases du bord gauche (colonne des titres), laissant
+  // un court passé visible. Si « hoy » est hors fenêtre → repli VISTA_INICIO.
+  const posInicialRef = useRef(false);
+  useEffect(() => {
+    if (posInicialRef.current || hoyMs == null) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    const cellSpan = SPAN / unidades.length; // ms par case (granularité courante)
+    const ancla = hoyEnRango ? hoyMs - OFFSET_HOY_CASES * cellSpan : VISTA_INICIO;
+    anclaMsRef.current = ancla;
+    el.scrollLeft = Math.max(0, ((ancla - START) / SPAN) * totalW);
+    posInicialRef.current = true;
+  }, [hoyMs, hoyEnRango, unidades.length, totalW]);
 
   const anios: { anio: number; left: number; width: number }[] = [];
   for (let y = ANIO_INI; y <= ANIO_FIN; y += 1) {
