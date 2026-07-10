@@ -1291,6 +1291,8 @@ function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string
   const tono = CARD_TONOS[comp];
   // Cadre complet (contour entier), à peine détaché de la carte (écart minime) ;
   // polices et hauteur de bandeau alignées sur la carte (en-tête 12.5px, corps 11px).
+  // En-tête dans le ton CLAIR de la composante (comme l'en-tête de la carte) —
+  // plus léger que l'ancien bandeau foncé, séparé du corps par un filet.
   return (
     <div
       className="flex-1 overflow-hidden rounded-md border"
@@ -1298,7 +1300,7 @@ function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string
     >
       <div
         className="px-3 py-1.5 text-[12.5px] font-semibold leading-snug"
-        style={{ backgroundColor: tono.foot, color: tono.footText }}
+        style={{ backgroundColor: tono.head, color: tono.headText, borderBottom: `1px solid ${tono.border}` }}
       >
         Comentarios
       </div>
