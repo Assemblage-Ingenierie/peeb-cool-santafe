@@ -60,6 +60,18 @@ export function cartasBaseSubproyecto(ctx: {
  * semestre (`s1-2027`, `s2-2026`…) — la source unique reste la liste SEMESTRES
  * de la page Hojas de ruta, passée en argument.
  */
+// Commentaire par défaut des cartes « Informe Semestral AyS » (MGAS §9.1.5 —
+// contenido mínimo del informe semestral). Les sauts de ligne sont préservés à
+// l'affichage (ComentariosPanel : whitespace-pre-line).
+const COMENTARIO_INFORME_AYS = `Informes elaborados por la UG/ACEFE (MGAS 9.1.5)
+
+* El estado de la elaboración y ejecución de los documentos ambientales y sociales requeridos por el Proyecto.
+* El estado de la implementación de las medidas ambientales, sociales y de salud y seguridad requeridas en los instrumentos de gestión, para los diferentes municipios.
+* El estado de implementación del plan de capacitaciones.
+* Reporte de accidentes/incidentes.
+* Las actividades del Plan de Participación de Partes Interesadas (PPPI), con énfasis especial en lo relacionado con el Mecanismo de Atención de Reclamos y Resolución de Conflictos, incluyendo las quejas y los reclamos recibidos y el estado de su resolución.
+Anexo 1 (Contenido mínimo del informe semestral)`;
+
 export function cartasBaseGlobal(semestres: string[]): (RoadmapCard & { fila: string })[] {
   const cards: (RoadmapCard & { fila: string })[] = [];
   for (const code of semestres) {
@@ -74,6 +86,7 @@ export function cartasBaseGlobal(semestres: string[]): (RoadmapCard & { fila: st
       key: `informe-ays-${code}`,
       componente: "AyS",
       nombre: "Informe Semestral AyS",
+      comentario: COMENTARIO_INFORME_AYS,
       fila: code,
     });
   }

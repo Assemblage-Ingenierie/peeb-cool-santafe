@@ -1302,7 +1302,7 @@ function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string
       >
         Comentarios
       </div>
-      <div className="px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]">
+      <div className="whitespace-pre-line px-3 py-1.5 text-[11px] leading-snug text-[var(--text)]">
         {texto ? texto : <span className="text-[var(--text-muted)]">—</span>}
       </div>
     </div>
