@@ -1592,7 +1592,9 @@ function TareaCard({
         arrastrable && "cursor-grab active:cursor-grabbing",
         arrastrando && "opacity-40",
       )}
-      style={{ borderColor: tono.border }}
+      // Carte réalisée : on retire le liseré de contour (transparent, mais on
+      // garde le `border` pour ne pas décaler la mise en page d'1px).
+      style={{ borderColor: realizada ? "transparent" : tono.border }}
     >
       {/* Pilule « realizada » — pleine visibilité (hors du calque atténué). */}
       {pillVisible && (
