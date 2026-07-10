@@ -64,12 +64,11 @@ const FASE_COLOR: Record<string, string> = {
   obra: "#f6b26b",
 };
 
-// Sigles des fases sur les frises (comme le tableau Inicio). Règles :
-// « validacion_anteproyecto » → rien ; toutes les « No objeción AFD » → « CNO ».
+// Sigles des fases sur les frises (comme le tableau Inicio). Règle :
+// toutes les « No objeción AFD » → « CNO ».
 const FASE_SIGLA: Record<string, string> = {
   estudios_preliminares: "EP",
   anteproyecto: "AP",
-  validacion_anteproyecto: "",
   proyecto_ejecutivo: "PE",
   redaccion_pliegos: "PL",
   no_objecion_afd: "CNO",
@@ -99,20 +98,10 @@ function textoSobre(hex: string): string {
   return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#1f2733" : "#ffffff";
 }
 
-// Jalons rendus comme tareas GP (grises) DANS leur phase, et non comme des
-// phases distinctes. Clé = code de fase parente → jalon. « Validación de
-// anteproyecto » est une tarea GP de la phase Anteproyecto (pas une fase).
-const HITO_COMO_TAREA: Record<string, { code: string; nombre: string }> = {
-  anteproyecto: { code: "validacion_anteproyecto", nombre: "Validación de anteproyecto" },
-};
-// Codes de « fase » qui ne doivent PAS avoir leur propre bande (rendus en tarea).
-const FASES_OCULTAS = new Set(Object.values(HITO_COMO_TAREA).map((h) => h.code));
-
-// Phases affichées (ordre chronologique canonique, hors « general » et hors
-// jalons rendus comme tareas).
-const FASES_ORD = GESTION_FASES.filter(
-  (f) => f.code !== "general" && !FASES_OCULTAS.has(f.code),
-);
+// Phases affichées (ordre chronologique canonique, hors « general »).
+// « Validación de anteproyecto » n'est plus une fase : c'est une tarea GP de la
+// fase Anteproyecto (ROADMAP_TAREAS) → rendue naturellement parmi les tareas.
+const FASES_ORD = GESTION_FASES.filter((f) => f.code !== "general");
 // Composantes en sections (ordre d'affichage).
 const COMPS: ComponenteCode[] = ["GP", "EE", "AyS", "G"];
 
@@ -326,9 +315,6 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
     for (const comp of COMPS) {
       if (!filtros.has(comp)) continue;
       const cards = [...(columnas.get(`${f.code}|${comp}`) ?? [])].filter((c) => !c.nota);
-      // Jalon rendu comme tarea GP de la phase (ex. Validación de anteproyecto).
-      const hito = comp === "GP" ? HITO_COMO_TAREA[f.code] : undefined;
-      if (hito) cards.push({ key: faseNodeKey(hito.code), componente: "GP", nombre: hito.nombre });
       if (cards.length === 0) continue;
       cards
         .map((c) => {

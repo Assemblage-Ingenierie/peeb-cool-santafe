@@ -13,10 +13,10 @@ import { getCurrentUser, isAdmin } from "@/lib/auth";
 
 const ESTADO = "peebcoolsf_roadmap_estado";
 const ENLACE = "peebcoolsf_roadmap_enlace";
-// Clés persistées des cases de jalon (« checks ») : Validación de anteproyecto,
-// No objeción AFD (avant Licitación) + Atribución / Contrato (après Licitación).
+// Clés persistées des cases de jalon (« checks ») : No objeción AFD (avant
+// Licitación) + Atribución / Contrato (après Licitación). (« Validación de
+// anteproyecto » n'est plus un jalon : c'est une tarea GP normale.)
 const ANO_KEYS = new Set([
-  "__val_anteproyecto__",
   "__ano_afd__",
   "__ano_afd_atribucion__",
   "__ano_afd_contrato__",

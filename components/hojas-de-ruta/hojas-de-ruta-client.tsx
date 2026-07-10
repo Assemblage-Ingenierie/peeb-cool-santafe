@@ -95,7 +95,7 @@ const FILAS_RUTA: FilaRuta[] = [];
       numero: hito ? null : numero,
       anoKey: hito ? ANO_KEY : undefined,
     });
-    // Jalons insérés juste après cette phase (Validación de anteproyecto, AFD…).
+    // Jalons insérés juste après cette phase (No objeción AFD — Atribución/Contrato).
     for (const h of HITOS_TRAS_FASE[f.code] ?? []) {
       FILAS_RUTA.push({ code: h.code, nombre: h.nombre, hito: true, numero: null, anoKey: h.anoKey });
     }

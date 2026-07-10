@@ -269,6 +269,7 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
 
   // --- Gestión de proyecto (GP) — étapes de processus (palette noir/gris),
   // rendues dans la colonne EE. Timing géré par liaisons (Excel Hojaruta). ---
+  { id: "validacion_anteproyecto", fase: "anteproyecto", componente: "GP", nombre: "Validación de anteproyecto" },
   { id: "gp-lic-publicacion", fase: "licitacion", componente: "GP", nombre: "Publicación del pliego" },
   { id: "gp-lic-analisis", fase: "licitacion", componente: "GP", nombre: "Análisis y atribución" },
   { id: "gp-lic-negociacion", fase: "licitacion", componente: "GP", nombre: "Negociación y firma del contrato" },
@@ -328,7 +329,8 @@ export interface HitoFase {
   anoKey: string;
 }
 export const HITOS_FASE: HitoFase[] = [
-  { code: "validacion_anteproyecto", nombre: "Validación de anteproyecto", trasFase: "anteproyecto", anoKey: "__val_anteproyecto__" },
+  // « Validación de anteproyecto » n'est plus un jalon : c'est une tarea GP de la
+  // fase Anteproyecto (voir ROADMAP_TAREAS ci-dessous).
   { code: "no_objecion_afd_atribucion", nombre: "No objeción AFD — Atribución", trasFase: "licitacion", anoKey: "__ano_afd_atribucion__" },
   { code: "no_objecion_afd_contrato", nombre: "No objeción AFD — Contrato", trasFase: "licitacion", anoKey: "__ano_afd_contrato__" },
 ];
