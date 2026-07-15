@@ -9,6 +9,7 @@ import {
 } from "@/lib/constants";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import { SEMESTRES_CODES, labelSemestre, esS2, semestreRango } from "@/lib/semestres";
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
@@ -344,6 +345,73 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
   return out;
 }
 
+// Section « Proyecto global » : les éléments de la feuille de route globale
+// (informes GP/AyS par semestre + cartes créées), positionnés par des règles de
+// temporalité DÉDIÉES au cronograma (la feuille globale n'a pas d'ancre de phase).
+//   • Informes GP/AyS : inicio 3 semanas antes del fin del semestre, duración 3 semanas.
+//   • Otras tareas : duración 1 semana ; las del S2 empiezan 2 meses tras el inicio
+//     del semestre (las del S1, al inicio del semestre).
+function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion {
+  const DIA = 24 * 3600 * 1000;
+  const estado = new Map<string, RoadmapOverride>();
+  for (const r of d.roadmapEstado) {
+    if (r.feuille !== "global") continue;
+    estado.set(r.tareaKey, {
+      oculta: r.oculta,
+      creada: r.creada,
+      componente: (r.componente as ComponenteCode | null) ?? null,
+      fila: r.fila,
+      orden: r.orden,
+      banda: r.banda,
+      nombre: r.nombre,
+    });
+  }
+  const columnas = construirCartasPorFila({ esGlobal: true, semestres: SEMESTRES_CODES, estado });
+  const filas: (Fila & { _s: number })[] = [];
+  for (const [colKey, cards] of columnas) {
+    const semCode = colKey.split("|")[0];
+    const rango = semestreRango(semCode);
+    if (!rango) continue;
+    const semLabel = labelSemestre(semCode);
+    for (const c of cards) {
+      if (c.nota || !filtros.has(c.componente)) continue;
+      const esInforme = c.key.startsWith("informe-");
+      let startMs: number;
+      let endMs: number;
+      if (esInforme) {
+        // inicio 3 semanas antes del fin del semestre, duración 3 semanas.
+        endMs = rango.fin.getTime();
+        startMs = endMs - 21 * DIA;
+      } else {
+        // duración 1 semana ; S2 → 2 meses tras el inicio ; S1 → al inicio.
+        startMs = esS2(semCode)
+          ? new Date(rango.inicio.getFullYear(), rango.inicio.getMonth() + 2, 1).getTime()
+          : rango.inicio.getTime();
+        endMs = startMs + 7 * DIA;
+      }
+      const color = c.componente === "GP" ? GP_BARRA : CARD_TONOS[c.componente]?.head ?? "#888888";
+      const txt =
+        c.componente === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[c.componente]?.headText ?? "#ffffff";
+      const barra: Barra = {
+        startMs,
+        solidMs: endMs,
+        endMs,
+        color,
+        etiquetaColor: txt,
+        dentro: false,
+        tooltip: `${c.nombre} · ${fmtFecha(startMs)} → ${fmtFecha(endMs)}`,
+      };
+      filas.push({ label: `${c.nombre} · ${semLabel}`, barras: [barra], _s: startMs });
+    }
+  }
+  filas.sort((a, b) => a._s - b._s);
+  return {
+    titulo: "Proyecto global",
+    barras: [],
+    filas: filas.map(({ label, barras }) => ({ label, barras })),
+  };
+}
+
 // Vue globale : une ligne par sous-projet, montrant l'ENCHAÎNEMENT des fases
 // (chaque fase = un segment coloré avec sa date de démarrage et sa durée).
 function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Seccion {
@@ -384,7 +452,8 @@ export function CronogramaClient() {
   const secciones: Seccion[] = useMemo(() => {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
     const datos: DatosCronograma = { ...snap.data, ...rm.data };
-    if (seleccion === "global") return [seccionGlobal(datos.subproyectos, datos)];
+    if (seleccion === "global")
+      return [seccionGlobalRoadmap(datos, filtros), seccionGlobal(datos.subproyectos, datos)];
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros);
   }, [snap, rm, seleccion, filtros]);

@@ -13,6 +13,7 @@ import {
   type ComponenteCode,
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import { SEMESTRES } from "@/lib/semestres";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import {
   computeSchedule,
@@ -112,15 +113,8 @@ function footColor(comp: string): string {
   return (CARD_TONOS as Record<string, { foot: string }>)[comp]?.foot ?? COLOR_FASE;
 }
 
-// Semestres du calendrier global (S2 2026 → S2 2030). La feuille « Proyecto
-// global » utilise cette décomposition en semestres au lieu des phases.
-const SEMESTRES: { code: string; label: string }[] = [];
-for (let anio = 2026; anio <= 2030; anio += 1) {
-  for (const s of [1, 2] as const) {
-    if (anio === 2026 && s === 1) continue; // démarre à S2 2026
-    SEMESTRES.push({ code: `s${s}-${anio}`, label: `S${s} ${anio}` });
-  }
-}
+// Semestres du calendrier global (S2 2026 → S2 2030) : source unique dans
+// lib/semestres (partagée avec le Cronograma).
 
 // Colonnes de la feuille de route, par composante (gauche → droite). Chaque
 // colonne conserve sa place même vide (alignement des cartes par composante).
