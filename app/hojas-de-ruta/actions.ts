@@ -139,6 +139,7 @@ export async function roadmapCrearCarta(
   fila: string,
   nombre: string,
   orden: number,
+  banda = 0,
 ): Promise<string> {
   assertAdmin();
   assertFeuille(feuille);
@@ -153,6 +154,7 @@ export async function roadmapCrearCarta(
     componente,
     fila,
     orden,
+    banda,
     nombre: nullable(nombre),
   });
   if (error) throw new Error(error.message);
@@ -182,12 +184,16 @@ export async function roadmapEliminarCarta(
   if (error) throw new Error(error.message);
 }
 
-/** Déplace une carte : nouvelle fila (phase/semestre) + orden (drag-drop). */
+/**
+ * Déplace une carte : nouvelle fila (phase/semestre) + banda (compartiment
+ * horizontal dans la phase) + orden (tri dans la cellule) — drag-drop.
+ */
 export async function roadmapMoverCarta(
   feuille: string,
   tareaKey: string,
   fila: string,
   orden: number,
+  banda: number,
 ): Promise<void> {
   assertAdmin();
   assertFeuille(feuille);
@@ -196,7 +202,10 @@ export async function roadmapMoverCarta(
   const sb = createServiceClient();
   const { error } = await sb
     .from(ESTADO)
-    .upsert({ feuille, tarea_key: tareaKey, fila, orden }, { onConflict: "feuille,tarea_key" });
+    .upsert(
+      { feuille, tarea_key: tareaKey, fila, orden, banda },
+      { onConflict: "feuille,tarea_key" },
+    );
   if (error) throw new Error(error.message);
 }
 

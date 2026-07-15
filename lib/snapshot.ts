@@ -151,7 +151,8 @@ export interface SnapshotRoadmapEstado {
   responsable: string | null;
   oculta: boolean; // carte par défaut masquée sur cette feuille
   fila: string | null; // override de phase/semestre (null = fila d'origine)
-  orden: number | null; // clé de tri dans la colonne (null = ordre par défaut)
+  orden: number | null; // clé de tri dans la cellule (null = ordre par défaut)
+  banda: number | null; // compartiment horizontal dans la phase (null = bande 0)
   componente: string | null; // composante d'une carte créée (null = carte par défaut)
   creada: boolean; // true = carte ajoutée à la main (tarea_key = UID)
   fechaInicio: string | null; // planification (date ISO) — indépendante
@@ -454,7 +455,7 @@ export async function getRoadmap(): Promise<Roadmap> {
     sb
       .from("peebcoolsf_roadmap_estado")
       .select(
-        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
+        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, banda, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
       ),
     sb
       .from("peebcoolsf_roadmap_enlace")
@@ -478,6 +479,7 @@ export async function getRoadmap(): Promise<Roadmap> {
       oculta: boolean | null;
       fila: string | null;
       orden: number | null;
+      banda: number | null;
       componente: string | null;
       creada: boolean | null;
       fecha_inicio: string | null;
@@ -496,6 +498,7 @@ export async function getRoadmap(): Promise<Roadmap> {
     oculta: !!r.oculta,
     fila: r.fila,
     orden: r.orden,
+    banda: r.banda,
     componente: r.componente,
     creada: !!r.creada,
     fechaInicio: r.fecha_inicio,

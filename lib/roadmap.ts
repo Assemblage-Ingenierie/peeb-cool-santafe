@@ -17,7 +17,8 @@ export interface RoadmapCard {
   responsable?: string;
   comentario?: string;
   nota?: boolean; // carte informative (placeholder dynamique) — non planifiable
-  orden?: number; // clé de tri effective dans la colonne
+  orden?: number; // clé de tri effective dans la cellule (banda × composante)
+  banda?: number; // compartiment horizontal dans la phase (0 par défaut)
 }
 
 // Overrides persistés d'une tâche (peebcoolsf_roadmap_estado), par tarea_key.
@@ -27,6 +28,7 @@ export interface RoadmapOverride {
   componente?: ComponenteCode | null;
   fila?: string | null;
   orden?: number | null;
+  banda?: number | null; // compartiment horizontal dans la phase (null = 0)
   nombre?: string | null; // titre d'une carte créée
 }
 
@@ -106,9 +108,15 @@ export function construirCartasPorFila(opts: {
 }): Map<string, RoadmapCard[]> {
   const { esGlobal, tipologia, uid, semestres, estado } = opts;
   const acc = new Map<string, RoadmapCard[]>();
-  const add = (fila: string, comp: ComponenteCode, card: RoadmapCard, orden: number) => {
+  const add = (
+    fila: string,
+    comp: ComponenteCode,
+    card: RoadmapCard,
+    orden: number,
+    banda: number,
+  ) => {
     const key = `${fila}|${comp}`;
-    const c = { ...card, orden };
+    const c = { ...card, orden, banda };
     const arr = acc.get(key);
     if (arr) arr.push(c);
     else acc.set(key, [c]);
@@ -123,16 +131,28 @@ export function construirCartasPorFila(opts: {
       idx += 1;
       const ov = estado.get(card.key);
       if (ov?.oculta) continue;
-      add(ov?.fila ?? card.fila, card.componente, card, ov?.orden ?? idx);
+      add(ov?.fila ?? card.fila, card.componente, card, ov?.orden ?? idx, ov?.banda ?? 0);
     }
   }
   // Cartes créées.
   for (const [tareaKey, ov] of estado) {
     if (!ov.creada || !ov.componente || !ov.fila) continue;
-    add(ov.fila, ov.componente, { key: tareaKey, componente: ov.componente, nombre: ov.nombre ?? "" }, ov.orden ?? 0);
+    add(
+      ov.fila,
+      ov.componente,
+      { key: tareaKey, componente: ov.componente, nombre: ov.nombre ?? "" },
+      ov.orden ?? 0,
+      ov.banda ?? 0,
+    );
   }
+  // Tri : bande (compartiment horizontal), puis orden dans la cellule, puis clé.
   for (const arr of acc.values()) {
-    arr.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0) || (a.key < b.key ? -1 : 1));
+    arr.sort(
+      (a, b) =>
+        (a.banda ?? 0) - (b.banda ?? 0) ||
+        (a.orden ?? 0) - (b.orden ?? 0) ||
+        (a.key < b.key ? -1 : 1),
+    );
   }
   return acc;
 }

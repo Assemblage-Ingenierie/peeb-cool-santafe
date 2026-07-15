@@ -149,7 +149,8 @@ interface CardModel {
   responsable?: string; // défaut (surchargé par l'édition admin) — sinon ACEFE
   comentario?: string; // commentaire par défaut (surchargé par l'édition admin)
   nota?: boolean;
-  orden?: number; // clé de tri effective dans la colonne (fila × composante)
+  orden?: number; // clé de tri effective dans la cellule (banda × composante)
+  banda?: number; // compartiment horizontal dans la phase (0 par défaut)
 }
 
 interface Edicion {
@@ -179,7 +180,8 @@ interface LiaisonDraft {
 // Override de position d'une carte (drag-drop / cartes créées).
 interface Posicion {
   fila: string | null; // phase (sous-projet) / semestre (global) ; null = fila d'origine
-  orden: number | null; // clé de tri dans la colonne ; null = ordre par défaut
+  orden: number | null; // clé de tri dans la cellule ; null = ordre par défaut
+  banda: number | null; // compartiment horizontal dans la phase ; null = bande 0
 }
 
 // Planification d'une tâche (champs indépendants ; durée « estimée »).
@@ -266,12 +268,17 @@ export function HojasDeRutaClient() {
   const [posiciones, setPosiciones] = useState<Record<string, Posicion>>({}); // fila/orden override
   const [planes, setPlanes] = useState<Record<string, Plan>>({}); // planification par carte
 
-  // Drag-drop vertical (composante fixe). `drag` = carte en cours ; `dropAt` =
-  // emplacement d'insertion aimanté (fila × composante × index).
+  // Drag-drop (composante fixe). `drag` = carte en cours ; `dropAt` = insertion
+  // aimantée dans une cellule (fila × banda × composante × index) ; `dropBanda`
+  // = zone « nouvelle bande » survolée (fila × position d'insertion entre bandes).
   const [drag, setDrag] = useState<{ key: string; comp: ComponenteCode } | null>(null);
-  const [dropAt, setDropAt] = useState<{ fila: string; comp: ComponenteCode; index: number } | null>(
-    null,
-  );
+  const [dropAt, setDropAt] = useState<{
+    fila: string;
+    banda: number;
+    comp: ComponenteCode;
+    index: number;
+  } | null>(null);
+  const [dropBanda, setDropBanda] = useState<{ fila: string; at: number } | null>(null);
 
   // Hydratation de l'état local depuis le snapshot (une fois prêt).
   const [hydrated, setHydrated] = useState(false);
@@ -316,7 +323,9 @@ export function HojasDeRutaClient() {
       }
       if (r.oculta) ocu.add(sk);
       if (r.creada && r.componente) cre[sk] = r.componente as ComponenteCode;
-      if (r.fila != null || r.orden != null) pos[sk] = { fila: r.fila, orden: r.orden };
+      if (r.fila != null || r.orden != null || r.banda != null) {
+        pos[sk] = { fila: r.fila, orden: r.orden, banda: r.banda };
+      }
       if (r.fechaInicio != null || r.fechaFin != null || r.durValor != null || r.durUnidad != null) {
         pla[sk] = {
           fechaInicio: r.fechaInicio,
@@ -379,6 +388,7 @@ export function HojasDeRutaClient() {
       const o = ensure(splitKey(sk).tarea);
       o.fila = p.fila;
       o.orden = p.orden;
+      o.banda = p.banda;
     }
     const subs = snap.status === "ready" ? snap.data.subproyectos : [];
     const sub = subs.find((s) => s.uid === seleccion);
@@ -567,13 +577,18 @@ export function HojasDeRutaClient() {
   }
 
   // Crée une carte dans la colonne (fila × composante) et ouvre son édition.
+  // Ajoutée en fin de la dernière bande de la colonne (comportement intuitif).
   async function addCard(fila: string, comp: ComponenteCode) {
-    const orden = cartasColumna(fila, comp).reduce((m, c) => Math.max(m, c.orden ?? 0), 0) + 1;
+    const cards = cartasColumna(fila, comp);
+    const banda = cards.reduce((m, c) => Math.max(m, c.banda ?? 0), 0);
+    const orden =
+      cards.filter((c) => (c.banda ?? 0) === banda).reduce((m, c) => Math.max(m, c.orden ?? 0), 0) +
+      1;
     try {
-      const key = await roadmapCrearCarta(seleccion, comp, fila, "Nueva tarea", orden);
+      const key = await roadmapCrearCarta(seleccion, comp, fila, "Nueva tarea", orden, banda);
       const k = `${seleccion}::${key}`;
       setCreadas((p) => ({ ...p, [k]: comp }));
-      setPosiciones((p) => ({ ...p, [k]: { fila, orden } }));
+      setPosiciones((p) => ({ ...p, [k]: { fila, orden, banda } }));
       setEdiciones((p) => ({ ...p, [k]: { nombre: "Nueva tarea" } }));
       setPanel({ key: k, tipo: "editar" });
     } catch {
@@ -625,7 +640,9 @@ export function HojasDeRutaClient() {
     setOcultas((p) => new Set([...p].filter((sk) => splitKey(sk).feuille !== seleccion)));
   }
 
-  // --- Drag-drop des cartes (vertical, composante fixe) ---
+  // --- Drag-drop des cartes (composante fixe) ---
+  // Deux axes : `orden` (tri dans une cellule banda × composante) et `banda`
+  // (compartiment horizontal dans la phase, aligné à travers les colonnes).
   function onCardDragStart(e: DragEvent<HTMLElement>, card: CardModel) {
     setDrag({ key: `${seleccion}::${card.key}`, comp: card.componente });
     e.dataTransfer.effectAllowed = "move";
@@ -638,42 +655,71 @@ export function HojasDeRutaClient() {
   function onCardDragEnd() {
     setDrag(null);
     setDropAt(null);
+    setDropBanda(null);
   }
-  // Calcule l'index d'insertion aimanté selon la position du curseur.
-  function onColumnaDragOver(
+  // Persiste la nouvelle position (local + DB) et réinitialise le drag.
+  function moverA(fila: string, orden: number, banda: number) {
+    if (!drag) return;
+    const dragKey = drag.key;
+    const tarea = splitKey(dragKey).tarea;
+    setPosiciones((p) => ({ ...p, [dragKey]: { fila, orden, banda } }));
+    roadmapMoverCarta(seleccion, tarea, fila, orden, banda).catch(() => {});
+    setDrag(null);
+    setDropAt(null);
+    setDropBanda(null);
+  }
+  // Interpole un `orden` entre deux cartes voisines d'une même cellule.
+  function ordenEntre(prev: CardModel | null, next: CardModel | null): number {
+    const po = prev?.orden ?? null;
+    const no = next?.orden ?? null;
+    if (po != null && no != null) return (po + no) / 2;
+    if (po != null) return po + 1;
+    if (no != null) return no - 1;
+    return 0;
+  }
+  // Calcule l'index d'insertion aimanté (curseur vs. milieu des cartes).
+  function indiceInsercion(container: HTMLElement, clientY: number, largo: number): number {
+    const kids = Array.from(container.querySelectorAll<HTMLElement>("[data-cardkey]"));
+    for (let i = 0; i < kids.length; i += 1) {
+      const r = kids[i].getBoundingClientRect();
+      if (clientY < r.top + r.height / 2) return i;
+    }
+    return largo;
+  }
+  // Drop dans une cellule (banda × composante) : réordonne via `orden`.
+  function onCeldaDragOver(
     e: DragEvent<HTMLElement>,
     fila: string,
+    banda: number,
     comp: ComponenteCode,
     cards: CardModel[],
   ) {
     if (!drag || drag.comp !== comp) return; // composante fixe : drop hors colonne interdit
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
-    const kids = Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-cardkey]"));
-    let index = cards.length;
-    for (let i = 0; i < kids.length; i += 1) {
-      const r = kids[i].getBoundingClientRect();
-      if (e.clientY < r.top + r.height / 2) {
-        index = i;
-        break;
-      }
-    }
+    const index = indiceInsercion(e.currentTarget, e.clientY, cards.length);
+    if (dropBanda) setDropBanda(null);
     setDropAt((cur) =>
-      cur && cur.fila === fila && cur.comp === comp && cur.index === index
+      cur && cur.fila === fila && cur.banda === banda && cur.comp === comp && cur.index === index
         ? cur
-        : { fila, comp, index },
+        : { fila, banda, comp, index },
     );
   }
-  function onColumnaDrop(
+  function onCeldaDrop(
     e: DragEvent<HTMLElement>,
     fila: string,
+    banda: number,
     comp: ComponenteCode,
     cards: CardModel[],
   ) {
     if (!drag || drag.comp !== comp) return;
     e.preventDefault();
+    e.stopPropagation();
     const index =
-      dropAt && dropAt.fila === fila && dropAt.comp === comp ? dropAt.index : cards.length;
+      dropAt && dropAt.fila === fila && dropAt.banda === banda && dropAt.comp === comp
+        ? dropAt.index
+        : cards.length;
     const esOtro = (c: CardModel) => `${seleccion}::${c.key}` !== drag.key;
     let prev: CardModel | null = null;
     let next: CardModel | null = null;
@@ -689,19 +735,80 @@ export function HojasDeRutaClient() {
         break;
       }
     }
-    const po = prev?.orden ?? null;
-    const no = next?.orden ?? null;
-    let orden: number;
-    if (po != null && no != null) orden = (po + no) / 2;
-    else if (po != null) orden = po + 1;
-    else if (no != null) orden = no - 1;
-    else orden = 0;
-    const dragKey = drag.key;
-    const tarea = splitKey(dragKey).tarea;
-    setPosiciones((p) => ({ ...p, [dragKey]: { fila, orden } }));
-    roadmapMoverCarta(seleccion, tarea, fila, orden).catch(() => {});
-    setDrag(null);
-    setDropAt(null);
+    moverA(fila, ordenEntre(prev, next), banda);
+  }
+  // Zone « nouvelle bande » entre deux strips : la carte forme un compartiment
+  // à part. `at` = position d'insertion parmi les bandes triées de la phase.
+  function onNuevaBandaDragOver(e: DragEvent<HTMLElement>, fila: string, at: number) {
+    if (!drag) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dropAt) setDropAt(null);
+    setDropBanda((cur) => (cur && cur.fila === fila && cur.at === at ? cur : { fila, at }));
+  }
+  function onNuevaBandaDrop(e: DragEvent<HTMLElement>, fila: string, at: number, bandas: number[]) {
+    if (!drag) return;
+    e.preventDefault();
+    const before = at > 0 ? bandas[at - 1] : null;
+    const after = at < bandas.length ? bandas[at] : null;
+    let banda: number;
+    if (before != null && after != null) banda = (before + after) / 2;
+    else if (before != null) banda = before + 1;
+    else if (after != null) banda = after - 1;
+    else banda = 0;
+    moverA(fila, 0, banda);
+  }
+  // Drop en vue filtrée (une seule colonne, sans bandes) : la carte adopte la
+  // bande de sa voisine du dessus (sinon celle du dessous) et s'y insère.
+  function onColumnaFiltradaDrop(
+    e: DragEvent<HTMLElement>,
+    fila: string,
+    comp: ComponenteCode,
+    cards: CardModel[],
+  ) {
+    if (!drag || drag.comp !== comp) return;
+    e.preventDefault();
+    const index =
+      dropAt && dropAt.fila === fila && dropAt.comp === comp ? dropAt.index : cards.length;
+    // Voisins de la MÊME composante (la colonne EE fusionne GP + EE : échelles
+    // d'orden distinctes → ne pas interpoler entre GP et EE).
+    const elegible = (c: CardModel) =>
+      `${seleccion}::${c.key}` !== drag.key && c.componente === drag.comp;
+    let prev: CardModel | null = null;
+    let next: CardModel | null = null;
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (elegible(cards[i])) {
+        prev = cards[i];
+        break;
+      }
+    }
+    for (let i = index; i < cards.length; i += 1) {
+      if (elegible(cards[i])) {
+        next = cards[i];
+        break;
+      }
+    }
+    const banda = prev?.banda ?? next?.banda ?? 0;
+    // orden interpolé uniquement parmi les cartes de la bande cible.
+    const p = prev && (prev.banda ?? 0) === banda ? prev : null;
+    const n = next && (next.banda ?? 0) === banda ? next : null;
+    moverA(fila, ordenEntre(p, n), banda);
+  }
+  function onColumnaFiltradaDragOver(
+    e: DragEvent<HTMLElement>,
+    fila: string,
+    comp: ComponenteCode,
+    cards: CardModel[],
+  ) {
+    if (!drag || drag.comp !== comp) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const index = indiceInsercion(e.currentTarget, e.clientY, cards.length);
+    setDropAt((cur) =>
+      cur && cur.fila === fila && cur.comp === comp && cur.index === index
+        ? cur
+        : { fila, banda: 0, comp, index },
+    );
   }
 
   // Recalcule l'overlay sur redimensionnement de la fenêtre.
@@ -875,13 +982,16 @@ export function HojasDeRutaClient() {
     ) : null;
 
   // Grille des colonnes (EE / Género / AyS) d'une fila (phase ou semestre).
-  // Vue « Todo » (GP) : colonnes côte à côte, sans commentaire sur les cartes.
-  // Vue par composante (une seule cochée) : cartes + panneau latéral « Comentarios ».
+  // Vue « Todo » : bandes horizontales (compartiments) × colonnes de composantes ;
+  //   les cartes d'une même bande sont alignées → tâches simultanées.
+  // Vue par composante (une seule cochée) : cartes + panneau latéral « Comentarios »
+  //   (sans bandes ; l'ordre vertical suit banda puis orden).
   function columnasGrid(filaCode: string) {
     // La colonne EE apparaît aussi si seul le filtre GP est actif (cartes GP y logent).
     const cols = COLUMNAS.filter((c) => filtros.has(c) || (c === "EE" && filtros.has("GP")));
-    // Vue filtrée sur UNE composante → cartes accompagnées du panneau Comentarios.
     const compSel = cols.length === 1 ? cols[0] : null;
+
+    // --- Vue filtrée sur UNE composante (pas de bandes) ---
     if (compSel) {
       const cards = cartasColumnaVista(filaCode, compSel);
       const activo = drag?.comp === compSel;
@@ -889,8 +999,10 @@ export function HojasDeRutaClient() {
       return (
         <div
           className="flex flex-1 flex-col gap-2.5"
-          onDragOver={activo ? (e) => onColumnaDragOver(e, filaCode, compSel, cards) : undefined}
-          onDrop={activo ? (e) => onColumnaDrop(e, filaCode, compSel, cards) : undefined}
+          onDragOver={
+            activo ? (e) => onColumnaFiltradaDragOver(e, filaCode, compSel, cards) : undefined
+          }
+          onDrop={activo ? (e) => onColumnaFiltradaDrop(e, filaCode, compSel, cards) : undefined}
         >
           {cards.map((card, i) => (
             <Fragment key={card.key}>
@@ -902,39 +1014,99 @@ export function HojasDeRutaClient() {
             </Fragment>
           ))}
           {showAt === cards.length && <DropIndicator />}
-          {botonAnadir(filaCode, compSel)}
+          {filtros.has(compSel) && botonAnadir(filaCode, compSel)}
         </div>
       );
     }
-    // Vue « Todo » : grille multi-colonnes ajustée au nombre de composantes.
+
+    // --- Vue « Todo » : bandes × composantes ---
+    const gpCards = filtros.has("GP") ? cartasColumna(filaCode, "GP") : [];
+    const colCards = new Map<ComponenteCode, CardModel[]>(
+      cols.map((comp) => [comp, filtros.has(comp) ? cartasColumna(filaCode, comp) : []]),
+    );
+    // Union des bandes présentes (toutes colonnes + GP) → strips triés.
+    const bandaSet = new Set<number>();
+    for (const c of gpCards) bandaSet.add(c.banda ?? 0);
+    for (const comp of cols) for (const c of colCards.get(comp) ?? []) bandaSet.add(c.banda ?? 0);
+    const bandas = [...bandaSet].sort((a, b) => a - b);
+    if (bandas.length === 0) bandas.push(0);
+
+    const gridStyle = { gridTemplateColumns: `repeat(${cols.length || 1}, minmax(0,1fr))` };
+    const enBanda = (arr: CardModel[], b: number) => arr.filter((c) => (c.banda ?? 0) === b);
+
+    // Cellule droppable (banda × composante). Vide + drag actif → placeholder.
+    const celda = (comp: ComponenteCode, banda: number, cards: CardModel[]) => {
+      const activo = drag?.comp === comp;
+      const showAt =
+        dropAt && dropAt.fila === filaCode && dropAt.banda === banda && dropAt.comp === comp
+          ? dropAt.index
+          : -1;
+      return (
+        <div
+          className={cn(
+            "flex flex-col items-start gap-2.5",
+            activo &&
+              cards.length === 0 &&
+              "min-h-[2.75rem] rounded-md border border-dashed border-[var(--border)]",
+          )}
+          onDragOver={activo ? (e) => onCeldaDragOver(e, filaCode, banda, comp, cards) : undefined}
+          onDrop={activo ? (e) => onCeldaDrop(e, filaCode, banda, comp, cards) : undefined}
+        >
+          {cards.map((card, i) => (
+            <Fragment key={card.key}>
+              {showAt === i && <DropIndicator />}
+              {renderCard(card)}
+            </Fragment>
+          ))}
+          {showAt === cards.length && <DropIndicator />}
+        </div>
+      );
+    };
+
+    // Zone « nouvelle bande » entre strips (visible seulement en cours de drag).
+    const nuevaBanda = (at: number) => {
+      if (!drag) return null;
+      const on = dropBanda?.fila === filaCode && dropBanda?.at === at;
+      return (
+        <div
+          onDragOver={(e) => onNuevaBandaDragOver(e, filaCode, at)}
+          onDrop={(e) => onNuevaBandaDrop(e, filaCode, at, bandas)}
+          className="relative py-1.5"
+        >
+          <div className={cn("h-px w-full", on ? "bg-[var(--accent)]" : "bg-[var(--border)]")} />
+          {on && (
+            <span className="absolute left-2 top-0 -translate-y-1/2 bg-[var(--surface)] px-1 text-[10px] font-medium text-[var(--accent)]">
+              Nueva banda
+            </span>
+          )}
+        </div>
+      );
+    };
+
     return (
-      <div
-        className="grid flex-1 items-start gap-x-4"
-        style={{ gridTemplateColumns: `repeat(${cols.length || 1}, minmax(0,1fr))` }}
-      >
-        {cols.map((comp) => {
-          const cards = cartasColumnaVista(filaCode, comp);
-          const activo = drag?.comp === comp;
-          const showAt =
-            dropAt && dropAt.fila === filaCode && dropAt.comp === comp ? dropAt.index : -1;
-          return (
-            <div
-              key={comp}
-              className="flex flex-col items-start gap-2.5"
-              onDragOver={activo ? (e) => onColumnaDragOver(e, filaCode, comp, cards) : undefined}
-              onDrop={activo ? (e) => onColumnaDrop(e, filaCode, comp, cards) : undefined}
-            >
-              {cards.map((card, i) => (
-                <Fragment key={card.key}>
-                  {showAt === i && <DropIndicator />}
-                  {renderCard(card)}
-                </Fragment>
+      <div className="flex flex-1 flex-col">
+        {nuevaBanda(0)}
+        {bandas.map((b, i) => (
+          <Fragment key={b}>
+            <div className="grid items-start gap-x-4" style={gridStyle}>
+              {cols.map((comp) => (
+                <div key={comp} className="flex flex-col gap-2.5">
+                  {comp === "EE" &&
+                    filtros.has("GP") &&
+                    (enBanda(gpCards, b).length > 0 || drag?.comp === "GP") &&
+                    celda("GP", b, enBanda(gpCards, b))}
+                  {celda(comp, b, enBanda(colCards.get(comp) ?? [], b))}
+                </div>
               ))}
-              {showAt === cards.length && <DropIndicator />}
-              {botonAnadir(filaCode, comp)}
             </div>
-          );
-        })}
+            {nuevaBanda(i + 1)}
+          </Fragment>
+        ))}
+        <div className="grid items-start gap-x-4 pt-1" style={gridStyle}>
+          {cols.map((comp) => (
+            <div key={comp}>{filtros.has(comp) && botonAnadir(filaCode, comp)}</div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -1059,12 +1231,12 @@ export function HojasDeRutaClient() {
         {/* Estructura vertical de las fases del proyecto */}
         <div
           ref={boxRef}
-          className="relative divide-y divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]"
+          className="relative divide-y-2 divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]"
         >
           {seleccion === "global"
             ? SEMESTRES.map((sem) => (
-                <div key={sem.code} className="flex items-center gap-4 p-4">
-                  <div className="w-28 shrink-0 self-center sm:w-44">
+                <div key={sem.code} className="flex items-start gap-4 p-4">
+                  <div className="w-28 shrink-0 self-start rounded-md bg-[var(--app-bg)] px-3 py-2 sm:w-44">
                     <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
                       Semestre
                     </div>
@@ -1174,11 +1346,11 @@ export function HojasDeRutaClient() {
                   );
                 }
                 return (
-              <div key={fila.code} className="flex items-center gap-4 p-4">
+              <div key={fila.code} className="flex items-start gap-4 p-4">
                 <div
                   data-cardkey={faseStatKey}
                   data-comp="fase"
-                  className="relative w-28 shrink-0 self-center sm:w-44"
+                  className="relative w-28 shrink-0 self-start rounded-md bg-[var(--app-bg)] px-3 py-2 sm:w-44"
                 >
                   <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
                     Fase {String(fila.numero).padStart(2, "0")}
