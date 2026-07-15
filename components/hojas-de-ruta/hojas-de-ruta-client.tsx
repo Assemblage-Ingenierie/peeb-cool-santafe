@@ -1112,7 +1112,12 @@ export function HojasDeRutaClient() {
         {nuevaBanda(0)}
         {bandas.map((b, i) => (
           <Fragment key={b}>
-            <div className="grid items-start gap-x-4" style={gridStyle}>
+            {/* Espacement entre bandes : bien plus lâche qu'entre cartes d'une
+                même bande (gap-2.5) → les compartiments se distinguent. */}
+            <div
+              className={cn("grid items-start gap-x-4", i > 0 && "mt-7")}
+              style={gridStyle}
+            >
               {cols.map((comp) => (
                 <Fragment key={comp}>{celda(comp, b, enBanda(colCards.get(comp) ?? [], b))}</Fragment>
               ))}
