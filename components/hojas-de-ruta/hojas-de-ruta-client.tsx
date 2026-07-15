@@ -656,13 +656,19 @@ export function HojasDeRutaClient() {
   // Deux axes : `orden` (tri dans une cellule banda × composante) et `banda`
   // (compartiment horizontal dans la phase, aligné à travers les colonnes).
   function onCardDragStart(e: DragEvent<HTMLElement>, card: CardModel) {
-    setDrag({ key: `${seleccion}::${card.key}`, comp: card.componente });
     e.dataTransfer.effectAllowed = "move";
     try {
       e.dataTransfer.setData("text/plain", card.key);
     } catch {
       /* certains navigateurs exigent un setData ; sans importance ici */
     }
+    // Différer l'activation du drag : sinon le re-render (zones « nueva banda »,
+    // cellules actives, retrait du mt-7) décale la mise en page PENDANT le
+    // dragstart et Chrome annule le glisser — surtout pour les cartes en bas de
+    // phase (plus de contenu inséré au-dessus). En reportant d'un tick, le
+    // navigateur établit d'abord le drag natif, puis l'UI réagit.
+    const payload = { key: `${seleccion}::${card.key}`, comp: card.componente };
+    window.setTimeout(() => setDrag(payload), 0);
   }
   function onCardDragEnd() {
     setDrag(null);
