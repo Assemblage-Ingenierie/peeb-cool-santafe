@@ -13,7 +13,7 @@ import {
   type ComponenteCode,
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
-import { SEMESTRES } from "@/lib/semestres";
+import { SEMESTRES, planTareaGlobal } from "@/lib/semestres";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import {
   computeSchedule,
@@ -433,58 +433,97 @@ export function HojasDeRutaClient() {
     return tarea;
   }
 
-  // Planning calculé (moteur partagé lib/schedule). Sous-projets uniquement :
-  // le Proyecto global n'a pas d'ancre de phase (semestres). Les dates ne sont
-  // jamais stockées (convention projet). Mémoïsé : ne se relance que si la donnée,
-  // la feuille, les cartes, la planification ou les liaisons changent.
-  const schedule = useMemo(
-    () =>
-      seleccion === "global" || snap.status !== "ready"
-      ? null
-      : (() => {
-          const tasks = [];
-          for (const [colKey, cards] of columnas) {
-            const fila = colKey.split("|")[0];
-            for (const card of cards) {
-              if (card.nota) continue;
-              const p = planes[`${seleccion}::${card.key}`];
-              tasks.push({
-                key: card.key,
-                fase: fila,
-                durValor: p?.durValor ?? null,
-                durUnidad: asUnidad(p?.durUnidad),
-                fechaInicio: p?.fechaInicio ?? null,
-                fechaFin: p?.fechaFin ?? null,
-              });
-            }
-          }
-          const links = enlaces
-            .filter((e) => splitKey(e.from).feuille === seleccion)
-            .map((e) => ({
-              desde: splitKey(e.from).tarea,
-              hacia: splitKey(e.to).tarea,
-              punto: e.punto,
-              desfaseValor: e.desfaseValor,
-              desfaseUnidad: e.desfaseUnidad,
-            }));
-          const faseInicio: Record<string, string | null> = {};
-          for (const f of snap.data.fases) {
-            if (f.subproyecto_uid !== seleccion) continue;
-            faseInicio[f.fase] = f.fecha_inicio;
-            // Nœud de phase planifiable/enlazable (dates/durée = Gestión de subproyectos).
-            tasks.push({
-              key: faseNodeKey(f.fase),
-              fase: "",
-              durValor: f.dur_valor ?? null,
-              durUnidad: asUnidad(f.dur_unidad),
-              fechaInicio: f.fecha_inicio,
-              fechaFin: f.fecha_fin,
-            });
-          }
-          return computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
-        })(),
-    [snap, seleccion, columnas, planes, enlaces],
-  );
+  // Planning calculé (moteur partagé lib/schedule). Les dates ne sont jamais
+  // stockées (convention projet). Deux cas :
+  //   • Sous-projet : ancres de phase (Gestión) + durées + liaisons.
+  //   • Proyecto global : pas d'ancre de phase → dates dérivées des RÈGLES de
+  //     temporalité par semestre (lib/semestres · planTareaGlobal), source unique
+  //     partagée avec le Cronograma. `planesGlobal` alimente aussi l'affichage de
+  //     la durée sur les cartes.
+  // Mémoïsé : ne se relance que si la donnée, la feuille, les cartes ou la
+  // planification / les liaisons changent.
+  const { schedule, planesGlobal } = useMemo<{
+    schedule: Map<string, ScheduleResult> | null;
+    planesGlobal: Map<string, Plan>;
+  }>(() => {
+    if (snap.status !== "ready") return { schedule: null, planesGlobal: new Map() };
+
+    if (seleccion === "global") {
+      const pg = new Map<string, Plan>();
+      const tasks = [];
+      for (const [colKey, cards] of columnas) {
+        const sem = colKey.split("|")[0];
+        for (const card of cards) {
+          if (card.nota) continue;
+          const p = planTareaGlobal(sem, card.key);
+          if (!p) continue;
+          pg.set(card.key, {
+            fechaInicio: p.fechaInicio,
+            fechaFin: null,
+            durValor: p.durValor,
+            durUnidad: p.durUnidad,
+          });
+          tasks.push({
+            key: card.key,
+            fase: sem,
+            durValor: p.durValor,
+            durUnidad: p.durUnidad as Unidad,
+            fechaInicio: p.fechaInicio,
+            fechaFin: null,
+          });
+        }
+      }
+      const raw = computeSchedule({ tasks, links: [], faseInicio: {}, projectStart: PROJECT_START });
+      // Dates dérivées d'une règle → pas « fijada a mano » (aucune épingle).
+      const sched = new Map<string, ScheduleResult>();
+      for (const [k, r] of raw) sched.set(k, { ...r, startFijada: false });
+      return { schedule: sched, planesGlobal: pg };
+    }
+
+    const tasks = [];
+    for (const [colKey, cards] of columnas) {
+      const fila = colKey.split("|")[0];
+      for (const card of cards) {
+        if (card.nota) continue;
+        const p = planes[`${seleccion}::${card.key}`];
+        tasks.push({
+          key: card.key,
+          fase: fila,
+          durValor: p?.durValor ?? null,
+          durUnidad: asUnidad(p?.durUnidad),
+          fechaInicio: p?.fechaInicio ?? null,
+          fechaFin: p?.fechaFin ?? null,
+        });
+      }
+    }
+    const links = enlaces
+      .filter((e) => splitKey(e.from).feuille === seleccion)
+      .map((e) => ({
+        desde: splitKey(e.from).tarea,
+        hacia: splitKey(e.to).tarea,
+        punto: e.punto,
+        desfaseValor: e.desfaseValor,
+        desfaseUnidad: e.desfaseUnidad,
+      }));
+    const faseInicio: Record<string, string | null> = {};
+    for (const f of snap.data.fases) {
+      if (f.subproyecto_uid !== seleccion) continue;
+      faseInicio[f.fase] = f.fecha_inicio;
+      // Nœud de phase planifiable/enlazable (dates/durée = Gestión de subproyectos).
+      tasks.push({
+        key: faseNodeKey(f.fase),
+        fase: "",
+        durValor: f.dur_valor ?? null,
+        durUnidad: asUnidad(f.dur_unidad),
+        fechaInicio: f.fecha_inicio,
+        fechaFin: f.fecha_fin,
+      });
+    }
+    return {
+      schedule: computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START }),
+      planesGlobal: new Map(),
+    };
+  }, [snap, seleccion, columnas, planes, enlaces]);
 
   function toggleRealizada(k: string) {
     setRealizadas((prev) => {
@@ -946,7 +985,7 @@ export function HojasDeRutaClient() {
         onCancelLink={() => setLinkFrom(null)}
         creada={!!creadas[k]}
         onEliminar={() => eliminarCard(card, !!creadas[k])}
-        plan={planes[k]}
+        plan={seleccion === "global" ? planesGlobal.get(card.key) : planes[k]}
         onPlan={(patch) => {
           const base: Plan = planes[k] ?? {
             fechaInicio: null,

@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
-import { SEMESTRES_CODES, labelSemestre, esS2, semestreRango } from "@/lib/semestres";
+import { SEMESTRES_CODES, planTareaGlobal } from "@/lib/semestres";
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
@@ -345,14 +345,13 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
   return out;
 }
 
-// Section « Proyecto global » : les éléments de la feuille de route globale
-// (informes GP/AyS par semestre + cartes créées), positionnés par des règles de
-// temporalité DÉDIÉES au cronograma (la feuille globale n'a pas d'ancre de phase).
-//   • Informes GP/AyS : inicio 3 semanas antes del fin del semestre, duración 3 semanas.
-//   • Otras tareas : duración 1 semana ; las del S2 empiezan 2 meses tras el inicio
-//     del semestre (las del S1, al inicio del semestre).
+// Section « Proyecto global » : les éléments de la feuille de route globale,
+// positionnés par les RÈGLES de temporalité par semestre (lib/semestres ·
+// planTareaGlobal → computeSchedule). MÊME source que les Hojas de ruta : les
+// deux vues ne peuvent pas diverger. Les informes semblables sont regroupés sur
+// UNE ligne commune (GP ; AyS) ; les autres tâches ont chacune leur ligne. Le
+// titre est écrit À CÔTÉ de la barre (comme pour les sous-projets).
 function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion {
-  const DIA = 24 * 3600 * 1000;
   const estado = new Map<string, RoadmapOverride>();
   for (const r of d.roadmapEstado) {
     if (r.feuille !== "global") continue;
@@ -367,44 +366,67 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
     });
   }
   const columnas = construirCartasPorFila({ esGlobal: true, semestres: SEMESTRES_CODES, estado });
-  const filas: (Fila & { _s: number })[] = [];
+
+  // Entrées de planning (règles) → dates calculées par le moteur partagé.
+  const tasks: {
+    key: string;
+    fase: string;
+    durValor: number | null;
+    durUnidad: Unidad | null;
+    fechaInicio: string | null;
+    fechaFin: string | null;
+  }[] = [];
+  const items: { key: string; comp: ComponenteCode; nombre: string }[] = [];
   for (const [colKey, cards] of columnas) {
-    const semCode = colKey.split("|")[0];
-    const rango = semestreRango(semCode);
-    if (!rango) continue;
-    const semLabel = labelSemestre(semCode);
+    const sem = colKey.split("|")[0];
     for (const c of cards) {
       if (c.nota || !filtros.has(c.componente)) continue;
-      const esInforme = c.key.startsWith("informe-");
-      let startMs: number;
-      let endMs: number;
-      if (esInforme) {
-        // inicio 3 semanas antes del fin del semestre, duración 3 semanas.
-        endMs = rango.fin.getTime();
-        startMs = endMs - 21 * DIA;
-      } else {
-        // duración 1 semana ; S2 → 2 meses tras el inicio ; S1 → al inicio.
-        startMs = esS2(semCode)
-          ? new Date(rango.inicio.getFullYear(), rango.inicio.getMonth() + 2, 1).getTime()
-          : rango.inicio.getTime();
-        endMs = startMs + 7 * DIA;
-      }
-      const color = c.componente === "GP" ? GP_BARRA : CARD_TONOS[c.componente]?.head ?? "#888888";
-      const txt =
-        c.componente === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[c.componente]?.headText ?? "#ffffff";
-      const barra: Barra = {
-        startMs,
-        solidMs: endMs,
-        endMs,
-        color,
-        etiquetaColor: txt,
-        dentro: false,
-        tooltip: `${c.nombre} · ${fmtFecha(startMs)} → ${fmtFecha(endMs)}`,
-      };
-      filas.push({ label: `${c.nombre} · ${semLabel}`, barras: [barra], _s: startMs });
+      const p = planTareaGlobal(sem, c.key);
+      if (!p) continue;
+      tasks.push({
+        key: c.key,
+        fase: sem,
+        durValor: p.durValor,
+        durUnidad: p.durUnidad,
+        fechaInicio: p.fechaInicio,
+        fechaFin: null,
+      });
+      items.push({ key: c.key, comp: c.componente, nombre: c.nombre });
     }
   }
-  filas.sort((a, b) => a._s - b._s);
+  const sched = computeSchedule({ tasks, links: [], faseInicio: {}, projectStart: PROJECT_START });
+
+  // Barre d'une carte : couleur de composante + titre écrit à côté (dentro=false).
+  const barraCard = (key: string, comp: ComponenteCode, nombre: string): Barra | null => {
+    const color = comp === "GP" ? GP_BARRA : CARD_TONOS[comp]?.head ?? "#888888";
+    const txt = comp === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[comp]?.headText ?? "#ffffff";
+    const b = barraDe(sched.get(key), color, nombre, false, txt);
+    return b ? { ...b, tooltip: `${nombre} · ${fmtFecha(b.startMs)} → ${fmtFecha(b.endMs)}` } : null;
+  };
+
+  // Informes regroupés (GP ; AyS) : une ligne commune, une barre par semestre.
+  const infGP: Fila & { _s: number } = { label: "Informe semestral / anual", barras: [], _s: Infinity };
+  const infAyS: Fila & { _s: number } = { label: "Informe Semestral AyS", barras: [], _s: Infinity };
+  const otras: (Fila & { _s: number })[] = [];
+  for (const it of items) {
+    const b = barraCard(it.key, it.comp, it.nombre);
+    if (!b) continue;
+    if (it.key.startsWith("informe-gp-")) {
+      infGP.barras.push(b);
+      infGP._s = Math.min(infGP._s, b.startMs);
+    } else if (it.key.startsWith("informe-ays-")) {
+      infAyS.barras.push(b);
+      infAyS._s = Math.min(infAyS._s, b.startMs);
+    } else {
+      otras.push({ label: it.nombre, barras: [b], _s: b.startMs });
+    }
+  }
+  otras.sort((a, b) => a._s - b._s);
+  const filas: (Fila & { _s: number })[] = [];
+  if (infGP.barras.length > 0) filas.push(infGP);
+  if (infAyS.barras.length > 0) filas.push(infAyS);
+  filas.push(...otras);
+
   return {
     titulo: "Proyecto global",
     barras: [],

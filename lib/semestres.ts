@@ -41,3 +41,36 @@ export function semestreRango(code: string): { inicio: Date; fin: Date } | null 
     ? { inicio: new Date(y, 0, 1), fin: new Date(y, 5, 30) }
     : { inicio: new Date(y, 6, 1), fin: new Date(y, 11, 31) };
 }
+
+// Date locale → ISO (YYYY-MM-DD), sans décalage de fuseau.
+const isoLocal = (d: Date): string => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${da}`;
+};
+
+// Entrées de planning (date de début + durée estimée) d'une tâche de la feuille
+// de route « Proyecto global ». SOURCE UNIQUE des règles de temporalité, utilisée
+// à l'identique par les Hojas de ruta ET le Cronograma :
+//   • informes GP/AyS : inicio 3 semanas antes del fin del semestre, duración 3 semanas ;
+//   • otras tareas : duración 1 semana ; las del S2 empiezan 2 meses tras el inicio
+//     del semestre, las del S1 al inicio.
+// Un informe se reconnaît à sa clé `informe-…`.
+export interface PlanGlobal {
+  fechaInicio: string;
+  durValor: number;
+  durUnidad: "semana";
+}
+export function planTareaGlobal(semCode: string, tareaKey: string): PlanGlobal | null {
+  const r = semestreRango(semCode);
+  if (!r) return null;
+  if (tareaKey.startsWith("informe-")) {
+    const inicio = new Date(r.fin.getTime() - 21 * 86_400_000);
+    return { fechaInicio: isoLocal(inicio), durValor: 3, durUnidad: "semana" };
+  }
+  const inicio = esS2(semCode)
+    ? new Date(r.inicio.getFullYear(), r.inicio.getMonth() + 2, 1)
+    : r.inicio;
+  return { fechaInicio: isoLocal(inicio), durValor: 1, durUnidad: "semana" };
+}
