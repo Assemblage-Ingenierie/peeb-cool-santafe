@@ -127,6 +127,13 @@ for (let anio = 2026; anio <= 2030; anio += 1) {
 // GP (Gestión de proyecto) à ajouter ici lorsque son contenu sera défini.
 const COLUMNAS: ComponenteCode[] = ["EE", "G", "AyS"];
 
+// Une colonne accepte les cartes de sa composante ; la colonne EE accepte AUSSI
+// les cartes GP (Gestión de proyecto) — GP et EE partagent la colonne et l'ordre
+// (on peut déposer une GP avant/après une EE). La carte garde sa composante.
+function aceptaColumna(dragComp: ComponenteCode, colComp: ComponenteCode): boolean {
+  return dragComp === colComp || (colComp === "EE" && dragComp === "GP");
+}
+
 // Découpe une clé locale `${feuille}::${tareaKey}` pour la persistance.
 function splitKey(sk: string): { feuille: string; tarea: string } {
   const i = sk.indexOf("::");
@@ -404,12 +411,17 @@ export function HojasDeRutaClient() {
     return columnas.get(`${fila}|${comp}`) ?? [];
   }
   // Cartes affichées dans une colonne. La colonne EE agrège aussi les cartes GP
-  // (Gestión de proyecto, noir/gris), en tête — alignées sur la colonne EE.
+  // (Gestión de proyecto, gris) : même colonne, même ordre (banda puis orden).
   function cartasColumnaVista(fila: string, comp: ComponenteCode): CardModel[] {
     if (comp !== "EE") return cartasColumna(fila, comp);
     const gp = filtros.has("GP") ? cartasColumna(fila, "GP") : [];
     const ee = filtros.has("EE") ? cartasColumna(fila, "EE") : [];
-    return [...gp, ...ee];
+    return [...gp, ...ee].sort(
+      (a, b) =>
+        (a.banda ?? 0) - (b.banda ?? 0) ||
+        (a.orden ?? 0) - (b.orden ?? 0) ||
+        (a.key < b.key ? -1 : 1),
+    );
   }
   const ocultasFeuille = [...ocultas].filter((sk) => splitKey(sk).feuille === seleccion).length;
 
@@ -694,7 +706,7 @@ export function HojasDeRutaClient() {
     comp: ComponenteCode,
     cards: CardModel[],
   ) {
-    if (!drag || drag.comp !== comp) return; // composante fixe : drop hors colonne interdit
+    if (!drag || !aceptaColumna(drag.comp, comp)) return; // GP acceptée dans la colonne EE
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = "move";
@@ -713,7 +725,7 @@ export function HojasDeRutaClient() {
     comp: ComponenteCode,
     cards: CardModel[],
   ) {
-    if (!drag || drag.comp !== comp) return;
+    if (!drag || !aceptaColumna(drag.comp, comp)) return;
     e.preventDefault();
     e.stopPropagation();
     const index =
@@ -766,14 +778,13 @@ export function HojasDeRutaClient() {
     comp: ComponenteCode,
     cards: CardModel[],
   ) {
-    if (!drag || drag.comp !== comp) return;
+    if (!drag || !aceptaColumna(drag.comp, comp)) return;
     e.preventDefault();
     const index =
       dropAt && dropAt.fila === fila && dropAt.comp === comp ? dropAt.index : cards.length;
-    // Voisins de la MÊME composante (la colonne EE fusionne GP + EE : échelles
-    // d'orden distinctes → ne pas interpoler entre GP et EE).
-    const elegible = (c: CardModel) =>
-      `${seleccion}::${c.key}` !== drag.key && c.componente === drag.comp;
+    // GP et EE partagent la colonne et l'ordre → on interpole parmi toutes les
+    // cartes voisines (peu importe la composante).
+    const elegible = (c: CardModel) => `${seleccion}::${c.key}` !== drag.key;
     let prev: CardModel | null = null;
     let next: CardModel | null = null;
     for (let i = index - 1; i >= 0; i -= 1) {
@@ -800,7 +811,7 @@ export function HojasDeRutaClient() {
     comp: ComponenteCode,
     cards: CardModel[],
   ) {
-    if (!drag || drag.comp !== comp) return;
+    if (!drag || !aceptaColumna(drag.comp, comp)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const index = indiceInsercion(e.currentTarget, e.clientY, cards.length);
@@ -1020,13 +1031,26 @@ export function HojasDeRutaClient() {
     }
 
     // --- Vue « Todo » : bandes × composantes ---
-    const gpCards = filtros.has("GP") ? cartasColumna(filaCode, "GP") : [];
+    // La colonne EE fusionne GP + EE (même colonne, même ordre) → on peut
+    // intercaler une carte GP grise avant/après une carte EE.
+    const cardsDeColumna = (comp: ComponenteCode): CardModel[] => {
+      if (comp === "EE") {
+        const gp = filtros.has("GP") ? cartasColumna(filaCode, "GP") : [];
+        const ee = filtros.has("EE") ? cartasColumna(filaCode, "EE") : [];
+        return [...gp, ...ee].sort(
+          (a, b) =>
+            (a.banda ?? 0) - (b.banda ?? 0) ||
+            (a.orden ?? 0) - (b.orden ?? 0) ||
+            (a.key < b.key ? -1 : 1),
+        );
+      }
+      return filtros.has(comp) ? cartasColumna(filaCode, comp) : [];
+    };
     const colCards = new Map<ComponenteCode, CardModel[]>(
-      cols.map((comp) => [comp, filtros.has(comp) ? cartasColumna(filaCode, comp) : []]),
+      cols.map((comp) => [comp, cardsDeColumna(comp)]),
     );
-    // Union des bandes présentes (toutes colonnes + GP) → strips triés.
+    // Union des bandes présentes (toutes colonnes) → strips triés.
     const bandaSet = new Set<number>();
-    for (const c of gpCards) bandaSet.add(c.banda ?? 0);
     for (const comp of cols) for (const c of colCards.get(comp) ?? []) bandaSet.add(c.banda ?? 0);
     const bandas = [...bandaSet].sort((a, b) => a - b);
     if (bandas.length === 0) bandas.push(0);
@@ -1034,9 +1058,9 @@ export function HojasDeRutaClient() {
     const gridStyle = { gridTemplateColumns: `repeat(${cols.length || 1}, minmax(0,1fr))` };
     const enBanda = (arr: CardModel[], b: number) => arr.filter((c) => (c.banda ?? 0) === b);
 
-    // Cellule droppable (banda × composante). Vide + drag actif → placeholder.
+    // Cellule droppable (banda × colonne). Vide + drag acceptée → placeholder.
     const celda = (comp: ComponenteCode, banda: number, cards: CardModel[]) => {
-      const activo = drag?.comp === comp;
+      const activo = !!drag && aceptaColumna(drag.comp, comp);
       const showAt =
         dropAt && dropAt.fila === filaCode && dropAt.banda === banda && dropAt.comp === comp
           ? dropAt.index
@@ -1090,13 +1114,7 @@ export function HojasDeRutaClient() {
           <Fragment key={b}>
             <div className="grid items-start gap-x-4" style={gridStyle}>
               {cols.map((comp) => (
-                <div key={comp} className="flex flex-col gap-2.5">
-                  {comp === "EE" &&
-                    filtros.has("GP") &&
-                    (enBanda(gpCards, b).length > 0 || drag?.comp === "GP") &&
-                    celda("GP", b, enBanda(gpCards, b))}
-                  {celda(comp, b, enBanda(colCards.get(comp) ?? [], b))}
-                </div>
+                <Fragment key={comp}>{celda(comp, b, enBanda(colCards.get(comp) ?? [], b))}</Fragment>
               ))}
             </div>
             {nuevaBanda(i + 1)}
