@@ -1088,6 +1088,7 @@ export function HojasDeRutaClient() {
     };
 
     // Zone « nouvelle bande » entre strips (visible seulement en cours de drag).
+    // Cible haute et pleine largeur → facile à viser ; surlignée au survol.
     const nuevaBanda = (at: number) => {
       if (!drag) return null;
       const on = dropBanda?.fila === filaCode && dropBanda?.at === at;
@@ -1095,14 +1096,15 @@ export function HojasDeRutaClient() {
         <div
           onDragOver={(e) => onNuevaBandaDragOver(e, filaCode, at)}
           onDrop={(e) => onNuevaBandaDrop(e, filaCode, at, bandas)}
-          className="relative py-1.5"
-        >
-          <div className={cn("h-px w-full", on ? "bg-[var(--accent)]" : "bg-[var(--border)]")} />
-          {on && (
-            <span className="absolute left-2 top-0 -translate-y-1/2 bg-[var(--surface)] px-1 text-[10px] font-medium text-[var(--accent)]">
-              Nueva banda
-            </span>
+          className={cn(
+            "my-1 flex items-center justify-center rounded-md border border-dashed text-[10px] font-medium transition-colors",
+            on
+              ? "min-h-[2.75rem] border-[var(--accent)] text-[var(--accent)]"
+              : "min-h-[2rem] border-[var(--border)] text-[var(--text-muted)]",
           )}
+          style={on ? { backgroundColor: "rgba(227,5,19,0.08)" } : undefined}
+        >
+          {on ? "Soltar aquí → nueva banda" : "Nueva banda"}
         </div>
       );
     };
@@ -1113,9 +1115,10 @@ export function HojasDeRutaClient() {
         {bandas.map((b, i) => (
           <Fragment key={b}>
             {/* Espacement entre bandes : bien plus lâche qu'entre cartes d'une
-                même bande (gap-2.5) → les compartiments se distinguent. */}
+                même bande (gap-2.5) → les compartiments se distinguent. En cours
+                de drag, l'écart vient des zones « nueva banda » (droppables). */}
             <div
-              className={cn("grid items-start gap-x-4", i > 0 && "mt-7")}
+              className={cn("grid items-start gap-x-4", i > 0 && !drag && "mt-7")}
               style={gridStyle}
             >
               {cols.map((comp) => (
