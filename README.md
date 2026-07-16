@@ -128,4 +128,4 @@ peeb-cool-santafe/
 | 3 | Page Admin (CRUD, UID visibles) | — |
 | 4 | Inicio (Dashboard) + Mapa | — |
 | 5 | PWA offline (lecture) | — |
-| 6 | Auth Supabase + RLS productif + gestion des rôles | — |
+| 6 | Auth Supabase + RLS productif + gestion des rôles | ✅ |

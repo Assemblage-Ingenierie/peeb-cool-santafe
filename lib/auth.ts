@@ -1,8 +1,9 @@
 // ============================================================
-// lib/auth.ts — gestion minimale de l'utilisateur courant.
+// lib/auth.ts — types + helpers d'utilisateur, ISOMORPHE (client + serveur).
 // 3 rôles (CDC §3.4) : admin, gestion, consultor.
-// En dev : bypass via NEXT_PUBLIC_DEV_AUTH_BYPASS=true → utilisateur mock admin.
-// L'auth réelle (Supabase) est branchée à l'Étape 6.
+// Ne contient AUCUN accès session/DB (server-only) → importable côté client.
+// La résolution de la session réelle vit dans lib/auth-server.ts (getCurrentUser).
+// Côté client, l'utilisateur est fourni par le contexte (components/auth-context).
 // ============================================================
 
 export type Rol = "admin" | "gestion" | "consultor";
@@ -13,19 +14,14 @@ export interface AppUser {
   email?: string;
 }
 
+/** Bypass d'auth en développement local (mock admin). JAMAIS activé en prod. */
 export const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
-const MOCK_ADMIN: AppUser = {
+export const MOCK_ADMIN: AppUser = {
   nombre: "Admin (dev)",
   rol: "admin",
   email: "dev@assemblage.net",
 };
-
-/** Utilisateur courant. En dev (bypass) → mock admin ; sinon null (auth réelle = Étape 6). */
-export function getCurrentUser(): AppUser | null {
-  if (DEV_AUTH_BYPASS) return MOCK_ADMIN;
-  return null;
-}
 
 export const isAdmin = (u: AppUser | null): boolean => u?.rol === "admin";
 

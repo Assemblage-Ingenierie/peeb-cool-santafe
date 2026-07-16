@@ -5,12 +5,18 @@ import { COMPONENTES } from "@/lib/constants";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { FilterProvider } from "./filter-context";
+import { useAuthUser } from "./auth-context";
 
 /**
  * Cadre applicatif : sidebar + header + zone de contenu.
  * Gère le tiroir mobile et l'état (visuel) des filtres de composante.
+ *
+ * Sans utilisateur (page /login), on n'affiche PAS le chrome : seule la page est
+ * rendue. Le proxy redirige les non-authentifiés vers /login, donc user==null
+ * correspond à la page de connexion.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const user = useAuthUser();
   const [mobileOpen, setMobileOpen] = useState(false);
   // Vista / Rol : le Set des composantes visibles.
   //  • GP = « Todo » (réinitialise → tout visible). Actif par défaut.
@@ -26,6 +32,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       code === "GP" ? new Set(COMPONENTES.map((c) => c.code)) : new Set([code]),
     );
   }, []);
+
+  // Non authentifié → pas de chrome (page /login rendue seule).
+  if (!user) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">

@@ -1,15 +1,15 @@
 import "server-only";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { TABLES } from "./config";
 
 export type Row = { uid: string; [key: string]: unknown };
 
-/** Lecture serveur d'une table Admin (service_role, sans cache). */
+/** Lecture serveur d'une table Admin (session utilisateur, RLS, sans cache). */
 export async function listTable(key: string): Promise<Row[]> {
   const cfg = TABLES[key];
   if (!cfg) throw new Error(`Tabla desconocida: ${key}`);
 
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   let query = sb.from(cfg.table).select(cfg.select);
   for (const o of cfg.orderBy) {
     query = query.order(o.col, { ascending: o.ascending ?? true, nullsFirst: o.nullsFirst });
@@ -60,7 +60,7 @@ const METRICA_COLS =
 
 /** Sous-projets (édition « Datos del edificio »), ordonnés. */
 export async function listSubproyectos(): Promise<SubproyectoRow[]> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data, error } = await sb
     .from("peebcoolsf_subproyectos")
     .select("uid, nombre, tipologia, seccion, orden, direccion, lat, lng, superficie_m2, notas, ays_texto")
@@ -72,7 +72,7 @@ export async function listSubproyectos(): Promise<SubproyectoRow[]> {
 
 /** Métriques (1 ligne par sous-projet × escenario : faisabilidad / proyecto). */
 export async function listMetricas(): Promise<MetricaRow[]> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data, error } = await sb
     .from("peebcoolsf_metricas")
     .select(METRICA_COLS)
@@ -94,7 +94,7 @@ export type MedidaRow = {
 
 /** Mesures du projet (9 par sous-projet, table peebcoolsf_medidas), ordonnées. */
 export async function listMedidas(): Promise<MedidaRow[]> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data, error } = await sb
     .from("peebcoolsf_medidas")
     .select("subproyecto_uid, medida, componente, activa, texto, kwh_anual, orden")
@@ -112,7 +112,7 @@ export type AysRequisitoRow = {
 
 /** Requisitos AyS (17 plans par sous-projet, table peebcoolsf_ays_requisitos). */
 export async function listAysRequisitos(): Promise<AysRequisitoRow[]> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data, error } = await sb
     .from("peebcoolsf_ays_requisitos")
     .select("subproyecto_uid, requisito, activa");
@@ -140,7 +140,7 @@ export type RoadmapEstadoRow = {
  * (cartes) par fase dans l'Admin, synchronisées avec Hojas de ruta.
  */
 export async function listRoadmapEstado(): Promise<RoadmapEstadoRow[]> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data, error } = await sb
     .from("peebcoolsf_roadmap_estado")
     .select(

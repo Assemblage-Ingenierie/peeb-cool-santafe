@@ -3,11 +3,8 @@ import { getRoadmap } from "@/lib/snapshot";
 // ============================================================
 // GET /api/roadmap — feuille de route + planning (Cronograma + Hojas de ruta).
 // Séparé de /api/snapshot : ces tables volumineuses (~60 % du poids) ne sont
-// livrées qu'aux 2 pages qui les utilisent. Lit en service_role CÔTÉ SERVEUR :
-// seule la donnée JSON est renvoyée, jamais la clé.
-//
-// `public` est sûr ICI : le roadmap ne contient aucune donnée confidentielle
-// (état d'édition des cartes + liaisons du planning, pas de contenu documentaire).
+// livrées qu'aux 2 pages qui les utilisent. Lit avec la SESSION de l'utilisateur
+// (clé anon + cookies, RLS) → cache privé `no-store` (voir /api/snapshot).
 // ============================================================
 
 export const dynamic = "force-dynamic";
@@ -17,8 +14,7 @@ export async function GET() {
     const roadmap = await getRoadmap();
     return Response.json(roadmap, {
       headers: {
-        // Même politique de cache que /api/snapshot (CDC §6).
-        "Cache-Control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
+        "Cache-Control": "private, no-store",
       },
     });
   } catch (err) {

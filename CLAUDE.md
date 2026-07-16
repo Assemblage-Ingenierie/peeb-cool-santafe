@@ -49,6 +49,20 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 6. ✅ Requisitos AyS (checklist MGAS dédiée — n'est plus une « medida »)
 7. ✅ Hojas de ruta (feuille de route interactive : phases verticales, cartes par composante, contenu AyS + cartes dynamiques par plan ; édition admin realizada/comentario/editar/enlazar + case ANO AFD ; persistance DB)
 8. ⏳ PWA offline (lecture)
-9. ⏳ Auth Supabase + RLS productif + gestion des rôles
+9. ✅ Auth Supabase + RLS productif + gestion des rôles
+
+## Auth (Étape 9)
+- **`@supabase/ssr`** : client navigateur (`lib/supabase/client.ts`), client serveur
+  cookie-bound (`lib/supabase/server.ts` → `createServerSupabase`), refresh session +
+  protection des routes dans **`proxy.ts`** (Next 16 = ex-middleware) via
+  `lib/supabase/proxy.ts`. **Plus de `service_role` dans l'app** : tout passe par la
+  clé anon + session → la RLS s'applique par utilisateur.
+- Utilisateur courant : `getCurrentUser()` (async, server-only) dans `lib/auth-server.ts`
+  (session + rôle depuis `peebcoolsf_perfiles`). Côté client : `useAuthUser()`
+  (`components/auth-context.tsx`), alimenté par `app/layout.tsx`.
+- Login : `app/login/page.tsx` (email + mot de passe). Comptes créés dans Supabase Auth
+  + ligne `peebcoolsf_perfiles` (user_id, rol). `NEXT_PUBLIC_DEV_AUTH_BYPASS` = dev only.
+- Écriture d'événements (calendario) : RLS `eventos_admin` = **admin only** (la garde
+  applicative laisse passer tout authentifié, mais la RLS reste le rempart).
 
 **Migrations** : dans `supabase/migrations/`, **dernière = 025**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.

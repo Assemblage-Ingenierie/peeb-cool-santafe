@@ -1,14 +1,15 @@
-import { getCurrentUser, isAdmin } from "@/lib/auth";
-import { createServiceClient } from "@/lib/supabase/server";
+import { isAdmin } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth-server";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { NotasClient } from "@/components/notas/notas-client";
 import type { NotaRow } from "./actions";
 
-// Notas — whiteboard admin (post-its libres). Lecture directe en service_role
-// (données non publiques). force-dynamic : pas de cache.
+// Notas — whiteboard admin (post-its libres). Lecture via session utilisateur
+// (RLS admin only). force-dynamic : pas de cache.
 export const dynamic = "force-dynamic";
 
 export default async function NotasPage() {
-  const user = getCurrentUser();
+  const user = await getCurrentUser();
   if (!isAdmin(user)) {
     return (
       <section className="mx-auto max-w-2xl">
@@ -20,7 +21,7 @@ export default async function NotasPage() {
     );
   }
 
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data } = await sb
     .from("peebcoolsf_notas")
     .select("id, titulo, contenido, color, x, y")

@@ -1,10 +1,10 @@
 import "server-only";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createServerSupabase } from "@/lib/supabase/server";
 
 // ============================================================
-// lib/snapshot.ts — Lecture publique (Dashboard + Mapa) en service_role.
-// Source unique de données pour /api/snapshot (Étape 4). `server-only` :
-// la clé service_role ne fuit jamais côté client.
+// lib/snapshot.ts — Lecture (Dashboard + Mapa) via la session de l'utilisateur
+// (clé anon + cookies, RLS appliquée). Source unique de données pour /api/snapshot.
+// `server-only` : le client serveur n'est jamais exposé au navigateur.
 //
 // Projection FIDÈLE de la base : valeurs brutes, NULL conservés, AUCUN calcul
 // dérivé (économie kWh/%/m² calculés à l'affichage via lib/calc.ts). Le filtrage
@@ -256,7 +256,7 @@ const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anu
 
 /** Construit le snapshot complet (un seul aller-retour groupé). */
 export async function getSnapshot(): Promise<Snapshot> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
 
   const [
     subRes,
@@ -449,7 +449,7 @@ export async function getSnapshot(): Promise<Snapshot> {
  * conservés, aucun calcul dérivé.
  */
 export async function getRoadmap(): Promise<Roadmap> {
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
 
   const [rmEstadoRes, rmEnlaceRes] = await Promise.all([
     sb

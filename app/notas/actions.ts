@@ -1,19 +1,20 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { createServiceClient } from "@/lib/supabase/server";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/auth";
 
 // ============================================================
-// Server Actions — Notas (whiteboard admin). Écriture en service_role.
-// Autorisation admin. Table peebcoolsf_notas.
+// Server Actions — Notas (whiteboard admin). Écriture via session utilisateur
+// (RLS admin only). Garde d'autorisation en plus. Table peebcoolsf_notas.
 // ============================================================
 
 const TABLE = "peebcoolsf_notas";
 const COLORES = new Set(["blanco", "GP", "EE", "AyS", "G"]);
 
-function assertAdmin() {
-  if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
+async function assertAdmin() {
+  if (!isAdmin(await getCurrentUser())) throw new Error("No autorizado");
 }
 
 export interface NotaRow {
@@ -27,10 +28,10 @@ export interface NotaRow {
 
 /** Crée une nota (couleur donnée) et retourne la ligne. */
 export async function notaCrear(color: string, x: number, y: number): Promise<NotaRow> {
-  assertAdmin();
+  await assertAdmin();
   const id = `nota-${randomUUID()}`;
   const col = COLORES.has(color) ? color : "blanco";
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { data, error } = await sb
     .from(TABLE)
     .insert({ id, color: col, x: Math.round(x), y: Math.round(y), titulo: "", contenido: "" })
@@ -45,7 +46,7 @@ export async function notaActualizar(
   id: string,
   patch: { titulo?: string; contenido?: string; color?: string; x?: number; y?: number },
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const row: Record<string, unknown> = {};
   if ("titulo" in patch) row.titulo = patch.titulo ?? "";
   if ("contenido" in patch) row.contenido = patch.contenido ?? "";
@@ -53,15 +54,15 @@ export async function notaActualizar(
   if ("x" in patch) row.x = Math.round(patch.x ?? 0);
   if ("y" in patch) row.y = Math.round(patch.y ?? 0);
   if (Object.keys(row).length === 0) return;
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(TABLE).update(row).eq("id", id);
   if (error) throw new Error(error.message);
 }
 
 /** Supprime une nota. */
 export async function notaEliminar(id: string): Promise<void> {
-  assertAdmin();
-  const sb = createServiceClient();
+  await assertAdmin();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(TABLE).delete().eq("id", id);
   if (error) throw new Error(error.message);
 }

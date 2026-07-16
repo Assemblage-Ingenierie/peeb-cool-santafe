@@ -1,8 +1,9 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { createServiceClient } from "@/lib/supabase/server";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/auth";
 
 // ============================================================
 // Server Actions — Hojas de ruta (état d'édition admin, écriture).
@@ -22,8 +23,8 @@ const ANO_KEYS = new Set([
   "__ano_afd_contrato__",
 ]);
 
-function assertAdmin() {
-  if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
+async function assertAdmin() {
+  if (!isAdmin(await getCurrentUser())) throw new Error("No autorizado");
 }
 
 function assertFeuille(feuille: string) {
@@ -59,10 +60,10 @@ export async function roadmapSetRealizada(
   tareaKey: string,
   realizada: boolean,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ESTADO)
     .upsert({ feuille, tarea_key: tareaKey, realizada }, { onConflict: "feuille,tarea_key" });
@@ -75,10 +76,10 @@ export async function roadmapSetComentario(
   tareaKey: string,
   comentario: string,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ESTADO)
     .upsert(
@@ -96,10 +97,10 @@ export async function roadmapSetEdicion(
   descripcion: string,
   responsable: string,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(ESTADO).upsert(
     {
       feuille,
@@ -119,10 +120,10 @@ export async function roadmapSetAnoAfd(
   tareaKey: string,
   recibida: boolean,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   if (!ANO_KEYS.has(tareaKey)) throw new Error(`Hito AFD inválido: ${tareaKey}`);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ESTADO)
     .upsert(
@@ -141,12 +142,12 @@ export async function roadmapCrearCarta(
   orden: number,
   banda = 0,
 ): Promise<string> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertComponente(componente);
   assertFila(fila);
   const tareaKey = `carta-${randomUUID()}`;
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(ESTADO).insert({
     feuille,
     tarea_key: tareaKey,
@@ -167,10 +168,10 @@ export async function roadmapEliminarCarta(
   tareaKey: string,
   creada: boolean,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   if (creada) {
     const { error } = await sb.from(ESTADO).delete().eq("feuille", feuille).eq("tarea_key", tareaKey);
     if (error) throw new Error(error.message);
@@ -195,11 +196,11 @@ export async function roadmapMoverCarta(
   orden: number,
   banda: number,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   assertFila(fila);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ESTADO)
     .upsert(
@@ -226,7 +227,7 @@ export async function roadmapSetPlan(
     durUnidad?: string | null;
   },
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(tareaKey);
   const row: Record<string, unknown> = { feuille, tarea_key: tareaKey };
@@ -239,16 +240,16 @@ export async function roadmapSetPlan(
   if ("durUnidad" in patch) {
     row.dur_unidad = patch.durUnidad && UNIDADES_VALIDAS.has(patch.durUnidad) ? patch.durUnidad : null;
   }
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(ESTADO).upsert(row, { onConflict: "feuille,tarea_key" });
   if (error) throw new Error(error.message);
 }
 
 /** Restaure toutes les cartes par défaut masquées d'une feuille. */
 export async function roadmapRestaurarOcultas(feuille: string): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ESTADO)
     .update({ oculta: false })
@@ -268,7 +269,7 @@ export async function roadmapAddEnlace(
   hacia: string,
   liaison?: { punto?: string; desfaseValor?: number; desfaseUnidad?: string },
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
   assertKey(desde);
   assertKey(hacia);
@@ -277,7 +278,7 @@ export async function roadmapAddEnlace(
   const dv = liaison?.desfaseValor;
   const desfaseValor = dv == null || Number.isNaN(dv) ? 0 : Math.trunc(dv);
   const desfaseUnidad = UNIDADES_VALIDAS.has(liaison?.desfaseUnidad ?? "") ? liaison!.desfaseUnidad : "dia";
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ENLACE)
     .upsert(
@@ -293,9 +294,9 @@ export async function roadmapRemoveEnlace(
   desde: string,
   hacia: string,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   assertFeuille(feuille);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from(ENLACE)
     .delete()

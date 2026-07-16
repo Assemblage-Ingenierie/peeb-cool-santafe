@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/nav";
-import { getCurrentUser, isAdmin, rolLabel } from "@/lib/auth";
+import { isAdmin, rolLabel } from "@/lib/auth";
+import { useAuthUser } from "./auth-context";
+import { createBrowserSupabase } from "@/lib/supabase/client";
 import { cn } from "@/lib/cn";
 import { LogoSlot } from "./logo-slot";
 import { NavIcon, LogoutIcon } from "./icons";
@@ -15,9 +17,16 @@ interface SidebarProps {
 
 export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
   const pathname = usePathname();
-  const user = getCurrentUser();
+  const router = useRouter();
+  const user = useAuthUser();
   const admin = isAdmin(user);
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || admin);
+
+  async function cerrarSesion() {
+    await createBrowserSupabase().auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
 
   return (
     <aside
@@ -97,6 +106,7 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
               </div>
               <button
                 type="button"
+                onClick={cerrarSesion}
                 title="Cerrar sesión"
                 aria-label="Cerrar sesión"
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-[var(--sidebar-text-muted)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-text)]"

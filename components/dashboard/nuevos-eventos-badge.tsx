@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { SnapshotActividad } from "@/lib/snapshot";
-import { DEV_AUTH_BYPASS } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
+import { useAuthUser } from "@/components/auth-context";
 import { cn } from "@/lib/cn";
 import { fmtFecha } from "@/components/calendario/fechas";
 
@@ -17,6 +18,7 @@ const VISTOS_KEY = "peebcoolsf:agenda:vistos";
  * Visible pour l'admin (en dev, bypass = admin ; Étape 6 = vraie session).
  */
 export function NuevosEventosBadge({ actividad }: { actividad: SnapshotActividad[] }) {
+  const admin = isAdmin(useAuthUser());
   const [vistos, setVistos] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
     return window.localStorage.getItem(VISTOS_KEY);
@@ -24,7 +26,7 @@ export function NuevosEventosBadge({ actividad }: { actividad: SnapshotActividad
   const [popup, setPopup] = useState<SnapshotActividad[] | null>(null);
 
   // Réservé à l'admin.
-  if (!DEV_AUTH_BYPASS) return null;
+  if (!admin) return null;
 
   const nuevos = actividad.filter((a) => !vistos || a.creadoEn > vistos);
   const n = nuevos.length;

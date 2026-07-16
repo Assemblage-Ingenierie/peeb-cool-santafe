@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { themeVars } from "@/lib/constants";
 import { AppShell } from "@/components/app-shell";
+import { AuthProvider } from "@/components/auth-context";
+import { getCurrentUser } from "@/lib/auth-server";
 
 export const metadata: Metadata = {
   title: "PEEB Cool — Santa Fe",
@@ -9,13 +11,17 @@ export const metadata: Metadata = {
     "Seguimiento del proyecto de rehabilitación energética de edificios públicos — Provincia de Santa Fe",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const user = await getCurrentUser();
+
   return (
     <html lang="es-AR" className="h-full">
       <body className="min-h-full" style={themeVars}>
-        <AppShell>{children}</AppShell>
+        <AuthProvider user={user}>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   );

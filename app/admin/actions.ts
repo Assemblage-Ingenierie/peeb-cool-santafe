@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createServiceClient } from "@/lib/supabase/server";
-import { getCurrentUser, isAdmin } from "@/lib/auth";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth-server";
+import { isAdmin } from "@/lib/auth";
 import { TABLES, type TableConfig } from "@/lib/admin/config";
 import type { Row, SubproyectoRow } from "@/lib/admin/read";
 import { GESTION_FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants";
@@ -14,8 +15,8 @@ import { GESTION_FASES, getMedida, REQUISITOS_AYS_CODES } from "@/lib/constants"
 // UID des nouvelles lignes généré CÔTÉ SERVEUR (max + 1 par table).
 // ============================================================
 
-function assertAdmin() {
-  if (!isAdmin(getCurrentUser())) throw new Error("No autorizado");
+async function assertAdmin() {
+  if (!isAdmin(await getCurrentUser())) throw new Error("No autorizado");
 }
 
 function cfgOf(tableKey: string): TableConfig {
@@ -62,9 +63,9 @@ function sanitizeNotasServer(html: string): string {
  * `presets` permet de préremplir des champs (ex. subseccion du bloc), validés par liste blanche.
  */
 export async function addRow(tableKey: string, presets?: Record<string, unknown>): Promise<Row> {
-  assertAdmin();
+  await assertAdmin();
   const cfg = cfgOf(tableKey);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
 
   const { data: existing, error: readErr } = await sb.from(cfg.table).select("uid");
   if (readErr) throw new Error(readErr.message);
@@ -100,7 +101,7 @@ export async function updateField(
   field: string,
   value: string,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.textFields.includes(field)) throw new Error(`Campo no editable: ${field}`);
 
@@ -114,7 +115,7 @@ export async function updateField(
     v = field === "url" || field === "url_conexion" ? value.trim() : value;
   }
 
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(cfg.table).update({ [field]: v }).eq("uid", uid);
   if (error) throw new Error(error.message);
 
@@ -129,11 +130,11 @@ export async function gestionSetDuracion(
   durValor: number | null,
   durUnidad: string | null,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const v =
     durValor == null || Number.isNaN(durValor) || durValor <= 0 ? null : Math.trunc(durValor);
   const u = durUnidad && DUR_UNIDADES.has(durUnidad) ? durUnidad : null;
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from("peebcoolsf_gestion_lineas")
     .update({ dur_valor: v, dur_unidad: u })
@@ -149,11 +150,11 @@ export async function setFlag(
   flag: string,
   value: boolean,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.flagFields.includes(flag)) throw new Error(`Bandera inválida: ${flag}`);
 
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(cfg.table).update({ [flag]: value }).eq("uid", uid);
   if (error) throw new Error(error.message);
 
@@ -167,12 +168,12 @@ export async function setArrayField(
   field: string,
   values: string[],
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.arrayFields.includes(field)) throw new Error(`Campo no válido: ${field}`);
 
   const clean = Array.isArray(values) ? values.filter((x) => typeof x === "string") : [];
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from(cfg.table).update({ [field]: clean }).eq("uid", uid);
   if (error) throw new Error(error.message);
 
@@ -185,9 +186,9 @@ export async function setArrayField(
  * - entidad → equipo.entidad_uid mis à NULL (lève le blocage FK) + retirée de eventos.participantes[].
  */
 export async function deleteRow(tableKey: string, uid: string): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const cfg = cfgOf(tableKey);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
 
   // Entidad : détacher AVANT le delete (FK equipo.entidad_uid → entidades.uid).
   if (tableKey === "entidades") await detachEntidad(sb, uid);
@@ -244,7 +245,7 @@ const TIPOLOGIAS_CODES = new Set(["A", "H", "E"]);
 
 /** Met à jour un champ de « Datos del edificio » (texte ou numérique nullable). */
 export async function updateSubproyecto(uid: string, field: string, value: string): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   let v: string | number | null;
 
   if (SUB_TEXT.has(field)) {
@@ -265,7 +266,7 @@ export async function updateSubproyecto(uid: string, field: string, value: strin
     throw new Error(`Campo no editable: ${field}`);
   }
 
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb.from("peebcoolsf_subproyectos").update({ [field]: v }).eq("uid", uid);
   if (error) throw new Error(error.message);
   revalidatePath("/admin");
@@ -299,7 +300,7 @@ export async function updateMetrica(
   field: string,
   value: string,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   if (escenario !== "faisabilidad" && escenario !== "proyecto") {
     throw new Error(`Escenario inválido: ${escenario}`);
   }
@@ -310,7 +311,7 @@ export async function updateMetrica(
   }
 
   const v = parseNullableNumber(value, isInt);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from("peebcoolsf_metricas")
     .update({ [field]: v })
@@ -341,7 +342,7 @@ export async function updateMedida(
   field: string,
   value: string,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   if (!MEDIDA_CODES.has(medida)) throw new Error(`Medida inválida: ${medida}`);
 
   let patch: Record<string, unknown>;
@@ -357,7 +358,7 @@ export async function updateMedida(
     throw new Error(`Campo no editable: ${field}`);
   }
 
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from("peebcoolsf_medidas")
     .update(patch)
@@ -375,9 +376,9 @@ export async function setAysRequisito(
   requisito: string,
   activa: boolean,
 ): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   if (!AYS_REQUISITOS_SET.has(requisito)) throw new Error(`Requisito inválido: ${requisito}`);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
   const { error } = await sb
     .from("peebcoolsf_ays_requisitos")
     .upsert(
@@ -394,8 +395,8 @@ export async function setAysRequisito(
  * Crée aussi les 2 lignes metricas (faisabilidad + proyecto) vides ; gestion_lineas démarre vide.
  */
 export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; fases: Row[] }> {
-  assertAdmin();
-  const sb = createServiceClient();
+  await assertAdmin();
+  const sb = await createServerSupabase();
   const nom = (nombre ?? "").trim() || "Nueva escuela";
 
   const { data: allSubs, error: readErr } = await sb.from("peebcoolsf_subproyectos").select("uid, orden");
@@ -456,8 +457,8 @@ export async function addSchool(nombre: string): Promise<{ sub: SubproyectoRow; 
  * écoles (seccion='Escuelas') sont supprimables — jamais aéroports/hôpitaux.
  */
 export async function deleteSubproyecto(uid: string): Promise<void> {
-  assertAdmin();
-  const sb = createServiceClient();
+  await assertAdmin();
+  const sb = await createServerSupabase();
 
   const { data, error: readErr } = await sb
     .from("peebcoolsf_subproyectos")
@@ -490,8 +491,8 @@ export async function deleteSubproyecto(uid: string): Promise<void> {
 
 /** Ajoute une ligne de gestion à un sous-projet. UID `GEST-<code>-NNNN` (numéroté par sous-projet). */
 export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
-  assertAdmin();
-  const sb = createServiceClient();
+  await assertAdmin();
+  const sb = await createServerSupabase();
   const code = subproyectoUid.replace(/^SUB-/, "");
   const prefix = `GEST-${code}-`;
 
@@ -533,10 +534,10 @@ export async function addGestionLinea(subproyectoUid: string): Promise<Row> {
 
 /** Réécrit la colonne d'ordre (drag & drop) : orden = position+1 dans la liste fournie. */
 export async function reorderRows(tableKey: string, orderedUids: string[]): Promise<void> {
-  assertAdmin();
+  await assertAdmin();
   const cfg = cfgOf(tableKey);
   if (!cfg.orderField) throw new Error(`Tabla no ordenable: ${tableKey}`);
-  const sb = createServiceClient();
+  const sb = await createServerSupabase();
 
   const results = await Promise.all(
     orderedUids.map((uid, i) =>
