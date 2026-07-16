@@ -13,7 +13,7 @@ import {
   type ComponenteCode,
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
-import { SEMESTRES, planTareaGlobal } from "@/lib/semestres";
+import { SEMESTRES, planGlobalEfectivo } from "@/lib/semestres";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import {
   computeSchedule,
@@ -455,11 +455,12 @@ export function HojasDeRutaClient() {
         const sem = colKey.split("|")[0];
         for (const card of cards) {
           if (card.nota) continue;
-          const p = planTareaGlobal(sem, card.key);
-          if (!p) continue;
+          // Plan effectif : le plan stocké (admin/seed) prime sur la règle.
+          const p = planGlobalEfectivo(sem, card.key, planes[`${seleccion}::${card.key}`]);
+          if (p.fechaInicio == null && p.durValor == null) continue;
           pg.set(card.key, {
             fechaInicio: p.fechaInicio,
-            fechaFin: null,
+            fechaFin: p.fechaFin,
             durValor: p.durValor,
             durUnidad: p.durUnidad,
           });
@@ -467,9 +468,9 @@ export function HojasDeRutaClient() {
             key: card.key,
             fase: sem,
             durValor: p.durValor,
-            durUnidad: p.durUnidad as Unidad,
+            durUnidad: p.durUnidad,
             fechaInicio: p.fechaInicio,
-            fechaFin: null,
+            fechaFin: p.fechaFin,
           });
         }
       }

@@ -74,3 +74,34 @@ export function planTareaGlobal(semCode: string, tareaKey: string): PlanGlobal |
     : r.inicio;
   return { fechaInicio: isoLocal(inicio), durValor: 1, durUnidad: "semana" };
 }
+
+type UnidadDur = "dia" | "semana" | "mes";
+const asUnidadDur = (u: string | null | undefined): UnidadDur | null =>
+  u === "dia" || u === "semana" || u === "mes" ? u : null;
+
+// Plan persisté d'une carte (peebcoolsf_roadmap_estado), champs pertinents.
+export interface PlanStored {
+  fechaInicio?: string | null;
+  durValor?: number | null;
+  durUnidad?: string | null;
+  fechaFin?: string | null;
+}
+
+// Plan EFFECTIF d'une tâche globale : le plan STOCKÉ prime sur la règle (les
+// règles ne sont que des défauts). La durée n'est surchargée que si valeur ET
+// unité sont présentes (une valeur sans unité = incomplète → on garde la règle).
+export function planGlobalEfectivo(
+  semCode: string,
+  tareaKey: string,
+  stored: PlanStored | null | undefined,
+): { fechaInicio: string | null; durValor: number | null; durUnidad: UnidadDur | null; fechaFin: string | null } {
+  const regla = planTareaGlobal(semCode, tareaKey);
+  const durU = asUnidadDur(stored?.durUnidad);
+  const durOverride = stored?.durValor != null && durU != null;
+  return {
+    fechaInicio: stored?.fechaInicio ?? regla?.fechaInicio ?? null,
+    durValor: durOverride ? stored!.durValor! : regla?.durValor ?? null,
+    durUnidad: durOverride ? durU : regla?.durUnidad ?? null,
+    fechaFin: stored?.fechaFin ?? null,
+  };
+}

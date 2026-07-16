@@ -9,7 +9,7 @@ import {
 } from "@/lib/constants";
 import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
-import { SEMESTRES_CODES, planTareaGlobal } from "@/lib/semestres";
+import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/semestres";
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
@@ -353,6 +353,7 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
 // titre est écrit À CÔTÉ de la barre (comme pour les sous-projets).
 function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion {
   const estado = new Map<string, RoadmapOverride>();
+  const stored = new Map<string, PlanStored>();
   for (const r of d.roadmapEstado) {
     if (r.feuille !== "global") continue;
     estado.set(r.tareaKey, {
@@ -364,10 +365,16 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
       banda: r.banda,
       nombre: r.nombre,
     });
+    stored.set(r.tareaKey, {
+      fechaInicio: r.fechaInicio,
+      durValor: r.durValor,
+      durUnidad: r.durUnidad,
+      fechaFin: r.fechaFin,
+    });
   }
   const columnas = construirCartasPorFila({ esGlobal: true, semestres: SEMESTRES_CODES, estado });
 
-  // Entrées de planning (règles) → dates calculées par le moteur partagé.
+  // Entrées de planning : plan stocké (prime) ou règle → dates via le moteur partagé.
   const tasks: {
     key: string;
     fase: string;
@@ -381,15 +388,15 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
     const sem = colKey.split("|")[0];
     for (const c of cards) {
       if (c.nota || !filtros.has(c.componente)) continue;
-      const p = planTareaGlobal(sem, c.key);
-      if (!p) continue;
+      const p = planGlobalEfectivo(sem, c.key, stored.get(c.key));
+      if (p.fechaInicio == null && p.durValor == null) continue;
       tasks.push({
         key: c.key,
         fase: sem,
         durValor: p.durValor,
         durUnidad: p.durUnidad,
         fechaInicio: p.fechaInicio,
-        fechaFin: null,
+        fechaFin: p.fechaFin,
       });
       items.push({ key: c.key, comp: c.componente, nombre: c.nombre });
     }
