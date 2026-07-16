@@ -20,17 +20,23 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // Table peebcoolsf_perfiles au format profiles : PK id = uid auth, rôle = status.
   const { data: perfil } = await supabase
     .from("peebcoolsf_perfiles")
-    .select("rol")
-    .eq("user_id", user.id)
+    .select("status, first_name, last_name")
+    .eq("id", user.id)
     .maybeSingle();
 
   // Authentifié sans profil → consultor (lecture non confidentielle uniquement).
-  const rol: Rol = (perfil?.rol as Rol) ?? "consultor";
+  const rol: Rol = (perfil?.status as Rol) ?? "consultor";
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const fullName = [perfil?.first_name, perfil?.last_name]
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .join(" ")
+    .trim();
   const nombre =
+    fullName ||
     (typeof meta.nombre === "string" && meta.nombre) ||
     (typeof meta.full_name === "string" && meta.full_name) ||
     user.email ||
