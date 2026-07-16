@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { NAV_ITEMS } from "@/lib/nav";
 import { isAdmin, rolLabel } from "@/lib/auth";
 import { useAuthUser } from "./auth-context";
 import { createBrowserSupabase } from "@/lib/supabase/client";
+import { MyAccountModal } from "./account/my-account-modal";
 import { cn } from "@/lib/cn";
 import { LogoSlot } from "./logo-slot";
 import { NavIcon, LogoutIcon } from "./icons";
@@ -21,6 +23,7 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
   const user = useAuthUser();
   const admin = isAdmin(user);
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || admin);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   async function cerrarSesion() {
     await createBrowserSupabase().auth.signOut();
@@ -96,14 +99,19 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
         {user && (
           <div className="relative border-t border-[var(--sidebar-border)] px-4 py-3">
             <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
+              <button
+                type="button"
+                onClick={() => setAccountOpen(true)}
+                title="Mi cuenta"
+                className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-[var(--sidebar-hover)]"
+              >
                 <p className="truncate text-sm font-medium text-[var(--sidebar-text)]">
                   {user.nombre}
                 </p>
                 <p className="truncate text-xs text-[var(--sidebar-text-muted)]">
                   {rolLabel(user.rol)}
                 </p>
-              </div>
+              </button>
               <button
                 type="button"
                 onClick={cerrarSesion}
@@ -114,6 +122,8 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
                 <LogoutIcon className="h-[18px] w-[18px]" />
               </button>
             </div>
+
+            {accountOpen && <MyAccountModal onClose={() => setAccountOpen(false)} />}
           </div>
         )}
       </div>

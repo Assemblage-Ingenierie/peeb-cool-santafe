@@ -1,6 +1,12 @@
 import "server-only";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { DEV_AUTH_BYPASS, MOCK_ADMIN, type AppUser, type Rol } from "@/lib/auth";
+import {
+  DEV_AUTH_BYPASS,
+  MOCK_ADMIN,
+  type AppUser,
+  type Rol,
+  type RequestedStatus,
+} from "@/lib/auth";
 
 // ============================================================
 // lib/auth-server.ts — résolution de l'utilisateur courant côté SERVEUR.
@@ -23,7 +29,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   // Table peebcoolsf_perfiles au format profiles : PK id = uid auth, rôle = status.
   const { data: perfil } = await supabase
     .from("peebcoolsf_perfiles")
-    .select("status, first_name, last_name")
+    .select("status, first_name, last_name, job_title, requested_status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -42,5 +48,14 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     user.email ||
     "Usuario";
 
-  return { nombre, rol, email: user.email ?? undefined };
+  return {
+    id: user.id,
+    nombre,
+    rol,
+    email: user.email ?? undefined,
+    firstName: perfil?.first_name ?? undefined,
+    lastName: perfil?.last_name ?? undefined,
+    jobTitle: perfil?.job_title ?? undefined,
+    requestedStatus: (perfil?.requested_status as RequestedStatus) ?? null,
+  };
 }

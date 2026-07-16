@@ -8,16 +8,25 @@
 
 export type Rol = "admin" | "gestion" | "consultor";
 
+/** Statut demandé pour une montée en niveau (workflow de demande de rôle). */
+export type RequestedStatus = "gestion" | "admin" | null;
+
 export interface AppUser {
+  id: string; // uid auth (= peebcoolsf_perfiles.id)
   nombre: string;
   rol: Rol;
   email?: string;
+  firstName?: string;
+  lastName?: string;
+  jobTitle?: string;
+  requestedStatus?: RequestedStatus;
 }
 
 /** Bypass d'auth en développement local (mock admin). JAMAIS activé en prod. */
 export const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
 export const MOCK_ADMIN: AppUser = {
+  id: "00000000-0000-0000-0000-000000000000",
   nombre: "Admin (dev)",
   rol: "admin",
   email: "dev@assemblage.net",
