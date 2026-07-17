@@ -3,10 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/client";
+import { PasswordInput } from "@/components/password-input";
 import { LogoSlot } from "@/components/logo-slot";
 
-const inputCls =
-  "mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--focus)]";
 const labelCls = "block text-sm font-medium text-[var(--text)]";
 
 export function ResetPasswordForm() {
@@ -61,12 +60,12 @@ export function ResetPasswordForm() {
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <div>
               <label className={labelCls}>Nueva contraseña</label>
-              <input type="password" autoComplete="new-password" required className={inputCls}
+              <PasswordInput autoComplete="new-password" required
                 value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>Confirmar</label>
-              <input type="password" autoComplete="new-password" required className={inputCls}
+              <PasswordInput autoComplete="new-password" required
                 value={password2} onChange={(e) => setPassword2(e.target.value)} />
             </div>
             {error && (

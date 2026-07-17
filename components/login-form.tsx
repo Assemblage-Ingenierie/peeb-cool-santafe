@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { GoogleSignInButton } from "@/components/google-signin-button";
+import { PasswordInput } from "@/components/password-input";
 import { LogoSlot } from "@/components/logo-slot";
 
 type Mode = "home" | "login" | "signup" | "forgot";
@@ -165,7 +166,7 @@ export function LoginForm() {
             </div>
             <div>
               <label className={labelCls} htmlFor="password">Contraseña</label>
-              <input id="password" type="password" autoComplete="current-password" required className={inputCls}
+              <PasswordInput id="password" autoComplete="current-password" required
                 value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <button type="submit" disabled={loading} className={primaryCls}>
@@ -208,11 +209,11 @@ export function LoginForm() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className={labelCls}>Contraseña</label>
-                <input type="password" autoComplete="new-password" required className={inputCls} value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <div>
                 <label className={labelCls}>Confirmar</label>
-                <input type="password" autoComplete="new-password" required className={inputCls} value={password2} onChange={(e) => setPassword2(e.target.value)} />
+                <PasswordInput autoComplete="new-password" required value={password2} onChange={(e) => setPassword2(e.target.value)} />
               </div>
             </div>
             <button type="submit" disabled={loading} className={primaryCls}>
