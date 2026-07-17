@@ -111,6 +111,29 @@ allowlist de domaine côté trigger/app.
 
 ---
 
+---
+
+## Variante retenue pour peeb-santafe : **client Google dédié**
+
+Plutôt que de partager le client de peeb-jordan, on a créé un **projet + client dédiés**
+(le nom affiché par Google dépend du **projet**). Avantages : branding « Peeb-SantaFe »,
+isolation (rotation/pannes indépendantes). Le *client ID* est public → aucun risque à le
+partager/coller ; **le *client secret* n'est PAS utilisé** (GIS = `signInWithIdToken`).
+
+Étapes réalisées (console « Google Auth Platform », nouvelle UI) :
+1. **Nouveau projet** Google Cloud « Peeb-SantaFe ».
+2. **Branding** : App name = `Peeb-SantaFe`, emails de contact.
+3. **Audience** : User type = External, **Publish app → In production** (indispensable
+   pour que tout compte Google puisse se connecter ; scopes non sensibles → pas de
+   vérification). *(Onglet « Accès aux données » = scopes : rien à ajouter.)*
+4. **Clients** : client OAuth « Web » → *Authorized JavaScript origins* =
+   `https://peeb-santafe.assemblage.net`, `http://localhost:3000` (+ option vercel.app).
+5. **Supabase** → Auth → Providers → Google → **Authorized Client IDs** : ajouter le
+   nouveau client ID (additif, sans retirer les existants ni toucher au client principal).
+6. **App/Vercel** : `NEXT_PUBLIC_GOOGLE_CLIENT_ID` = le nouveau client ID + redéploiement.
+
+---
+
 ### Résumé (mémo)
 | Élément | Valeur |
 |---|---|
