@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { usePathname } from "next/navigation";
 import { COMPONENTES } from "@/lib/constants";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
@@ -17,6 +18,7 @@ import { useAuthUser } from "./auth-context";
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const user = useAuthUser();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   // Vista / Rol : le Set des composantes visibles.
   //  • GP = « Todo » (réinitialise → tout visible). Actif par défaut.
@@ -33,8 +35,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  // Non authentifié → pas de chrome (page /login rendue seule).
-  if (!user) {
+  // Non authentifié (/login) ou récupération de mot de passe → pas de chrome.
+  if (!user || pathname === "/reset-password") {
     return <>{children}</>;
   }
 
