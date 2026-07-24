@@ -1,12 +1,19 @@
+"use client";
+
 import { REQUISITOS_AYS, refMgas, getComponente } from "@/lib/constants";
+import { useComponentFilters, pasaFiltro } from "@/components/filter-context";
 
 // ============================================================
 // Bloc « Ambiental y social » (mode Subproyectos, bâtiment sélectionné).
 // Remplace l'ancien groupe « Especificidades AyS ». Contenu : texte libre
 // (ays_texto) puis la liste des requisitos AyS cochés, groupés par section MGAS.
+// Filtré par la vue AyS (comme les blocs Medidas) : masqué si AyS est décoché.
 // ============================================================
 
 export function AysBlock({ texto, checked }: { texto: string | null; checked: Set<string> }) {
+  const filtros = useComponentFilters();
+  if (!pasaFiltro(filtros, "AyS")) return null;
+
   const grupos = REQUISITOS_AYS.map((g) => ({
     grupo: g,
     items: g.requisitos.filter((r) => checked.has(r.code)),
