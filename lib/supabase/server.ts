@@ -1,13 +1,18 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { DEV_AUTH_BYPASS } from "@/lib/auth";
 
 // ============================================================
 // Client Supabase SERVEUR lié à la SESSION de l'utilisateur (clé anon + cookies).
 // La RLS s'applique avec le contexte de l'appelant (authenticated / rôle via
-// peebcoolsf_perfiles). Plus de service_role : aucune clé secrète côté serveur.
+// peebcoolsf_perfiles). Aucune clé secrète exposée au navigateur.
 // Usage : Server Components (lecture), Server Actions (écriture), Route Handlers.
+//
+// DEV (NEXT_PUBLIC_DEV_AUTH_BYPASS=true) : on lit/écrit via service_role pour
+// développer SANS connexion (la RLS est contournée, comme l'ancien snapshot).
+// STRICTEMENT dev — en production le flag est faux → clé anon + session.
 // ============================================================
 
 export async function createServerSupabase(): Promise<SupabaseClient> {
@@ -18,6 +23,16 @@ export async function createServerSupabase(): Promise<SupabaseClient> {
     throw new Error(
       "Configuración Supabase incompleta: definir NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY.",
     );
+  }
+
+  // Bypass dev : service_role (RLS contournée). Jamais atteint en production.
+  if (DEV_AUTH_BYPASS) {
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (serviceKey) {
+      return createClient(url, serviceKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+    }
   }
 
   const cookieStore = await cookies();

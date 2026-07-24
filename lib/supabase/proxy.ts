@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { DEV_AUTH_BYPASS } from "@/lib/auth";
 
 // ============================================================
 // Rafraîchissement de session + protection des routes, appelé depuis proxy.ts
@@ -10,6 +11,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export async function updateSession(request: NextRequest): Promise<NextResponse> {
   let response = NextResponse.next({ request });
+
+  // Bypass dev : aucune protection ni rafraîchissement de session (pas de login
+  // requis en local). Jamais actif en production (flag dev only).
+  if (DEV_AUTH_BYPASS) return response;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
