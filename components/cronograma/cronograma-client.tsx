@@ -168,6 +168,8 @@ interface Barra {
   endMs: number; // fin réelle (hachures de solidMs → endMs si > solidMs)
   color: string;
   etiqueta?: string;
+  etiquetaCorta?: string; // repli affiché si `etiqueta` ne tient pas dans la barre (sigle)
+  etiquetaPequena?: boolean; // texte plus petit (bandes courtes type « CNO »)
   dentro?: boolean;
   etiquetaColor?: string;
   tooltip?: string; // survol (title) — sans texte visible sur la barre
@@ -281,11 +283,27 @@ const colorFase = (code: string, i: number): string =>
 const colorDeFase = (code: string): string =>
   colorFase(code, FASES_ORD.findIndex((f) => f.code === code));
 
-// Barre d'une fase avec son sigle centré (texte lisible selon le fond).
-function barraFase(sr: ScheduleResult | undefined, code: string, i: number, tooltip?: string): Barra | null {
+// Barre d'une fase avec son libellé centré (texte lisible selon le fond).
+// `label` : libellé forcé (sinon sigle). La vue « enlace de fases » y met le nom
+// complet (ou « CNO » pour les jalons No objeción AFD, courts et en rouge).
+function barraFase(
+  sr: ScheduleResult | undefined,
+  code: string,
+  i: number,
+  tooltip?: string,
+  label?: string,
+): Barra | null {
   const color = colorFase(code, i);
-  const b = barraDe(sr, color, FASE_SIGLA[code] ?? "", true, textoSobre(color));
-  return b ? { ...b, tooltip } : null;
+  const b = barraDe(sr, color, label ?? FASE_SIGLA[code] ?? "", true, textoSobre(color));
+  return b
+    ? {
+        ...b,
+        tooltip,
+        etiquetaCorta: FASE_SIGLA[code] ?? "",
+        // « CNO » (No objeción AFD) : bandes rouges courtes → texte plus petit.
+        etiquetaPequena: code.includes("no_objecion_afd"),
+      }
+    : null;
 }
 
 // Date courte (survol des segments de fase) — ex. « 3 jun 2027 ».
@@ -294,13 +312,16 @@ const fmtFecha = (ms: number): string => {
   return `${d.getDate()} ${MES_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 };
 
-// Enchaînement des fases d'un planning sur UNE ligne (segments colorés, sigle
-// centré ; nom + date de démarrage au survol).
+// Enchaînement des fases d'un planning sur UNE ligne (segments colorés). Libellé
+// = nom complet de la fase (tronqué si la bande est trop étroite), sauf les
+// jalons « No objeción AFD » → « CNO » (bandes rouges courtes). Nom + date au survol.
 function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
   const barras: Barra[] = [];
   FASES_ORD.forEach((f, i) => {
     const sr = sched.get(faseNodeKey(f.code));
-    const b = barraFase(sr, f.code, i, sr ? `${f.nombre} · inicio ${fmtFecha(isoMs(sr.start) ?? 0)}` : undefined);
+    const label = f.code.includes("no_objecion_afd") ? "CNO" : f.nombre;
+    const tooltip = sr ? `${f.nombre} · inicio ${fmtFecha(isoMs(sr.start) ?? 0)}` : undefined;
+    const b = barraFase(sr, f.code, i, tooltip, label);
     if (b) barras.push(b);
   });
   return barras;
@@ -862,20 +883,37 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
               />
             ) : null}
             {b.etiqueta && b.dentro ? (
-              <span
-                className="pointer-events-none absolute block truncate px-1 text-[10px] font-medium"
-                style={{
-                  left,
-                  width: Math.max(0, rPlena - left),
-                  top: 0,
-                  height: ROW_H,
-                  lineHeight: `${ROW_H}px`,
-                  color: b.etiquetaColor ?? "#1f2733",
-                }}
-                title={b.etiqueta}
-              >
-                {b.etiqueta}
-              </span>
+              (() => {
+                // Nom complet si la bande est assez large ; sinon repli sur les
+                // initiales (sigle). S'adapte au zoom (la largeur change). CNO en
+                // texte plus petit. `truncate` = filet de sécurité. Estimation
+                // conservatrice (~5,9 px/caractère à 10 px + padding) pour éviter
+                // une troncature partielle (« Reda… ») : on préfère le sigle.
+                const barW = Math.max(0, rPlena - left);
+                const pad = b.etiquetaPequena ? 4 : 8; // px-0.5 (CNO) vs px-1
+                const cw = b.etiquetaPequena ? 5.0 : 5.6; // largeur ~ par caractère
+                const cabe = b.etiqueta.length * cw + pad <= barW;
+                const texto = cabe ? b.etiqueta : b.etiquetaCorta || b.etiqueta;
+                return (
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute block truncate font-medium",
+                      b.etiquetaPequena ? "px-0.5 text-[9px]" : "px-1 text-[10px]",
+                    )}
+                    style={{
+                      left,
+                      width: barW,
+                      top: 0,
+                      height: ROW_H,
+                      lineHeight: `${ROW_H}px`,
+                      color: b.etiquetaColor ?? "#1f2733",
+                    }}
+                    title={b.etiqueta}
+                  >
+                    {texto}
+                  </span>
+                );
+              })()
             ) : b.etiqueta ? (
               <span
                 className="pointer-events-none absolute whitespace-nowrap text-[11px] leading-none text-[var(--text)]"
