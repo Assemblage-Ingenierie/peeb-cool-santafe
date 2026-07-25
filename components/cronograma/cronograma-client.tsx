@@ -844,13 +844,13 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
         return (
           <div key={bi}>
             <div
-              className={cn("absolute", b.endMs > b.solidMs ? "rounded-l" : "rounded")}
+              className="absolute"
               style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
               title={b.tooltip}
             />
             {b.endMs > b.solidMs ? (
               <div
-                className="absolute rounded-r"
+                className="absolute"
                 title={b.tooltip}
                 style={{
                   left: rPlena,
