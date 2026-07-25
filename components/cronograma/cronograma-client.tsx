@@ -884,16 +884,17 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
             ) : null}
             {b.etiqueta && b.dentro ? (
               (() => {
-                // Nom complet si la bande est assez large ; sinon repli sur les
-                // initiales (sigle). S'adapte au zoom (la largeur change). CNO en
-                // texte plus petit. `truncate` = filet de sécurité. Estimation
-                // conservatrice (~5,9 px/caractère à 10 px + padding) pour éviter
-                // une troncature partielle (« Reda… ») : on préfère le sigle.
+                // Nom complet si la bande est assez large ; sinon les initiales
+                // (sigle) ; sinon RIEN (jamais de troncature partielle « Reda… »).
+                // S'adapte au zoom (la largeur change). CNO en texte plus petit.
+                // Estimation conservatrice (~5,6 px/caractère à 10 px + padding).
                 const barW = Math.max(0, rPlena - left);
                 const pad = b.etiquetaPequena ? 4 : 8; // px-0.5 (CNO) vs px-1
                 const cw = b.etiquetaPequena ? 5.0 : 5.6; // largeur ~ par caractère
-                const cabe = b.etiqueta.length * cw + pad <= barW;
-                const texto = cabe ? b.etiqueta : b.etiquetaCorta || b.etiqueta;
+                const entra = (t: string) => t.length > 0 && t.length * cw + pad <= barW;
+                const corta = b.etiquetaCorta || b.etiqueta;
+                const texto = entra(b.etiqueta) ? b.etiqueta : entra(corta) ? corta : "";
+                if (!texto) return null;
                 return (
                   <span
                     className={cn(
