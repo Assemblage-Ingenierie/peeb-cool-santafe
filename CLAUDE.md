@@ -93,7 +93,17 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     Toute nouvelle table métier doit recevoir cette policy dans sa migration.
   - `/roles` : section « Solicitudes de acceso » + colonne « Estado » ;
     `adminApproveAccess()` / `adminRevokeAccess()` dans `app/roles/actions.ts`.
+  - Colonne « Gestión de acceso » = bascule **Sí / No** (`AccesoToggle`) : « No »
+    couvre refus ET révocation. Désactivée sur sa propre ligne.
+    Vert `--ok` (= vert AyS `#38761d`, `lib/constants.ts`) pour « Sí », rouge de
+    marque pour « No » — ne jamais signaler une approbation en rouge.
   - `protect_last_admin` étendu à `is_approved` (révoquer le dernier admin actif
     est bloqué) ; un admin ne peut pas révoquer son propre accès.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 029**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- **Acceso rechazado** (migration 030) : `is_rejected` distingue « refusé » de
+  « jamais traité » (les deux ont `is_approved = false`). **Aucun effet sur les droits**
+  (le rempart reste `is_approved`) : sert au classement dans `/roles`, où les comptes
+  refusés sortent du tableau principal vers un `<details>` repliable
+  « Accesos rechazados ». Figé par `guard_self_update` pour les non-admins.
+
+**Migrations** : dans `supabase/migrations/`, **dernière = 030**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.

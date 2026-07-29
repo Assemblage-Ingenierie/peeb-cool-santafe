@@ -371,6 +371,11 @@ export const UI = {
   // Distinct de la typologie H (#cc0000) pour éviter toute confusion.
   // Usage : indicateur de l'item de navigation actif (CDC §2.1 / charte §8).
   accent: "#E30513",
+  // Vert « action positive » (accorder un accès). PAS une couleur nouvelle :
+  // c'est le vert AyS des cartes de feuille de route (CARD_TONOS.AyS.foot),
+  // repris tel quel pour rester dans la palette. Le rouge de marque ne doit pas
+  // servir à signaler une approbation (il se lit comme un refus).
+  ok: "#38761d",
 } as const;
 
 // Variables CSS dérivées de UI — à poser en `style` sur <body> (source unique = ce fichier).
@@ -388,4 +393,5 @@ export const themeVars = {
   "--text-muted": UI.textMuted,
   "--focus": UI.focus,
   "--accent": UI.accent,
+  "--ok": UI.ok,
 } as CSSProperties;

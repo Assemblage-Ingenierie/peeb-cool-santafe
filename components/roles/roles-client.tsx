@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { rolLabel, PENDIENTE_LABEL, type Rol } from "@/lib/auth";
+import { rolLabel, PENDIENTE_LABEL, RECHAZADO_LABEL, type Rol } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import {
   adminSetStatus,
@@ -21,6 +21,7 @@ export interface UserRow {
   status: Rol;
   requested_status: "gestion" | "admin" | null;
   is_approved: boolean;
+  is_rejected: boolean;
 }
 
 const ROLES: Rol[] = ["admin", "gestion", "consultor"];
@@ -60,7 +61,7 @@ function AccesoToggle({
         className={cn(
           base,
           value
-            ? "bg-[var(--accent)] text-white"
+            ? "bg-[var(--ok)] text-white"
             : "bg-transparent text-[var(--text-muted)] hover:bg-[var(--app-bg)]",
         )}
       >
@@ -75,7 +76,7 @@ function AccesoToggle({
           base,
           "border-l border-[var(--border)]",
           !value
-            ? "bg-[var(--text-muted)] text-white"
+            ? "bg-[var(--accent)] text-white"
             : "bg-transparent text-[var(--text-muted)] hover:bg-[var(--app-bg)]",
         )}
       >
@@ -98,8 +99,12 @@ export function RolesClient({
   // Niveau choisi par l'admin au moment d'approuver un accès (défaut : consultor).
   const [nivelInicial, setNivelInicial] = useState<Record<string, Rol>>({});
 
-  // Comptes créés mais pas encore validés (is_approved = false).
-  const pendientesAcceso = users.filter((u) => !u.is_approved);
+  // Comptes créés, pas encore validés ET pas encore refusés → à traiter.
+  const pendientesAcceso = users.filter((u) => !u.is_approved && !u.is_rejected);
+  // Refusés/révoqués : sortis du tableau principal (section repliable dédiée).
+  const rechazados = users.filter((u) => u.is_rejected);
+  // Tableau principal : actifs + en attente, sans les refusés.
+  const gestionables = users.filter((u) => !u.is_rejected);
   // Demandes de montée en niveau : seulement pour les comptes déjà validés.
   const solicitudes = users.filter((u) => u.requested_status && u.is_approved);
 
@@ -198,7 +203,7 @@ export function RolesClient({
                     type="button"
                     disabled={pending}
                     onClick={() => run(() => adminApproveRequest(u.id))}
-                    className="rounded-md bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="rounded-md bg-[var(--ok)] px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     Aprobar
                   </button>
@@ -231,7 +236,7 @@ export function RolesClient({
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
-            {users.map((u) => (
+            {gestionables.map((u) => (
               <tr key={u.id}>
                 <td className="px-4 py-2 text-[var(--text)]">
                   {nombreCompleto(u)}
@@ -281,6 +286,66 @@ export function RolesClient({
           </tbody>
         </table>
       </div>
+
+      {/* Accesos rechazados — repliable, hors du tableau principal.
+          <details> natif : pas d'état React à gérer, repli mémorisé par le navigateur
+          tant que la page n'est pas rechargée, et accessible au clavier. */}
+      {rechazados.length > 0 && (
+        <details className="group mt-6 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-[var(--text)]">
+            <span
+              aria-hidden
+              className="text-[var(--text-muted)] transition-transform group-open:rotate-90"
+            >
+              ▶
+            </span>
+            Accesos rechazados ({rechazados.length})
+            <span className="ml-2 font-normal text-xs text-[var(--text-muted)]">
+              Mostrar u ocultar
+            </span>
+          </summary>
+
+          <p className="px-4 pb-3 text-xs text-[var(--text-muted)]">
+            Estas cuentas no tienen acceso a la plataforma. Poné « Sí » para otorgarles
+            el acceso y devolverlas a la lista principal.
+          </p>
+
+          <div className="overflow-x-auto border-t border-[var(--border)]">
+            <table className="w-full min-w-[800px] text-sm">
+              <thead>
+                <tr className="border-b border-[var(--border)] text-left text-xs uppercase tracking-wide text-[var(--text-muted)]">
+                  <th className="px-4 py-2 font-medium">Nombre</th>
+                  <th className="px-4 py-2 font-medium">Correo</th>
+                  <th className="px-4 py-2 font-medium">Cargo</th>
+                  <th className="px-4 py-2 font-medium">Estado</th>
+                  <th className="px-4 py-2 font-medium">Gestión de acceso</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--border)]">
+                {rechazados.map((u) => (
+                  <tr key={u.id}>
+                    <td className="px-4 py-2 text-[var(--text)]">{nombreCompleto(u)}</td>
+                    <td className="px-4 py-2 text-[var(--text-muted)]">{u.email || "—"}</td>
+                    <td className="px-4 py-2 text-[var(--text-muted)]">{u.job_title || "—"}</td>
+                    <td className="px-4 py-2">
+                      <span className="rounded-full bg-[var(--accent)]/10 px-2 py-0.5 text-xs font-medium text-[var(--accent)]">
+                        {RECHAZADO_LABEL}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      <AccesoToggle
+                        value={false}
+                        disabled={pending}
+                        onChange={(next) => next && run(() => adminApproveAccess(u.id, u.status))}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </section>
   );
 }

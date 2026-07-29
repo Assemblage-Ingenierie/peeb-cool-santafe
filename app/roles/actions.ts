@@ -63,7 +63,8 @@ export async function adminApproveAccess(userId: string, status: Rol = "consulto
   const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("peebcoolsf_perfiles")
-    .update({ is_approved: true, status, requested_status: null })
+    // is_rejected = false : le compte ressort de la liste « Accesos rechazados ».
+    .update({ is_approved: true, is_rejected: false, status, requested_status: null })
     .eq("id", userId);
   if (error) return { error: error.message };
   revalidatePath("/roles");
@@ -72,8 +73,9 @@ export async function adminApproveAccess(userId: string, status: Rol = "consulto
 }
 
 /**
- * Révoque l'accès (retour en « pendiente de validación »). Le compte auth
- * subsiste : l'utilisateur retombe sur l'écran d'attente à sa prochaine visite.
+ * Refuse ou révoque l'accès. Le compte auth subsiste : l'utilisateur retombe
+ * sur l'écran d'attente à sa prochaine visite. `is_rejected` le range dans la
+ * liste « Accesos rechazados » pour qu'il ne pollue plus le tableau principal.
  */
 export async function adminRevokeAccess(userId: string): Promise<{ error?: string }> {
   await assertAdmin();
@@ -83,7 +85,7 @@ export async function adminRevokeAccess(userId: string): Promise<{ error?: strin
   const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("peebcoolsf_perfiles")
-    .update({ is_approved: false, requested_status: null })
+    .update({ is_approved: false, is_rejected: true, requested_status: null })
     .eq("id", userId);
   if (error) return { error: error.message };
   revalidatePath("/roles");

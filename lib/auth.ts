@@ -44,8 +44,9 @@ export const isAdmin = (u: AppUser | null): boolean => u?.rol === "admin";
 /** Utilisateur connecté mais dont l'accès n'a pas encore été validé par un admin. */
 export const isPendiente = (u: AppUser | null): boolean => u !== null && !u.isApproved;
 
-/** Libellé du niveau d'accès affiché dans la gestion des rôles. */
+/** Libellés d'état d'accès affichés dans la gestion des rôles (UI en espagnol). */
 export const PENDIENTE_LABEL = "Pendiente de validación";
+export const RECHAZADO_LABEL = "Acceso rechazado";
 
 const ROL_LABELS: Record<Rol, string> = {
   admin: "Administrador",
