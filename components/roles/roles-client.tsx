@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { rolLabel, PENDIENTE_LABEL, type Rol } from "@/lib/auth";
+import { cn } from "@/lib/cn";
 import {
   adminSetStatus,
   adminApproveRequest,
@@ -27,6 +28,61 @@ const ROLES: Rol[] = ["admin", "gestion", "consultor"];
 function nombreCompleto(u: UserRow): string {
   const n = [u.first_name, u.last_name].filter(Boolean).join(" ").trim();
   return n || u.email || "—";
+}
+
+/**
+ * Bascule Sí / No de gestion d'accès (is_approved). « No » couvre à la fois le
+ * refus d'une nouvelle demande et la révocation d'un accès déjà accordé.
+ * `disabled` sert notamment pour l'admin courant (pas d'auto-révocation).
+ */
+function AccesoToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  const base =
+    "px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  return (
+    <span
+      role="group"
+      aria-label="Gestión de acceso"
+      className="inline-flex overflow-hidden rounded-md border border-[var(--border)]"
+    >
+      <button
+        type="button"
+        disabled={disabled}
+        aria-pressed={value}
+        onClick={() => !value && onChange(true)}
+        className={cn(
+          base,
+          value
+            ? "bg-[var(--accent)] text-white"
+            : "bg-transparent text-[var(--text-muted)] hover:bg-[var(--app-bg)]",
+        )}
+      >
+        Sí
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-pressed={!value}
+        onClick={() => value && onChange(false)}
+        className={cn(
+          base,
+          "border-l border-[var(--border)]",
+          !value
+            ? "bg-[var(--text-muted)] text-white"
+            : "bg-transparent text-[var(--text-muted)] hover:bg-[var(--app-bg)]",
+        )}
+      >
+        No
+      </button>
+    </span>
+  );
 }
 
 export function RolesClient({
@@ -77,7 +133,7 @@ export function RolesClient({
           </h2>
           <p className="mt-1 text-xs text-[var(--text-muted)]">
             Estas cuentas fueron creadas pero todavía no tienen acceso a la plataforma.
-            Elegí el nivel y aprobá el acceso.
+            Elegí el nivel y otorgá el acceso con « Sí » ; dejalo en « No » para rechazarlo.
           </p>
           <ul className="mt-2 divide-y divide-[var(--border)] rounded-lg border border-[var(--border)] bg-[var(--surface)]">
             {pendientesAcceso.map((u) => (
@@ -107,16 +163,17 @@ export function RolesClient({
                       </option>
                     ))}
                   </select>
-                  <button
-                    type="button"
+                  <AccesoToggle
+                    value={u.is_approved}
                     disabled={pending}
-                    onClick={() =>
-                      run(() => adminApproveAccess(u.id, nivelInicial[u.id] ?? "consultor"))
+                    onChange={(next) =>
+                      run(() =>
+                        next
+                          ? adminApproveAccess(u.id, nivelInicial[u.id] ?? "consultor")
+                          : adminRevokeAccess(u.id),
+                      )
                     }
-                    className="rounded-md bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                  >
-                    Aprobar acceso
-                  </button>
+                  />
                 </span>
               </li>
             ))}
@@ -170,7 +227,7 @@ export function RolesClient({
               <th className="px-4 py-2 font-medium">Cargo</th>
               <th className="px-4 py-2 font-medium">Estado</th>
               <th className="px-4 py-2 font-medium">Nivel de acceso</th>
-              <th className="px-4 py-2 font-medium" />
+              <th className="px-4 py-2 font-medium">Gestión de acceso</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--border)]">
@@ -207,28 +264,17 @@ export function RolesClient({
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-2 text-right whitespace-nowrap">
-                  {u.is_approved ? (
-                    u.id !== currentUserId && (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => run(() => adminRevokeAccess(u.id))}
-                        className="rounded-md border border-[var(--border)] px-3 py-1 text-xs font-medium text-[var(--text)] transition-colors hover:bg-[var(--app-bg)] disabled:opacity-50"
-                      >
-                        Revocar acceso
-                      </button>
-                    )
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => run(() => adminApproveAccess(u.id, u.status))}
-                      className="rounded-md bg-[var(--accent)] px-3 py-1 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-                    >
-                      Aprobar acceso
-                    </button>
-                  )}
+                <td className="px-4 py-2 whitespace-nowrap">
+                  <AccesoToggle
+                    value={u.is_approved}
+                    // L'admin courant ne peut pas se retirer son propre accès.
+                    disabled={pending || u.id === currentUserId}
+                    onChange={(next) =>
+                      run(() =>
+                        next ? adminApproveAccess(u.id, u.status) : adminRevokeAccess(u.id),
+                      )
+                    }
+                  />
                 </td>
               </tr>
             ))}
