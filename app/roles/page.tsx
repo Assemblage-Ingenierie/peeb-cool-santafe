@@ -25,7 +25,9 @@ export default async function RolesPage() {
   const supabase = await createServerSupabase();
   const { data } = await supabase
     .from("peebcoolsf_perfiles")
-    .select("id, email, first_name, last_name, job_title, status, requested_status")
+    .select("id, email, first_name, last_name, job_title, status, requested_status, is_approved")
+    // En attente de validation d'abord (is_approved = false).
+    .order("is_approved", { ascending: true })
     .order("status", { ascending: true })
     .order("email", { ascending: true });
 

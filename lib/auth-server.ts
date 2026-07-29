@@ -29,12 +29,14 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   // Table peebcoolsf_perfiles au format profiles : PK id = uid auth, rôle = status.
   const { data: perfil } = await supabase
     .from("peebcoolsf_perfiles")
-    .select("status, first_name, last_name, job_title, requested_status")
+    .select("status, first_name, last_name, job_title, requested_status, is_approved")
     .eq("id", user.id)
     .maybeSingle();
 
-  // Authentifié sans profil → consultor (lecture non confidentielle uniquement).
+  // Authentifié sans profil → consultor NON approuvé (écran d'attente). Le trigger
+  // de provisioning crée normalement la ligne ; ce cas ne doit pas ouvrir l'accès.
   const rol: Rol = (perfil?.status as Rol) ?? "consultor";
+  const isApproved = perfil?.is_approved === true;
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const fullName = [perfil?.first_name, perfil?.last_name]
@@ -52,6 +54,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
     id: user.id,
     nombre,
     rol,
+    isApproved,
     email: user.email ?? undefined,
     firstName: perfil?.first_name ?? undefined,
     lastName: perfil?.last_name ?? undefined,
