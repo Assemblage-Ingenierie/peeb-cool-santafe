@@ -76,9 +76,24 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   Self-service sécurisé par migration 027 (policy self-update + garde anti-escalade +
   protection du dernier admin).
 
-- **Provisioning auto** (migration 028) : triggers `peebcoolsf_on_auth_user_created/updated`
-  sur `auth.users` (fonction `peebcoolsf_private.handle_new_user`) → toute nouvelle inscription
-  ou 1re connexion Google crée une ligne `peebcoolsf_perfiles` (`consultor`, `is_approved=true`).
+- **Provisioning auto** (migration 028, révisée par 029) : triggers
+  `peebcoolsf_on_auth_user_created/updated` sur `auth.users` (fonction
+  `peebcoolsf_private.handle_new_user`) → toute nouvelle inscription ou 1re connexion
+  Google crée une ligne `peebcoolsf_perfiles` (`consultor`, **`is_approved=false`**).
   Noms distincts pour cohabiter avec les triggers `peeb_` de l'autre app sur `auth.users` partagé.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 028**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- **Validation d'accès obligatoire** (migration 029) : `is_approved` vaut `false` par
+  défaut → « Pendiente de validación ». Tant qu'un admin n'a pas approuvé :
+  - l'app rend `components/pending-approval.tsx` à la place de l'`AppShell`
+    (choix fait dans `app/layout.tsx` via `isPendiente()` — pas de redirection,
+    donc aucune boucle possible) ;
+  - la RLS refuse toute donnée métier : policy **restrictive** `req_aprobacion`
+    (`peebcoolsf_private.is_approved()`) sur les 20 tables `peebcoolsf_*` **sauf
+    `peebcoolsf_perfiles`** (l'utilisateur doit lire sa propre ligne).
+    Toute nouvelle table métier doit recevoir cette policy dans sa migration.
+  - `/roles` : section « Solicitudes de acceso » + colonne « Estado » ;
+    `adminApproveAccess()` / `adminRevokeAccess()` dans `app/roles/actions.ts`.
+  - `protect_last_admin` étendu à `is_approved` (révoquer le dernier admin actif
+    est bloqué) ; un admin ne peut pas révoquer son propre accès.
+
+**Migrations** : dans `supabase/migrations/`, **dernière = 029**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.

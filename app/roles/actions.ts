@@ -52,6 +52,45 @@ export async function adminApproveRequest(userId: string): Promise<{ error?: str
   return {};
 }
 
+/**
+ * Valide l'accès d'un nouvel utilisateur (is_approved = true), avec le niveau
+ * choisi par l'admin. Tant que is_approved est false, l'utilisateur ne voit que
+ * l'écran d'attente et la RLS lui refuse toute donnée métier (migration 029).
+ */
+export async function adminApproveAccess(userId: string, status: Rol = "consultor"): Promise<{ error?: string }> {
+  await assertAdmin();
+  if (!ROLES.includes(status)) return { error: "Estado inválido" };
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from("peebcoolsf_perfiles")
+    .update({ is_approved: true, status, requested_status: null })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+  revalidatePath("/roles");
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/**
+ * Révoque l'accès (retour en « pendiente de validación »). Le compte auth
+ * subsiste : l'utilisateur retombe sur l'écran d'attente à sa prochaine visite.
+ */
+export async function adminRevokeAccess(userId: string): Promise<{ error?: string }> {
+  await assertAdmin();
+  // Garde anti-lockout : un admin ne peut pas se retirer son propre accès.
+  const actual = await getCurrentUser();
+  if (actual?.id === userId) return { error: "No podés revocar tu propio acceso" };
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from("peebcoolsf_perfiles")
+    .update({ is_approved: false, requested_status: null })
+    .eq("id", userId);
+  if (error) return { error: error.message };
+  revalidatePath("/roles");
+  revalidatePath("/", "layout");
+  return {};
+}
+
 /** Rejette la demande (efface requested_status sans changer le statut). */
 export async function adminRejectRequest(userId: string): Promise<{ error?: string }> {
   await assertAdmin();

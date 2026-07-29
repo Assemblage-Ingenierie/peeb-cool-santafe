@@ -15,6 +15,12 @@ export interface AppUser {
   id: string; // uid auth (= peebcoolsf_perfiles.id)
   nombre: string;
   rol: Rol;
+  /**
+   * Accès validé par un administrateur (peebcoolsf_perfiles.is_approved).
+   * false = « pendiente de validación » → écran d'attente, aucune donnée
+   * métier accessible (policy RLS restrictive `req_aprobacion`, migration 029).
+   */
+  isApproved: boolean;
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -29,10 +35,17 @@ export const MOCK_ADMIN: AppUser = {
   id: "00000000-0000-0000-0000-000000000000",
   nombre: "Admin (dev)",
   rol: "admin",
+  isApproved: true,
   email: "dev@assemblage.net",
 };
 
 export const isAdmin = (u: AppUser | null): boolean => u?.rol === "admin";
+
+/** Utilisateur connecté mais dont l'accès n'a pas encore été validé par un admin. */
+export const isPendiente = (u: AppUser | null): boolean => u !== null && !u.isApproved;
+
+/** Libellé du niveau d'accès affiché dans la gestion des rôles. */
+export const PENDIENTE_LABEL = "Pendiente de validación";
 
 const ROL_LABELS: Record<Rol, string> = {
   admin: "Administrador",
