@@ -64,10 +64,18 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   + ligne `peebcoolsf_perfiles` (`id` = uid auth, `status`). `NEXT_PUBLIC_DEV_AUTH_BYPASS` = dev only.
 - **`peebcoolsf_perfiles` est au format de la table `profiles`** (migration 026) : colonnes
   `id` (PK = uid auth), `email`, `first_name`, `last_name`, `job_title`, `status`
-  (rôle : admin/gestion/consultor), `is_approved`, `created_at`, `requested_status`.
-  `is_admin()`/`current_rol()` lisent `id`/`status`.
+  (rôle : admin/gestion/consultor), `is_approved`, `is_rejected`, `created_at`,
+  `requested_status`. `is_admin()`/`current_rol()` lisent `id`/`status`.
 - Écriture d'événements (calendario) : RLS `eventos_admin` = **admin only** (la garde
   applicative laisse passer tout authentifié, mais la RLS reste le rempart).
+
+- **⚠ URLs d'auth sur projet Supabase partagé** : la **Site URL** est unique par projet
+  et appartient à **peeb-jordan**. Supabase **ignore silencieusement** `emailRedirectTo`
+  si l'URL n'est pas dans la liste blanche *Auth → URL Configuration → Redirect URLs*,
+  et retombe alors sur cette Site URL → les mails de peeb-santafe renvoyaient vers
+  l'autre app (404). **Correctif = liste blanche uniquement, ne jamais toucher la Site
+  URL.** Y ajouter tout nouveau domaine (prod, preview Vercel, localhost).
+  Détail + procédure : `docs/procedures/auth-redirect-urls.md`.
 
 - **Gestión de roles** (`/roles`, admin only) : liste des utilisateurs, approbation des
   demandes, changement de niveau (`app/roles/actions.ts` + `components/roles/roles-client.tsx`).
