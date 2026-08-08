@@ -9,11 +9,31 @@ import {
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/semestres";
-import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
+import {
+  computeSchedule,
+  faseNodeKey,
+  type ScheduleResult,
+  type ScheduleTask,
+  type Unidad,
+} from "@/lib/schedule";
+import {
+  FEUILLE_PAG,
+  PAG_ACCIONES,
+  PAG_CADENAS,
+  PAG_EJES,
+  PAG_FASE_NOMBRE,
+  PAG_HITOS,
+  PAG_RELLENO,
+  PAG_RESPONSABLES,
+  PAG_RESP_NOMBRE,
+  getPagAccion,
+  pagTareaKey,
+  type PagAccion,
+} from "@/lib/pag";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
-import type { Roadmap, Snapshot } from "@/lib/snapshot";
+import type { Roadmap, Snapshot, SnapshotRoadmapEstado } from "@/lib/snapshot";
 
 // Données combinées consommées par le Gantt : snapshot de base + roadmap
 // (chargés par deux endpoints séparés, fusionnés côté client).
@@ -175,6 +195,14 @@ interface Barra {
   dentro?: boolean;
   etiquetaColor?: string;
   tooltip?: string; // survol (title) — sans texte visible sur la barre
+  // --- Remplissage (feuille PAG) : le responsable se lit à la TEXTURE ---
+  patron?: string; // background-image de la barre (prime sur `color`)
+  borde?: string; // liseré interne, pour que les remplissages clairs se détachent
+  // Sigle écrit DANS la barre (s'il y tient) alors que l'étiquette est à côté.
+  interior?: string;
+  interiorColor?: string;
+  // Complément gris écrit après l'étiquette extérieure (durée, phase d'application).
+  etiquetaMeta?: string;
 }
 interface Fila {
   label: string;
@@ -377,13 +405,9 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
 // deux vues ne peuvent pas diverger. Les informes semblables sont regroupés sur
 // UNE ligne commune (GP ; AyS) ; les autres tâches ont chacune leur ligne. Le
 // titre est écrit À CÔTÉ de la barre (comme pour les sous-projets).
-// Construit d'un seul tenant les deux sections du haut de la vue globale : le
-// projet global et « Implementación del PAG ». Elles partagent le même calcul de
-// planning — les séparer en deux fonctions le referait deux fois.
-function seccionesGlobalRoadmap(
-  d: DatosCronograma,
-  filtros: Set<string>,
-): { global: Seccion; pag: Seccion } {
+// La section « Implementación del PAG » est construite à part (seccionPagGlobal) :
+// son contenu ne vient plus de cette feuille mais du catalogue lib/pag.
+function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion {
   const estado = new Map<string, RoadmapOverride>();
   const stored = new Map<string, PlanStored>();
   for (const r of d.roadmapEstado) {
@@ -447,9 +471,6 @@ function seccionesGlobalRoadmap(
   const infGP: Fila & { _s: number } = { label: "Informe semestral / anual", barras: [], _s: Infinity };
   const infAyS: Fila & { _s: number } = { label: "Informe Semestral AyS", barras: [], _s: Infinity };
   const otras: (Fila & { _s: number })[] = [];
-  // Cartes de la composante Género (violettes) : elles partent dans la section
-  // « Implementación del PAG » au lieu de rester dans le projet global.
-  const genero: (Fila & { _s: number })[] = [];
   for (const it of items) {
     const b = barraCard(it.key, it.comp, it.nombre);
     if (!b) continue;
@@ -459,14 +480,11 @@ function seccionesGlobalRoadmap(
     } else if (it.key.startsWith("informe-ays-")) {
       infAyS.barras.push(b);
       infAyS._s = Math.min(infAyS._s, b.startMs);
-    } else if (it.comp === "G") {
-      genero.push({ label: it.nombre, barras: [b], _s: b.startMs });
     } else {
       otras.push({ label: it.nombre, barras: [b], _s: b.startMs });
     }
   }
   otras.sort((a, b) => a._s - b._s);
-  genero.sort((a, b) => a._s - b._s);
   const filas: (Fila & { _s: number })[] = [];
   if (infGP.barras.length > 0) filas.push(infGP);
   if (infAyS.barras.length > 0) filas.push(infAyS);
@@ -475,23 +493,169 @@ function seccionesGlobalRoadmap(
   const desnudar = (f: (Fila & { _s: number })[]) => f.map(({ label, barras }) => ({ label, barras }));
 
   return {
-    global: {
-      titulo: "Proyecto global",
-      barras: [],
-      // Lignes de capacitaciones : libellés en place, planning À DÉFINIR.
-      filas: [
-        ...desnudar(filas),
-        { label: "Capacitaciones Eficiencia Energética", barras: [] },
-        { label: "Capacitaciones Género", barras: [] },
-      ],
-    },
-    pag: {
-      titulo: "Implementación del PAG",
-      barras: [],
-      // Si aucune carte Género n'est planifiée, une ligne vide tient la place.
-      filas: genero.length > 0 ? desnudar(genero) : [{ label: "", barras: [] }],
-    },
+    titulo: "Proyecto global",
+    barras: [],
+    // Lignes de capacitaciones : libellés en place, planning À DÉFINIR.
+    filas: [
+      ...desnudar(filas),
+      { label: "Capacitaciones Eficiencia Energética", barras: [] },
+      { label: "Capacitaciones Género", barras: [] },
+    ],
   };
+}
+
+// ============================================================
+// Implementación del PAG — les 33 acciones traitées une seule fois (lib/pag).
+//
+// Le RESPONSABLE se lit au remplissage de la barre (aplat foncé ACEFE, aplat
+// clair UG, fond blanc à contour violet AT) et son sigle est écrit dans la barre
+// quand il y tient. La colonne de gauche porte le code ET le titre de l'acción,
+// tronqué avec le titre complet au survol — comme le reste du cronograma. À
+// droite de la barre, seulement la durée et la phase d'application.
+// ============================================================
+
+// Plan effectif d'une acción : le catalogue donne le défaut, la DB peut le
+// surcharger (dates éditées dans le mode Admin de la feuille).
+function tareasPag(d: DatosCronograma): ScheduleTask[] {
+  const stored = new Map<string, SnapshotRoadmapEstado>();
+  for (const r of d.roadmapEstado) {
+    if (r.feuille === FEUILLE_PAG) stored.set(r.tareaKey, r);
+  }
+  return PAG_ACCIONES.map((a) => {
+    const st = stored.get(pagTareaKey(a.code));
+    const u = asUnidad(st?.durUnidad);
+    // Durée surchargée seulement si valeur ET unité sont présentes.
+    const dur = st?.durValor != null && u != null ? { v: st.durValor, u } : { v: a.durValor, u: a.durUnidad };
+    return {
+      key: a.code,
+      fase: "",
+      durValor: dur.v,
+      durUnidad: dur.u,
+      fechaInicio: st?.fechaInicio ?? a.inicio,
+      fechaFin: st?.fechaFin ?? a.fin ?? null,
+    };
+  });
+}
+
+const UNIDAD_CORTA: Record<string, string> = { dia: "d", semana: "sem", mes: "meses" };
+
+// Barre d'une acción : remplissage du responsable ; à côté, seulement la durée
+// et la phase d'application (le titre est dans la colonne de gauche).
+function barraPag(a: PagAccion, sr: ScheduleResult | undefined): Barra | null {
+  if (!sr) return null;
+  const rel = PAG_RELLENO[a.responsable];
+  const b = barraDe(sr, rel.color, "", false);
+  if (!b) return null;
+  const meta = [
+    `${a.durValor} ${UNIDAD_CORTA[a.durUnidad] ?? a.durUnidad}`,
+    a.aplicaFase ? `se aplica en ${PAG_FASE_NOMBRE[a.aplicaFase] ?? a.aplicaFase}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return {
+    ...b,
+    etiqueta: undefined,
+    patron: rel.patron,
+    borde: rel.borde,
+    interior: a.responsable,
+    interiorColor: rel.texto,
+    etiquetaMeta: meta,
+    tooltip: `${a.code} · ${a.titulo} — ${PAG_RESP_NOMBRE[a.responsable]} · ${fmtFecha(b.startMs)} → ${
+      a.continua ? a.continuaTxt : fmtFecha(b.endMs)
+    }`,
+  };
+}
+
+// Ligne d'un hito : un repère daté, avec son libellé écrit à côté. Chaque hito a
+// SA ligne — un rang de repères muets était illisible.
+function filaHito(h: { fecha: string; nombre: string }): Fila {
+  const ms = isoMs(h.fecha) ?? START;
+  return {
+    label: h.nombre,
+    barras: [
+      {
+        startMs: ms,
+        solidMs: ms + 6 * 86_400_000,
+        endMs: ms + 6 * 86_400_000,
+        color: CARD_TONOS.G.foot,
+        etiquetaMeta: fmtFecha(ms),
+        dentro: false,
+        tooltip: `${h.nombre} — ${fmtFecha(ms)}`,
+      },
+    ],
+  };
+}
+
+// Vue détaillée : une section par cadena de dépendances, plus les hitos.
+function seccionesPag(d: DatosCronograma): Seccion[] {
+  const sched = computeSchedule({
+    tasks: tareasPag(d),
+    links: [],
+    faseInicio: {},
+    projectStart: PROJECT_START,
+  });
+  const secs: Seccion[] = PAG_CADENAS.map((cad) => ({
+    titulo: `${cad.code} · ${cad.nombre}`,
+    barras: [],
+    filas: cad.orden
+      .map((code) => {
+        const a = getPagAccion(code);
+        if (!a) return null;
+        const barra = barraPag(a, sched.get(code));
+        // Code + titre : tronqué dans la colonne, complet au survol.
+        return { label: `${a.code} · ${a.titulo}`, barras: barra ? [barra] : [] } as Fila;
+      })
+      .filter((f): f is Fila => f !== null),
+  }));
+  secs.push({
+    titulo: "Hitos del PAG — entregables comprometidos",
+    barras: [],
+    filas: PAG_HITOS.map(filaHito),
+  });
+  return secs;
+}
+
+// Section « Implementación del PAG » de la vue globale : une ligne par eje
+// (agrégat de plusieurs responsables → pas de texture, elle n'aurait rien de
+// vrai à dire), plus une frise de hitos.
+function seccionPagGlobal(d: DatosCronograma): Seccion {
+  const sched = computeSchedule({
+    tasks: tareasPag(d),
+    links: [],
+    faseInicio: {},
+    projectStart: PROJECT_START,
+  });
+  const filas: Fila[] = [];
+  for (const eje of PAG_EJES) {
+    const accs = PAG_ACCIONES.filter((a) => a.eje === eje.code);
+    const res = accs.map((a) => sched.get(a.code)).filter((r): r is ScheduleResult => !!r);
+    if (res.length === 0) continue;
+    const ini = Math.min(...res.map((r) => isoMs(r.start) ?? START));
+    const fin = Math.max(...res.map((r) => isoMs(r.end) ?? START));
+    filas.push({
+      label: eje.nombre,
+      barras: [
+        {
+          startMs: ini,
+          solidMs: fin,
+          endMs: fin,
+          // Violet clair de la composante Género, comme les cartes G du reste
+          // du cronograma ; le libellé est écrit DANS la barre, pas à côté, et
+          // sans dates — présentation alignée sur le reste de la vue globale.
+          color: CARD_TONOS.G.head,
+          etiqueta: `${accs.length} acciones · ${eje.nombre}`,
+          etiquetaCorta: `${accs.length} acciones`,
+          dentro: true,
+          etiquetaColor: CARD_TONOS.G.headText,
+          tooltip: `${eje.nombre} — impactos ${eje.impactos} · ${fmtFecha(ini)} → ${fmtFecha(fin)}`,
+        },
+      ],
+    });
+  }
+  // Un hito par ligne, avec son nom en clair : un rang de repères muets ne
+  // disait pas ce qu'ils étaient.
+  filas.push(...PAG_HITOS.map(filaHito));
+  return { titulo: "Implementación del PAG", barras: [], filas };
 }
 
 // Vue globale : une ligne par sous-projet, montrant l'ENCHAÎNEMENT des fases
@@ -553,9 +717,13 @@ export function CronogramaClient() {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
     const datos: DatosCronograma = { ...snap.data, ...rm.data };
     if (seleccion === "global") {
-      const { global, pag } = seccionesGlobalRoadmap(datos, filtros);
-      return [global, pag, seccionGlobal(datos.subproyectos, datos)];
+      return [
+        seccionGlobalRoadmap(datos, filtros),
+        seccionPagGlobal(datos),
+        seccionGlobal(datos.subproyectos, datos),
+      ];
     }
+    if (seleccion === FEUILLE_PAG) return seccionesPag(datos);
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros);
   }, [snap, rm, seleccion, filtros]);
@@ -670,13 +838,18 @@ export function CronogramaClient() {
     backgroundImage: `repeating-linear-gradient(90deg, transparent 0 ${CELL_W - 1}px, var(--border) ${CELL_W - 1}px ${CELL_W}px)`,
   };
 
+  const esPag = seleccion === FEUILLE_PAG;
+  const LW = LABEL_W;
+
   const activa =
     seleccion === "global"
       ? "Proyecto global"
-      : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
+      : esPag
+        ? "Implementación del PAG"
+        : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
 
   // Vue compacte = toutes les fases repliées (seulement les barres de phase).
-  const esSub = seleccion !== "global";
+  const esSub = seleccion !== "global" && !esPag;
   const todasColapsadas = secciones.length > 0 && secciones.every((s) => colapsadas.has(s.titulo));
   const alternarTodas = () =>
     setColapsadas(todasColapsadas ? new Set() : new Set(secciones.map((s) => s.titulo)));
@@ -737,9 +910,40 @@ export function CronogramaClient() {
         )}
       </div>
 
-      {/* Légende des fases (sigle + couleur) au-dessus du cronograma. */}
+      {/* Légende AU-DESSUS du cronograma : remplissages par responsable sur la
+          feuille PAG, sigles de fase partout ailleurs. */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-[var(--text-muted)]">
-        {LEYENDA_FASES.map((code) => {
+        {esPag ? (
+          <>
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Responsable</span>
+            {PAG_RESPONSABLES.map((r) => {
+              const rel = PAG_RELLENO[r];
+              return (
+                <span key={r} className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-4 w-6 rounded-sm"
+                    style={{
+                      backgroundColor: rel.color,
+                      backgroundImage: rel.patron,
+                      boxShadow: rel.borde ? `inset 0 0 0 1px ${rel.borde}` : undefined,
+                    }}
+                  />
+                  <span>{PAG_RESP_NOMBRE[r]}</span>
+                </span>
+              );
+            })}
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-4 w-6 rounded-sm"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(45deg, ${CARD_TONOS.G.foot} 0 5px, #fff 5px 10px)`,
+                }}
+              />
+              <span>Continúa después</span>
+            </span>
+          </>
+        ) : (
+        LEYENDA_FASES.map((code) => {
           const color = colorDeFase(code);
           const sigla = FASE_SIGLA[code] ?? "";
           const nombre = GESTION_FASES.find((f) => f.code === code)?.nombre ?? code;
@@ -754,7 +958,8 @@ export function CronogramaClient() {
               <span>{nombre}</span>
             </span>
           );
-        })}
+        })
+        )}
       </div>
 
       <div
@@ -769,19 +974,19 @@ export function CronogramaClient() {
           arrastrando ? "cursor-grabbing select-none" : "cursor-grab",
         )}
       >
-        <div className="relative" style={{ width: LABEL_W + totalW }}>
+        <div className="relative" style={{ width: LW + totalW }}>
           {hoyEnRango && hoyMs != null && (
             // z sous la colonne d'étiquettes (z-10) : quand on scrolle et que la
             // ligne « hoy » passe derrière les libellés, elle est masquée par eux
             // (au lieu de peindre par-dessus). Reste au-dessus des barres.
             <div
               className="pointer-events-none absolute bottom-0 top-0 z-[5] w-0.5 bg-[var(--accent)]"
-              style={{ left: LABEL_W + x(hoyMs) }}
+              style={{ left: LW + x(hoyMs) }}
               aria-hidden="true"
             />
           )}
           <div className="flex border-b border-[var(--border)]">
-            <div className="sticky left-0 z-10 shrink-0 bg-[var(--surface)]" style={{ width: LABEL_W }} />
+            <div className="sticky left-0 z-10 shrink-0 bg-[var(--surface)]" style={{ width: LW }} />
             <div className="relative" style={{ width: totalW, height: headH }}>
               {anios.map((a) => (
                 <div
@@ -843,7 +1048,7 @@ export function CronogramaClient() {
                       "sticky left-0 z-10 flex shrink-0 items-center gap-1.5 border-r border-[var(--border)] px-2 text-left text-sm font-semibold text-[var(--text)]",
                       plegable && "cursor-pointer hover:bg-[#e2e5ea]",
                     )}
-                    style={{ width: LABEL_W, height: ROW_H, backgroundColor: "#eceef2" }}
+                    style={{ width: LW, height: ROW_H, backgroundColor: "#eceef2" }}
                     title={sec.titulo}
                   >
                     {plegable && <Chevron abierto={!colapsada} />}
@@ -869,7 +1074,7 @@ export function CronogramaClient() {
                     >
                       <div
                         className="sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
-                        style={{ width: LABEL_W, height: ROW_H }}
+                        style={{ width: LW, height: ROW_H }}
                         title={fila.label}
                       >
                         {fila.label}
@@ -917,9 +1122,28 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
           <div key={bi}>
             <div
               className="absolute"
-              style={{ left, width: Math.max(2, rPlena - left), top: 0, height: ROW_H, backgroundColor: b.color }}
+              style={{
+                left,
+                width: Math.max(2, rPlena - left),
+                top: 0,
+                height: ROW_H,
+                backgroundColor: b.color,
+                backgroundImage: b.patron,
+                boxShadow: b.borde ? `inset 0 0 0 1px ${b.borde}` : undefined,
+              }}
               title={b.tooltip}
-            />
+            >
+              {/* Sigle du responsable — écrit seulement s'il tient EN ENTIER
+                  (même règle que les sigles de fase : jamais de « ACE… »). */}
+              {b.interior && (b.interior.length * 5.7 + 8 <= rPlena - left) ? (
+                <span
+                  className="pointer-events-none block truncate px-1 text-[10px] font-semibold"
+                  style={{ lineHeight: `${ROW_H}px`, color: b.interiorColor ?? "#ffffff" }}
+                >
+                  {b.interior}
+                </span>
+              ) : null}
+            </div>
             {b.endMs > b.solidMs ? (
               <div
                 className="absolute"
@@ -966,12 +1190,17 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
                   </span>
                 );
               })()
-            ) : b.etiqueta ? (
+            ) : b.etiqueta || b.etiquetaMeta ? (
               <span
                 className="pointer-events-none absolute whitespace-nowrap text-[11px] leading-none text-[var(--text)]"
                 style={{ left: rFin + 4, top: ROW_H / 2 - 5 }}
               >
                 {b.etiqueta}
+                {b.etiquetaMeta && (
+                  <span className={cn("text-[10px] text-[var(--text-muted)]", b.etiqueta && "ml-2")}>
+                    {b.etiquetaMeta}
+                  </span>
+                )}
               </span>
             ) : null}
           </div>

@@ -29,6 +29,8 @@ import { useAuthUser } from "@/components/auth-context";
 import { CheckIcon } from "@/components/icons";
 import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
 import { AgendaGlobal } from "@/components/hojas-de-ruta/agenda-global";
+import { PagBoard } from "@/components/hojas-de-ruta/pag-board";
+import { FEUILLE_PAG } from "@/lib/pag";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import {
@@ -373,13 +375,18 @@ export function HojasDeRutaClient() {
   const activa =
     seleccion === "global"
       ? "Proyecto global"
-      : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
+      : seleccion === FEUILLE_PAG
+        ? "Implementación del PAG"
+        : subproyectos.find((s) => s.uid === seleccion)?.nombre ?? seleccion;
 
   // Instances de cartes par colonne (fila × composante) — modèle partagé
   // (lib/roadmap). On traduit l'état local (ocultas/creadas/posiciones/ediciones)
   // en overrides par tarea_key pour la feuille courante. Mémoïsé : ne se relance
   // que si la feuille ou l'état d'édition change — pas à chaque drag / hover / tick.
   const columnas = useMemo<Map<string, CardModel[]>>(() => {
+    // La feuille PAG n'a pas de grille fila × composante : son contenu vient du
+    // catalogue lib/pag, rendu par PagBoard. Rien à construire ici.
+    if (seleccion === FEUILLE_PAG) return new Map();
     const pref = `${seleccion}::`;
     const estado = new Map<string, RoadmapOverride>();
     const ensure = (tarea: string) => {
@@ -1305,7 +1312,20 @@ export function HojasDeRutaClient() {
         >
           {/* Feuille globale : « Próximas tareas » (radar calculé sur les
               cronogramas) et non plus une grille de cartes par semestre. */}
-          {seleccion === "global" && snap.status === "ready" && rm.status === "ready" ? (
+          {seleccion === FEUILLE_PAG ? (
+            /* Plan d'action genre : tablero de cadenas (format sur mesure, sans
+               fases ni colonnes de composante — tout y est Género). */
+            <PagBoard
+              realizadas={realizadas}
+              esAdmin={esAdmin}
+              onToggle={(k) => {
+                const nuevo = !realizadas.has(k);
+                toggleRealizada(k);
+                const code = k.split("::")[1] ?? "";
+                roadmapSetRealizada(FEUILLE_PAG, code, nuevo).catch(() => {});
+              }}
+            />
+          ) : seleccion === "global" && snap.status === "ready" && rm.status === "ready" ? (
             <AgendaGlobal datos={{ ...snap.data, ...rm.data }} filtros={filtros} />
           ) : seleccion === "global" ? (
             <p className="px-4 py-8 text-sm text-[var(--text-muted)]">Cargando próximas tareas…</p>

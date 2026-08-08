@@ -56,8 +56,8 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
    - **Ne stocke rien** : `lib/agenda.ts` rejoue `computeSchedule` sur les 27 sous-projets
      + la feuille globale. C'est obligatoire — la plupart des dates de démarrage
      n'existent pas en base, elles se déduisent des ancres, durées et liaisons.
-   - Les données de la feuille `global` restent en base : le Cronograma et la section
-     « Implementación del PAG » s'en servent toujours.
+   - ⚠ La feuille **« Implementación del PAG »** ne suit pas non plus ce format :
+     voir la section « Implementación del PAG » plus bas.
 8. ⏳ PWA offline (lecture)
 9. ✅ Auth Supabase + RLS productif + gestion des rôles
 
@@ -124,7 +124,48 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   refusés sortent du tableau principal vers un `<details>` repliable
   « Accesos rechazados ». Figé par `guard_self_update` pour les non-admins.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 034**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+## Implementación del PAG (feuille `pag`)
+- **Catalogue dans le code** : `lib/pag.ts` — 33 acciones, 7 cadenas, 6 ejes, 8 hitos,
+  remplissages par responsable. Source unique du Cronograma ET des Hojas de ruta.
+  Sur les 49 acciones du fichier « Hoja de ruta PAG detallada », seules celles qui
+  se traitent **une seule fois** y figurent :
+  - `ambito: "gob"` (18) — gouvernance, une occurrence datée ;
+  - `ambito: "una-vez"` (15) — destinées aux sous-projets mais **produites une fois** ;
+    `aplicaFase` nomme la phase où le livrable sera utilisé. C'est un **renvoi**,
+    jamais une réplication : aucune barre ×27 n'est dessinée dans ces vues.
+  - Les **16 restantes** sont répliquées bâtiment par bâtiment → elles relèvent de la
+    feuille de chaque sous-projet (composante Género, `ROADMAP_TAREAS`). ⚠ Elles ne
+    coïncident encore qu'à moitié avec les 11 cartes Género existantes — à réconcilier.
+- **Responsable = remplissage de la barre** (`PAG_RELLENO`), échelle à trois degrés
+  dans la seule famille `CARD_TONOS.G` : ACEFE aplat `#674ea7`, UG aplat `#d9d2e9`
+  **sans contour**, AT **fond blanc à contour `#674ea7`**. Pas de hachures : elles
+  gardent leur sens actuel (excédent au-delà de la durée estimée, `CapaBarras`).
+- **Cronograma** : `seccionesPag` (une section par cadena + les hitos) et
+  `seccionPagGlobal` (une ligne par eje, dans « Proyecto global »).
+  - Colonne de gauche = `code · titre`, tronqué, titre complet au survol (largeur
+    `LABEL_W` normale). À droite de la barre, **seulement** la durée et la phase
+    d'application — jamais de dates, pour rester aligné sur le reste du cronograma.
+  - Vue globale : barres en **violet clair** `CARD_TONOS.G.head` avec le libellé
+    écrit **DANS** la barre (`dentro`), repli sur `etiquetaCorta` si trop étroit.
+  - **Hitos = une ligne chacun**, nom en clair dans la colonne et date à côté du
+    repère (`filaHito`). Un rang de repères muets ne disait pas ce qu'ils étaient.
+- **Hoja de ruta** : `components/hojas-de-ruta/pag-board.tsx` — format sur mesure
+  (ni fases ni colonnes de composante), sept **rangées horizontales défilantes** de
+  cartes. Une seule rangée par cadena, sans retour à la ligne : chaque flèche relie
+  donc bien deux cartes voisines, et rappelle sous elle le **code de la carte
+  précédente** pour que le lien reste explicite après défilement.
+- **Édition** : uniquement depuis le mode Admin de la feuille. Le PAG n'est
+  **pas branché dans la section `/admin`** (choix explicite).
+- **Dates = proposition** : la colonne « Fecha en la que podría iniciarse » du fichier
+  est vide sur 45 lignes sur 49. Les ancres viennent des semestres (colonne D), des
+  durées (colonne L) et des enchaînements (M/N). Incohérences repérées et non tranchées :
+  11.1.1 daté S1 2027 alors que 11.1.2 démarre en nov 2026 ; 9.2.1 renvoie à une 9.2.2
+  inexistante ; 9.1.1 a deux libellés selon l'onglet ; 9.5.1 daté S2 2027 alors que les
+  premières licitaciones tombent en févr 2027.
+
+**Migrations** : dans `supabase/migrations/`, **dernière = 035**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 035 : sème le **planning** des 33 acciones du PAG (feuille `pag`, clés `pag-<code>`).
+  Idempotente (`on conflict do nothing`) — ne réécrit aucune date saisie à la main.
 - 032 : noms des 5 écoles préexistantes alignés sur le format officiel (`EPCD N°67 "…"`).
 - 033 : phases des **9 sous-projets d'origine** relevées sur l'Excel « AT Etapa 1 —
   Cronograma » (Gantt en cellules colorées, 4 colonnes = 1 mois, origine août 2026,

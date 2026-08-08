@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { TIPOLOGIAS } from "@/lib/constants";
+import { FEUILLE_PAG as CLAVE_PAG } from "@/lib/pag";
 
 // Couleur de charte par section. Les sections de la liste portent le même
 // libellé que les typologies (Aeropuertos / Hospitales / Escuelas) — on réutilise
@@ -30,8 +31,8 @@ export interface SubOpcion {
   color?: string; // pastille de typologie, si la surface en affiche une
 }
 
-/** Clé de feuille du plan d'action genre. Feuille à définir — bouton inactif. */
-export const FEUILLE_PAG = "pag";
+/** Clé de feuille du plan d'action genre (source : lib/pag). */
+export { FEUILLE_PAG } from "@/lib/pag";
 
 // Numéro d'établissement extrait du nom (« EPCD N°749 "…" » → 749). Sert à
 // classer les écoles par numéro plutôt que par ordre d'insertion. Le premier
@@ -239,7 +240,7 @@ export function HojaSelector({
   const [abierto, setAbierto] = useState(false);
   const raiz = useCierreExterior(abierto, () => setAbierto(false));
 
-  const subActivo = valor !== "global" && valor !== FEUILLE_PAG;
+  const subActivo = valor !== "global" && valor !== CLAVE_PAG;
   const nombreActivo = subproyectos.find((s) => s.uid === valor)?.nombre;
 
   // Rectangulaires (rounded-md), pas de pastilles ovales.
@@ -263,15 +264,15 @@ export function HojaSelector({
         Proyecto global
       </button>
 
-      {/* Plan d'action genre : feuille non encore définie → bouton INACTIF. */}
+      {/* Plan d'action genre : 33 acciones traitées une seule fois (lib/pag). */}
       <button
         type="button"
-        disabled
-        title="Por definir"
-        className={cn(
-          base,
-          "cursor-not-allowed border-dashed border-[var(--border)] bg-[var(--app-bg)] text-[var(--text-muted)] opacity-60",
-        )}
+        onClick={() => {
+          setAbierto(false);
+          onChange(CLAVE_PAG);
+        }}
+        aria-pressed={valor === CLAVE_PAG}
+        className={cn(base, valor === CLAVE_PAG ? activo : inactivo)}
       >
         Implementación del PAG
       </button>

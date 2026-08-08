@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth-server";
 import { isAdmin } from "@/lib/auth";
+import { FEUILLE_PAG } from "@/lib/pag";
 
 // ============================================================
 // Server Actions — Hojas de ruta (état d'édition admin, écriture).
@@ -28,7 +29,8 @@ async function assertAdmin() {
 }
 
 function assertFeuille(feuille: string) {
-  if (feuille !== "global" && !/^SUB-[A-Z0-9-]+$/.test(feuille)) {
+  // 'global' | 'pag' (Implementación del PAG) | uid de sous-projet.
+  if (feuille !== "global" && feuille !== FEUILLE_PAG && !/^SUB-[A-Z0-9-]+$/.test(feuille)) {
     throw new Error(`Feuille inválida: ${feuille}`);
   }
 }
