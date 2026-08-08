@@ -65,11 +65,13 @@ const ROJO_AFD = "#cc0000";
 // cronograma. Spécifique au Gantt (n'affecte pas les cartes des Hojas de ruta).
 const GP_BARRA = "#808080";
 // Couleurs spécifiques par fase (priment sur le dégradé de bleus).
+// Reprises du cronograma de référence (« PEEB Santa Fe - AT Etapa 1 ») pour que
+// l'app et l'Excel se lisent avec le même code couleur.
 const FASE_COLOR: Record<string, string> = {
   estudios_preliminares: "#d9d9d9", // gris clair
   redaccion_pliegos: "#ea9999", // même rouge clair que licitación
   licitacion: "#ea9999",
-  obra: "#f6b26b",
+  obra: "#fce5cd", // orange clair de l'Excel (Obras)
 };
 
 // Sigles des fases sur les frises (comme le tableau Inicio). Règle :
