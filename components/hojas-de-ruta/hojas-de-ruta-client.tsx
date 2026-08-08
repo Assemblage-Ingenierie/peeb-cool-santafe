@@ -28,6 +28,7 @@ import { isAdmin } from "@/lib/auth";
 import { useAuthUser } from "@/components/auth-context";
 import { CheckIcon } from "@/components/icons";
 import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
+import { AgendaGlobal } from "@/components/hojas-de-ruta/agenda-global";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import {
@@ -1302,21 +1303,14 @@ export function HojasDeRutaClient() {
           ref={boxRef}
           className="relative divide-y-2 divide-[var(--border)] overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]"
         >
-          {seleccion === "global"
-            ? SEMESTRES.map((sem) => (
-                <div key={sem.code} className="flex items-start gap-4 p-4">
-                  <div className="w-28 shrink-0 self-start rounded-md bg-[var(--app-bg)] px-3 py-2 sm:w-44">
-                    <div className="text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
-                      Semestre
-                    </div>
-                    <div className="mt-0.5 text-sm font-semibold leading-snug text-[var(--text)]">
-                      {sem.label}
-                    </div>
-                  </div>
-                  {columnasGrid(sem.code)}
-                </div>
-              ))
-            : FILAS_RUTA.map((fila) => {
+          {/* Feuille globale : « Próximas tareas » (radar calculé sur les
+              cronogramas) et non plus une grille de cartes par semestre. */}
+          {seleccion === "global" && snap.status === "ready" && rm.status === "ready" ? (
+            <AgendaGlobal datos={{ ...snap.data, ...rm.data }} filtros={filtros} />
+          ) : seleccion === "global" ? (
+            <p className="px-4 py-8 text-sm text-[var(--text-muted)]">Cargando próximas tareas…</p>
+          ) : (
+            FILAS_RUTA.map((fila) => {
                 // Nœud de phase : planifiable (dates/durée de Gestión) + enlazable.
                 const faseStatKey = `${seleccion}::${faseNodeKey(fila.code)}`;
                 const faseSched = schedule?.get(faseNodeKey(fila.code));
@@ -1434,7 +1428,8 @@ export function HojasDeRutaClient() {
                 {columnasGrid(fila.code)}
               </div>
                 );
-              })}
+            })
+          )}
 
           {/* Overlay des flèches de dépendance (masqué par défaut, via la case). */}
           {mostrarEnlaces && overlay.flechas.length > 0 && (
