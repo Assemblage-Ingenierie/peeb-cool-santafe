@@ -76,25 +76,23 @@ export function AgendaGlobal({
         const enCurso = v.key === "en_curso";
         return (
           <section key={v.key}>
-            <div className="flex items-center gap-2.5 border-y border-[var(--border)] bg-[var(--app-bg)] px-4 py-1.5">
-              <span
-                aria-hidden="true"
-                className="h-3.5 w-[3px] shrink-0 rounded-sm"
-                style={{
-                  backgroundColor:
-                    v.key === "en_curso"
-                      ? UI.focus
-                      : v.key === "d15"
-                        ? UI.accent
-                        : v.key === "m1"
-                          ? UI.textMuted
-                          : UI.border,
-                }}
-              />
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--text)]">
+            {/* Bandeau de fenêtre : texte clair sur gris sombre (celui de la
+                sidebar, lib/constants). Les repères colorés en tête de bandeau
+                ont été retirés — la fenêtre se lit au libellé, pas à la couleur. */}
+            <div
+              className="flex items-center gap-2.5 px-4 py-1.5"
+              style={{ backgroundColor: UI.sidebarBg }}
+            >
+              <h3
+                className="text-xs font-bold uppercase tracking-wider"
+                style={{ color: UI.sidebarText }}
+              >
                 {v.titulo}
               </h3>
-              <span className="ml-auto text-xs tabular-nums text-[var(--text-muted)]">
+              <span
+                className="ml-auto text-xs tabular-nums"
+                style={{ color: UI.sidebarTextMuted }}
+              >
                 {tareas.length} {tareas.length === 1 ? "tarea" : "tareas"}
               </span>
             </div>
@@ -114,15 +112,18 @@ export function AgendaGlobal({
                   return (
                     <li
                       key={t.id}
-                      className="grid grid-cols-[88px_1fr] items-start gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[88px_48px_1fr_104px] sm:items-center"
+                      className="grid grid-cols-[96px_1fr] items-stretch gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[96px_48px_1fr_104px]"
                     >
-                      {/* Bâtiment en tête, à la couleur de sa typologie. La feuille
-                          globale n'a pas de typologie : gris neutre. */}
+                      {/* Bâtiment : texte courant, encadré d'un liseré à la couleur
+                          de sa typologie à gauche et d'un filet léger à droite qui
+                          le sépare du reste du tableau. La pastille pleine était
+                          jugée trop appuyée. La feuille globale n'a pas de
+                          typologie : liseré gris neutre. */}
                       <span
-                        className="justify-self-start rounded px-1.5 py-0.5 text-xs font-semibold"
+                        className="flex items-center border-l-[3px] border-r pl-2 pr-2 text-xs leading-snug text-[var(--text)]"
                         style={{
-                          backgroundColor: tip?.color ?? UI.textMuted,
-                          color: tip?.onColor ?? "#ffffff",
+                          borderLeftColor: tip?.color ?? UI.textMuted,
+                          borderRightColor: UI.border,
                         }}
                         title={t.subproyecto}
                       >
@@ -130,23 +131,23 @@ export function AgendaGlobal({
                       </span>
 
                       {t.esFase ? (
-                        <span className="justify-self-start rounded border border-[var(--border)] px-1.5 py-0.5 text-xs font-semibold text-[var(--text-muted)]">
+                        <span className="justify-self-start self-center rounded border border-[var(--border)] px-1.5 py-0.5 text-xs font-semibold text-[var(--text-muted)]">
                           Fase
                         </span>
                       ) : (
                         <span
-                          className="justify-self-start rounded px-2 py-0.5 text-xs font-bold"
+                          className="justify-self-start self-center rounded px-2 py-0.5 text-xs font-bold"
                           style={{ backgroundColor: tono?.head, color: tono?.headText }}
                         >
                           {t.componente}
                         </span>
                       )}
 
-                      <span className="col-start-2 text-sm leading-snug text-[var(--text)] sm:col-start-3">
+                      <span className="col-start-2 self-center text-sm leading-snug text-[var(--text)] sm:col-start-3">
                         {t.nombre}
                       </span>
 
-                      <span className="col-start-2 text-xs tabular-nums text-[var(--text-muted)] sm:col-start-4 sm:text-right">
+                      <span className="col-start-2 self-center text-xs tabular-nums text-[var(--text-muted)] sm:col-start-4 sm:text-right">
                         <b className="block font-semibold text-[var(--text)]">
                           {enCurso ? `hasta ${fmtCorta(ref)}` : fmtCorta(ref)}
                         </b>
