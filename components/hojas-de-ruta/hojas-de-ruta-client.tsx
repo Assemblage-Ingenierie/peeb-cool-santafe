@@ -14,7 +14,6 @@ import {
 } from "@/lib/constants";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import { SEMESTRES, planGlobalEfectivo } from "@/lib/semestres";
-import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import {
   computeSchedule,
   faseNodeKey,
@@ -1217,18 +1216,17 @@ export function HojasDeRutaClient() {
       </div>
 
       {/* Navegación entre hojas de ruta */}
-      <nav aria-label="Hojas de ruta" className="flex flex-wrap items-center gap-2">
+      {/* Hauteur bornée + scroll : au-delà d'une vingtaine de sous-projets, la
+          liste de boutons repousserait la feuille de route hors de l'écran. */}
+      <nav
+        aria-label="Hojas de ruta"
+        className="max-h-32 overflow-y-auto rounded-md flex flex-wrap items-center gap-2"
+      >
         <RutaButton activo={seleccion === "global"} onClick={() => setSeleccion("global")}>
           Proyecto global
         </RutaButton>
         {subproyectos.map((s) => (
           <RutaButton key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
-            {s.nombre}
-          </RutaButton>
-        ))}
-        {/* Écoles factices : boutons DÉSACTIVÉS (feuille de route à définir). */}
-        {SUBPROYECTOS_HIPOTETICOS.map((s) => (
-          <RutaButton key={s.uid} activo={false} disabled onClick={() => {}}>
             {s.nombre}
           </RutaButton>
         ))}
@@ -1554,27 +1552,21 @@ function RutaButton({
   activo,
   onClick,
   children,
-  disabled = false,
 }: {
   activo: boolean;
   onClick: () => void;
   children: ReactNode;
-  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
       aria-pressed={activo}
-      title={disabled ? "Subproyecto hipotético — por definir" : undefined}
       className={cn(
         "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        disabled
-          ? "cursor-not-allowed border border-dashed border-[var(--border)] bg-[var(--app-bg)] italic text-[var(--text-muted)] opacity-60"
-          : activo
-            ? "bg-[var(--text)] text-white"
-            : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
+        activo
+          ? "bg-[var(--text)] text-white"
+          : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
       )}
     >
       {children}

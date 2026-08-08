@@ -50,11 +50,6 @@ export const getComponente = (code: string): Componente | undefined =>
 export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
-// Couleur associée aux sous-projets « hipotéticos » (factices, à définir plus
-// tard) : gris clair, distinct des typologies A/H/E. Sert aux marqueurs de carte
-// et aux badges/lignes grisées. Voir lib/subproyectos-hipoteticos.ts.
-export const COLOR_HIPOTETICO = "#c3c9d4";
-
 // --- Tons des cartes de la feuille de route (Hojas de ruta) ---
 // Format de carte validé : EN-TÊTE (nom) / CORPS (description) / PIED (responsable),
 // par composante. Nuances DÉRIVÉES des couleurs §2.3 (mêmes familles) — pas de
@@ -213,8 +208,40 @@ export interface RoadmapTarea {
   soloSubproyectos?: string[]; // uids SUB-…
 }
 
-// Sous-projets à valeur patrimoniale (carte « Plan de gestión del Patrimonio »).
-const SUBS_PATRIMONIO = ["SUB-CENTENARIO", "SUB-CULLEN", "SUB-E67", "SUB-E331"];
+// Sous-projets à valeur patrimoniale (cartes « Plan de gestión del Patrimonio »).
+//
+// ⚠ Pour les écoles du périmètre (SUB-ESC-*), le classement est HEURISTIQUE et
+// reste À CONFIRMER : faute d'information sur la protection patrimoniale réelle,
+// on retient l'établissement d'enseignement en bâtiment ancien (école normale,
+// séries de numérotation basses = fondations anciennes) et on tranche en faveur
+// de l'inclusion en cas de doute — un faux positif n'ajoute que deux cartes,
+// faciles à masquer, alors qu'un oubli ferait manquer une exigence AyS.
+// Sont EXCLUS : le centre d'éducation physique (SUB-ESC-002), l'établissement
+// privé de 193 m² (SUB-ESC-012) et les fondations récentes des séries 6000/1000
+// (SUB-ESC-007, -008, -016) ainsi que la série 700 (SUB-ESC-001).
+//
+// Doit rester SYNCHRONISÉ avec la colonne `plantilla` de la migration 031 : c'est
+// elle qui a décidé, à la création, quel modèle de feuille de route chaque école
+// a reçu (SUB-E67 = avec cartes patrimoine, SUB-E574 = sans).
+const SUBS_PATRIMONIO = [
+  "SUB-CENTENARIO",
+  "SUB-CULLEN",
+  "SUB-E67",
+  "SUB-E331",
+  // Escuelas del alcance (migration 031)
+  "SUB-ESC-003",
+  "SUB-ESC-004",
+  "SUB-ESC-005",
+  "SUB-ESC-006",
+  "SUB-ESC-009",
+  "SUB-ESC-010",
+  "SUB-ESC-011",
+  "SUB-ESC-013",
+  "SUB-ESC-014",
+  "SUB-ESC-015",
+  "SUB-ESC-017",
+  "SUB-ESC-018",
+];
 
 // Tâches de la feuille de route, toutes composantes (AyS, Género, …). Communes à
 // tous les sous-projets, sauf celles restreintes par `soloTipologias` /

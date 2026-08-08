@@ -7,7 +7,6 @@ import {
   GESTION_FASES,
   type ComponenteCode,
 } from "@/lib/constants";
-import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
 import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
 import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/semestres";
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
@@ -663,18 +662,18 @@ export function CronogramaClient() {
         </div>
       </div>
 
-      {/* Sélecteur de feuille (global / sous-projets réels / hypothétiques désactivés). */}
-      <nav aria-label="Cronograma" className="flex flex-wrap items-center gap-2">
+      {/* Sélecteur de feuille (global + un bouton par sous-projet). Hauteur bornée
+          + scroll : la liste dépasse la vingtaine d'entrées et repousserait sinon
+          le chronogramme hors de l'écran. */}
+      <nav
+        aria-label="Cronograma"
+        className="max-h-32 overflow-y-auto rounded-md flex flex-wrap items-center gap-2"
+      >
         <SelBtn activo={seleccion === "global"} onClick={() => setSeleccion("global")}>
           Proyecto global
         </SelBtn>
         {subproyectos.map((s) => (
           <SelBtn key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
-            {s.nombre}
-          </SelBtn>
-        ))}
-        {SUBPROYECTOS_HIPOTETICOS.map((s) => (
-          <SelBtn key={s.uid} activo={false} disabled onClick={() => {}}>
             {s.nombre}
           </SelBtn>
         ))}
@@ -934,27 +933,21 @@ function SelBtn({
   activo,
   onClick,
   children,
-  disabled = false,
 }: {
   activo: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
       aria-pressed={activo}
-      title={disabled ? "Subproyecto hipotético — por definir" : undefined}
       className={cn(
         "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        disabled
-          ? "cursor-not-allowed border border-dashed border-[var(--border)] bg-[var(--app-bg)] italic text-[var(--text-muted)] opacity-60"
-          : activo
-            ? "bg-[var(--text)] text-white"
-            : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
+        activo
+          ? "bg-[var(--text)] text-white"
+          : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
       )}
     >
       {children}

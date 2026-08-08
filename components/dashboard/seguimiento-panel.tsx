@@ -2,8 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { SnapshotSubproyecto } from "@/lib/snapshot";
-import { TIPOLOGIAS, getTipologia, COLOR_HIPOTETICO, UI } from "@/lib/constants";
-import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
+import { TIPOLOGIAS, getTipologia } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 
 // Carte chargée uniquement côté client (Leaflet touche `window`) et seulement
@@ -48,12 +47,7 @@ export function SeguimientoPanel({
   selected,
   onSelect,
 }: SeguimientoPanelProps) {
-  const reales =
-    tipo === "todos" ? subproyectos : subproyectos.filter((s) => s.tipologia === tipo);
-  // Écoles factices (typologie E) : visibles sous « Todos » et « Escuelas ».
-  // Affichées en lignes DÉSACTIVÉES (non sélectionnables) + marqueurs gris clair.
-  const hipoteticos = tipo === "todos" || tipo === "E" ? SUBPROYECTOS_HIPOTETICOS : [];
-  const lista = [...reales, ...hipoteticos];
+  const lista = tipo === "todos" ? subproyectos : subproyectos.filter((s) => s.tipologia === tipo);
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -103,20 +97,14 @@ export function SeguimientoPanel({
               ) : (
                 lista.map((s) => {
                   const tp = getTipologia(s.tipologia);
-                  const hip = !!s.hipotetico;
-                  const sel = !hip && s.uid === selected;
-                  // Ligne factice : désactivée (non cliquable), grisée, badge gris clair.
+                  const sel = s.uid === selected;
                   return (
                     <tr
                       key={s.uid}
-                      onClick={hip ? undefined : () => onSelect(s.uid)}
+                      onClick={() => onSelect(s.uid)}
                       aria-selected={sel}
-                      aria-disabled={hip || undefined}
                       className={cn(
-                        "border-b border-[var(--border)] transition-colors",
-                        hip
-                          ? "cursor-not-allowed italic text-[var(--text-muted)]"
-                          : "cursor-pointer hover:bg-[var(--app-bg)]",
+                        "cursor-pointer border-b border-[var(--border)] transition-colors hover:bg-[var(--app-bg)]",
                         sel && "bg-[var(--app-bg)]",
                       )}
                       style={sel ? { boxShadow: "inset 3px 0 0 var(--focus)" } : undefined}
@@ -126,23 +114,13 @@ export function SeguimientoPanel({
                           {tp && (
                             <span
                               className="inline-flex h-5 min-w-5 items-center justify-center rounded px-1 text-[10px] font-bold"
-                              style={{
-                                backgroundColor: hip ? COLOR_HIPOTETICO : tp.color,
-                                color: hip ? UI.text : tp.onColor,
-                              }}
-                              title={hip ? `${tp.nombre} (hipotético)` : tp.nombre}
+                              style={{ backgroundColor: tp.color, color: tp.onColor }}
+                              title={tp.nombre}
                             >
                               {tp.code}
                             </span>
                           )}
-                          <span className={cn(!hip && "font-medium text-[var(--text)]")}>
-                            {s.nombre}
-                          </span>
-                          {hip && (
-                            <span className="rounded-full bg-[var(--app-bg)] px-1.5 py-0.5 text-[10px] not-italic text-[var(--text-muted)]">
-                              hipotético
-                            </span>
-                          )}
+                          <span className="font-medium text-[var(--text)]">{s.nombre}</span>
                         </span>
                       </td>
                       <td className="px-3 py-2 text-[var(--text-muted)]">—</td>

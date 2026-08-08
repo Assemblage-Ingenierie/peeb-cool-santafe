@@ -32,7 +32,7 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 - Lecture publique : via endpoint serveur `/api/snapshot` (`lib/snapshot.ts`, `service_role`, jamais exposée au client ; cache SWR ~60 s). Filtre `publicar=true` à la source pour les documents. Hook client `use-snapshot.ts` (`refreshKey` pour recharger après écriture).
 
 ## Conventions UID
-- Sous-projets : SUB-AIR, SUB-ASV, SUB-CENTENARIO, SUB-CULLEN, SUB-E67, SUB-E407, SUB-E574, SUB-E1109, SUB-E331
+- Sous-projets : SUB-AIR, SUB-ASV, SUB-CENTENARIO, SUB-CULLEN, SUB-E67, SUB-E407, SUB-E574, SUB-E1109, SUB-E331, puis SUB-ESC-NNN (écoles ajoutées ensuite — les 18 du périmètre = SUB-ESC-001…018, migration 031). UID **internes** : jamais affichés ni saisis dans l'UI.
 - Équipe : EQ-001, EQ-002, …
 - Entités : ENT-001, …
 - Événements : EVT-0001, …
@@ -114,4 +114,18 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   refusés sortent du tableau principal vers un `<details>` repliable
   « Accesos rechazados ». Figé par `guard_self_update` pour les non-admins.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 030**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 031**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+
+## Escuelas del alcance (migration 031)
+- Les **18 écoles du périmètre** (17 sites — San Jorge en compte 2) sont en base, en
+  plus des 5 écoles de Rosario / Santa Fe Capital → **23 écoles, 27 sous-projets**.
+- Leurs hojas de ruta / cronogramas sont **copiés** d'une école typique :
+  `SUB-E67` (avec cartes Patrimonio) ou `SUB-E574` (sans).
+- ⚠ `SUBS_PATRIMONIO` (`lib/constants.ts`) doit rester **synchronisé** avec la colonne
+  `plantilla` de la migration 031 : le code décide quelles cartes s'affichent, la
+  migration a décidé lesquelles ont reçu un planning. Classement patrimonial
+  **heuristique, à confirmer**.
+- ⚠ Lecture **paginée obligatoire** (`fetchAllRows` dans `lib/snapshot.ts`) : le roadmap
+  dépasse désormais 1 000 lignes (≈1 190 estado / 1 274 enlace) et PostgREST tronque
+  **silencieusement** au-delà. Toute nouvelle lecture de ces tables doit paginer, avec
+  un tri déterministe (clé primaire) sans quoi les pages se chevauchent.

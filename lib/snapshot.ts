@@ -25,10 +25,6 @@ export interface SnapshotSubproyecto {
   superficie_m2: number | null;
   notas: string | null; // HTML restreint déjà assaini en écriture
   ays_texto: string | null; // texte libre « Requisitos AyS » (CDC §4.5)
-  // Sous-projet FACTICE (hypothétique, hors DB) : jamais rempli par le snapshot
-  // réel. Injecté côté client via lib/subproyectos-hipoteticos.ts pour tester
-  // l'app avec une longue liste. Rendu grisé / bouton désactivé selon la surface.
-  hipotetico?: boolean;
 }
 
 export interface SnapshotMetrica {
@@ -254,6 +250,37 @@ const GESTION_COLS =
 const DOCGP_COLS = "uid, nombre_documento, url, componente, publicar, orden";
 const MEDIDA_COLS = "subproyecto_uid, medida, componente, activa, texto, kwh_anual, orden";
 
+// Taille de page de lecture. PostgREST PLAFONNE toute réponse (`db-max-rows`,
+// 1000 par défaut) et tronque SILENCIEUSEMENT au-delà — aucune erreur remontée.
+// Sans pagination, le planning des derniers sous-projets disparaîtrait sans bruit
+// dès que le total dépasse le plafond (déjà le cas : > 1000 lignes de roadmap).
+const PAGE_SIZE = 1000;
+
+/**
+ * Lit TOUTES les lignes d'une requête, par pages successives.
+ *
+ * On avance du nombre de lignes RÉELLEMENT reçues (et non d'un pas fixe) et on
+ * ne s'arrête que sur une page vide : c'est correct même si le plafond serveur
+ * est inférieur à PAGE_SIZE, cas où un pas fixe sauterait des lignes.
+ *
+ * ⚠ La requête DOIT porter un tri déterministe (clé primaire), sinon l'ordre
+ * entre deux pages n'est pas garanti → doublons et lignes manquantes.
+ */
+async function fetchAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<{ data: T[]; error: { message: string } | null }> {
+  const filas: T[] = [];
+  for (let desde = 0; ; ) {
+    const { data, error } = await page(desde, desde + PAGE_SIZE - 1);
+    if (error) return { data: filas, error };
+    const lote = data ?? [];
+    filas.push(...lote);
+    if (lote.length === 0) break;
+    desde += lote.length;
+  }
+  return { data: filas, error: null };
+}
+
 /** Construit le snapshot complet (un seul aller-retour groupé). */
 export async function getSnapshot(): Promise<Snapshot> {
   const sb = await createServerSupabase();
@@ -280,12 +307,18 @@ export async function getSnapshot(): Promise<Snapshot> {
       .select(METRICA_COLS)
       .order("subproyecto_uid", { ascending: true })
       .order("escenario", { ascending: true }),
-    // Toutes les lignes gestion_lineas (fases + documents) en une fois ; split en JS.
-    sb
-      .from("peebcoolsf_gestion_lineas")
-      .select(GESTION_COLS)
-      .order("orden", { ascending: true, nullsFirst: false })
-      .order("uid", { ascending: true }),
+    // Toutes les lignes gestion_lineas (fases + documents) ; split en JS.
+    // Paginé : croît avec le nombre de sous-projets (~10 lignes de fase chacun)
+    // et porte les ancres de phase du cronograma — une troncature silencieuse
+    // fausserait les plannings. Tri sur `uid` (unique) = pagination déterministe.
+    fetchAllRows((desde, hasta) =>
+      sb
+        .from("peebcoolsf_gestion_lineas")
+        .select(GESTION_COLS)
+        .order("orden", { ascending: true, nullsFirst: false })
+        .order("uid", { ascending: true })
+        .range(desde, hasta),
+    ),
     sb
       .from("peebcoolsf_eventos")
       .select(
@@ -451,15 +484,28 @@ export async function getSnapshot(): Promise<Snapshot> {
 export async function getRoadmap(): Promise<Roadmap> {
   const sb = await createServerSupabase();
 
+  // Tables volumineuses (> 1000 lignes à elles deux) : lecture PAGINÉE, triée sur
+  // la clé primaire composite pour que le découpage en pages soit déterministe.
   const [rmEstadoRes, rmEnlaceRes] = await Promise.all([
-    sb
-      .from("peebcoolsf_roadmap_estado")
-      .select(
-        "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, banda, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
-      ),
-    sb
-      .from("peebcoolsf_roadmap_enlace")
-      .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad"),
+    fetchAllRows((desde, hasta) =>
+      sb
+        .from("peebcoolsf_roadmap_estado")
+        .select(
+          "feuille, tarea_key, realizada, comentario, nombre, descripcion, responsable, oculta, fila, orden, banda, componente, creada, fecha_inicio, fecha_fin, dur_valor, dur_unidad",
+        )
+        .order("feuille", { ascending: true })
+        .order("tarea_key", { ascending: true })
+        .range(desde, hasta),
+    ),
+    fetchAllRows((desde, hasta) =>
+      sb
+        .from("peebcoolsf_roadmap_enlace")
+        .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad")
+        .order("feuille", { ascending: true })
+        .order("desde", { ascending: true })
+        .order("hacia", { ascending: true })
+        .range(desde, hasta),
+    ),
   ]);
 
   const firstError = rmEstadoRes.error || rmEnlaceRes.error;

@@ -378,7 +378,15 @@ export function SubproyectosPanel({
           return (
             <div key={sec}>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{sec}</p>
-              <div className="flex flex-wrap gap-1.5">
+              {/* Escuelas : la liste dépasse la vingtaine d'entrées → hauteur
+                  bornée + scroll. Le bouton « Agregar » est rendu APRÈS, hors de
+                  cette zone, sinon il faudrait scroller jusqu'en bas pour l'atteindre. */}
+              <div
+                className={cn(
+                  "flex flex-wrap gap-1.5",
+                  sec === "Escuelas" && "max-h-40 overflow-y-auto",
+                )}
+              >
                 {items.map((s) => {
                   const on = s.uid === selectedUid;
                   const tip = getTipologia(s.tipologia);
@@ -404,6 +412,8 @@ export function SubproyectosPanel({
                     </button>
                   );
                 })}
+              </div>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {sec === "Escuelas" &&
                   (adding ? (
                     <span className="inline-flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--focus)] px-2 py-1">

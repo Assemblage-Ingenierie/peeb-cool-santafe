@@ -2,8 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase, SnapshotMedida } from "@/lib/snapshot";
-import { FASES, ESTADOS, MEDIDAS, getTipologia, UI, COLOR_HIPOTETICO } from "@/lib/constants";
-import { SUBPROYECTOS_HIPOTETICOS } from "@/lib/subproyectos-hipoteticos";
+import { FASES, ESTADOS, MEDIDAS, getTipologia, UI } from "@/lib/constants";
 import { MedidaIcon } from "@/components/medida-icons";
 import { economiaKwh, economiaPct, porM2, suma } from "@/lib/calc";
 import { fmtNumero, fmtPct } from "@/lib/format";
@@ -107,7 +106,7 @@ const EDIFICIO: Grupo = {
       key: "tipo",
       header: "Tipo",
       align: "left",
-      display: (f) => <TipoBadge code={f.sub.tipologia} hip={f.sub.hipotetico} />,
+      display: (f) => <TipoBadge code={f.sub.tipologia} />,
       csv: (f) => getTipologia(f.sub.tipologia)?.nombre ?? f.sub.tipologia,
       sortVal: (f) => f.sub.tipologia,
     },
@@ -180,17 +179,14 @@ const SORT_COLS = new Map<string, Columna>();
 for (const c of EDIFICIO.cols) SORT_COLS.set(c.key, c);
 for (const g of DATA_GROUPS) for (const c of g.cols) SORT_COLS.set(c.key, c);
 
-function TipoBadge({ code, hip }: { code: string; hip?: boolean }) {
+function TipoBadge({ code }: { code: string }) {
   const tp = getTipologia(code);
   if (!tp) return <span>{code}</span>;
-  // Sous-projet factice : badge gris clair (couleur associée) au lieu du bleu E.
-  const bg = hip ? COLOR_HIPOTETICO : tp.color;
-  const fg = hip ? UI.text : tp.onColor;
   return (
     <span
       className="inline-block w-5 rounded text-center text-[11px] font-bold leading-5"
-      style={{ backgroundColor: bg, color: fg }}
-      title={hip ? `${tp.nombre} (hipotético)` : tp.nombre}
+      style={{ backgroundColor: tp.color, color: tp.onColor }}
+      title={tp.nombre}
     >
       {tp.code}
     </span>
@@ -233,19 +229,6 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
       medidas: medMap.get(sub.uid) ?? new Set<string>(),
     }));
   }, [subproyectos, metricas, fases, medidas]);
-
-  // Lignes FACTICES (hypothétiques) : aucune donnée → « — » partout. Toujours
-  // affichées après les sous-projets réels (jamais triées), grisées.
-  const filasHip = useMemo<Fila[]>(
-    () =>
-      SUBPROYECTOS_HIPOTETICOS.map((sub) => ({
-        sub,
-        met: undefined,
-        estados: {},
-        medidas: new Set<string>(),
-      })),
-    [],
-  );
 
   const sortedFilas = useMemo(() => {
     if (!sort) return filas;
@@ -310,15 +293,9 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
     );
   };
 
-  // Rendu d'une ligne (réelle ou factice). Les factices sont grisées (texte
-  // atténué + italique) ; toutes leurs valeurs dérivées valent « — ».
   const renderFila = (f: Fila) => {
-    const hip = !!f.sub.hipotetico;
     return (
-      <tr
-        key={f.sub.uid}
-        className={cn("hover:bg-[var(--app-bg)]", hip && "italic text-[var(--text-muted)]")}
-      >
+      <tr key={f.sub.uid} className="hover:bg-[var(--app-bg)]">
         {EDIFICIO.cols.map((c) => (
           <td key={c.key} className={cn(bodyTd, c.align === "right" ? "text-right" : "text-left")}>
             {c.display(f)}
@@ -473,7 +450,6 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
           </thead>
           <tbody>
             {sortedFilas.map((f) => renderFila(f))}
-            {filasHip.map((f) => renderFila(f))}
           </tbody>
         </table>
       </div>
