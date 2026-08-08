@@ -114,12 +114,12 @@ export function AgendaGlobal({
                   return (
                     <li
                       key={t.id}
-                      className="grid grid-cols-[104px_1fr] items-start gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[104px_52px_1fr_104px] sm:items-center"
+                      className="grid grid-cols-[88px_1fr] items-start gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[88px_48px_1fr_104px] sm:items-center"
                     >
                       {/* Bâtiment en tête, à la couleur de sa typologie. La feuille
                           globale n'a pas de typologie : gris neutre. */}
                       <span
-                        className="justify-self-start rounded px-2 py-0.5 text-sm font-semibold"
+                        className="justify-self-start rounded px-1.5 py-0.5 text-xs font-semibold"
                         style={{
                           backgroundColor: tip?.color ?? UI.textMuted,
                           color: tip?.onColor ?? "#ffffff",
