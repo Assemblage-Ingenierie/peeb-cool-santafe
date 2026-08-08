@@ -2,9 +2,9 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { cn } from "@/lib/cn";
 import { COMPONENTES, TIPOLOGIAS, ESTADOS, getTipologia } from "@/lib/constants";
 import { TrashIcon } from "@/components/icons";
+import { SubproyectoSelect, type SubOpcion } from "@/components/subproyecto-select";
 import { EditableTable, type AdminColumn, type AdminRow, type SelectOption } from "./editable-table";
 import { FieldEditor, type FieldDef } from "./field-editor";
 import { MedidasEditor } from "./medidas-editor";
@@ -163,6 +163,24 @@ export function SubproyectosPanel({
     });
 
   const selected = subs.find((s) => s.uid === selectedUid) ?? null;
+
+  // Options du sélecteur, groupées par sección dans l'ordre SECCIONES (et non
+  // dans l'ordre de `subs`, pour garder Aeropuertos / Hospitales / Escuelas).
+  const opcionesSel = useMemo<SubOpcion[]>(
+    () =>
+      SECCIONES.flatMap((sec) =>
+        subs
+          .filter((s) => s.seccion === sec)
+          .map((s) => ({
+            uid: s.uid,
+            nombre: s.nombre,
+            seccion: sec,
+            color: getTipologia(s.tipologia)?.color,
+          })),
+      ),
+    [subs],
+  );
+
   const fais = metricas.find((m) => m.subproyecto_uid === selectedUid && m.escenario === "faisabilidad") ?? null;
   const proy = metricas.find((m) => m.subproyecto_uid === selectedUid && m.escenario === "proyecto") ?? null;
   const gestionDocs = useMemo(
@@ -370,52 +388,20 @@ export function SubproyectosPanel({
 
   return (
     <div className="space-y-6">
-      {/* Sélecteur */}
-      <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
-        {SECCIONES.map((sec) => {
-          const items = subs.filter((s) => s.seccion === sec);
-          if (items.length === 0 && sec !== "Escuelas") return null;
-          return (
-            <div key={sec}>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{sec}</p>
-              {/* Escuelas : la liste dépasse la vingtaine d'entrées → hauteur
-                  bornée + scroll. Le bouton « Agregar » est rendu APRÈS, hors de
-                  cette zone, sinon il faudrait scroller jusqu'en bas pour l'atteindre. */}
-              <div
-                className={cn(
-                  "flex flex-wrap gap-1.5",
-                  sec === "Escuelas" && "max-h-40 overflow-y-auto",
-                )}
-              >
-                {items.map((s) => {
-                  const on = s.uid === selectedUid;
-                  const tip = getTipologia(s.tipologia);
-                  return (
-                    <button
-                      key={s.uid}
-                      type="button"
-                      onClick={() => selectSub(s.uid)}
-                      aria-pressed={on}
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors",
-                        on
-                          ? "border-[var(--focus)] bg-[var(--app-bg)] font-medium text-[var(--text)]"
-                          : "border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--app-bg)] hover:text-[var(--text)]",
-                      )}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: tip?.color ?? "var(--border)" }}
-                      />
-                      {s.nombre}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {sec === "Escuelas" &&
-                  (adding ? (
+      {/* Sélecteur : liste déroulante avec recherche, groupée par sección
+          (encombrement constant quel que soit le nombre de sous-projets).
+          « Agregar escuela » reste à côté, toujours visible. */}
+      <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <SubproyectoSelect
+            etiqueta="Elegir subproyecto"
+            opciones={opcionesSel}
+            valor={selectedUid ?? ""}
+            onChange={selectSub}
+            className="w-full max-w-md"
+          />
+          <div className="flex flex-wrap gap-1.5">
+            {adding ? (
                     <span className="inline-flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--focus)] px-2 py-1">
                       <input
                         autoFocus
@@ -451,11 +437,9 @@ export function SubproyectosPanel({
                     >
                       + Agregar escuela
                     </button>
-                  ))}
-              </div>
-            </div>
-          );
-        })}
+                  )}
+          </div>
+        </div>
       </div>
 
       {!selected ? (

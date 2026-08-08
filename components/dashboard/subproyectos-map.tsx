@@ -131,11 +131,14 @@ export function SubproyectosMap({
           <CircleMarker
             key={s.uid}
             center={[s.lat as number, s.lng as number]}
-            radius={sel ? 11 : 7}
+            // Points volontairement discrets : à 27 sous-projets étalés sur toute
+            // la province, de gros disques se chevauchent (San Jorge = 2 écoles à
+            // 500 m). Le sélectionné reste nettement plus gros pour rester repérable.
+            radius={sel ? 8 : 4.5}
             pathOptions={{
               // Sélection mise en valeur : anneau clair + trait plus épais.
               color: sel ? UI.surface : color,
-              weight: sel ? 3 : 1.5,
+              weight: sel ? 2.5 : 1,
               fillColor: color,
               fillOpacity: 1,
             }}

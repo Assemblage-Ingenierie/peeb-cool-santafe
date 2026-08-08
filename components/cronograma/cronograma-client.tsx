@@ -12,6 +12,7 @@ import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/seme
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
+import { SubproyectoSelect, type SubOpcion } from "@/components/subproyecto-select";
 import type { Roadmap, Snapshot } from "@/lib/snapshot";
 
 // Données combinées consommées par le Gantt : snapshot de base + roadmap
@@ -492,7 +493,22 @@ export function CronogramaClient() {
       return next;
     });
 
-  const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
+  // Mémoïsé : le repli `[]` créerait sinon un tableau neuf à chaque rendu, ce qui
+  // invaliderait en permanence les useMemo qui en dépendent.
+  const subproyectos = useMemo(
+    () => (snap.status === "ready" ? snap.data.subproyectos : []),
+    [snap],
+  );
+
+  // Options du sélecteur : « Proyecto global » puis les sous-projets groupés par
+  // sección (l'ordre du snapshot est déjà celui de `orden`).
+  const opcionesSel = useMemo<SubOpcion[]>(
+    () => [
+      { uid: "global", nombre: "Proyecto global", seccion: "General" },
+      ...subproyectos.map((s) => ({ uid: s.uid, nombre: s.nombre, seccion: s.seccion })),
+    ],
+    [subproyectos],
+  );
 
   // Calcul du planning (parcours de graphe computeSchedule pour chaque sous-projet)
   // mémoïsé : ne se relance que si la donnée, la sélection ou les filtres changent —
@@ -662,21 +678,16 @@ export function CronogramaClient() {
         </div>
       </div>
 
-      {/* Sélecteur de feuille (global + un bouton par sous-projet). Hauteur bornée
-          + scroll : la liste dépasse la vingtaine d'entrées et repousserait sinon
-          le chronogramme hors de l'écran. */}
-      <nav
-        aria-label="Cronograma"
-        className="max-h-32 overflow-y-auto rounded-md flex flex-wrap items-center gap-2"
-      >
-        <SelBtn activo={seleccion === "global"} onClick={() => setSeleccion("global")}>
-          Proyecto global
-        </SelBtn>
-        {subproyectos.map((s) => (
-          <SelBtn key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
-            {s.nombre}
-          </SelBtn>
-        ))}
+      {/* Sélecteur de feuille : liste déroulante avec recherche (encombrement
+          constant quel que soit le nombre de sous-projets). */}
+      <nav aria-label="Cronograma">
+        <SubproyectoSelect
+          etiqueta="Elegir cronograma"
+          opciones={opcionesSel}
+          valor={seleccion}
+          onChange={(uid) => setSeleccion(uid)}
+          className="w-full max-w-md"
+        />
       </nav>
 
       <div className="flex items-center justify-between gap-3">
@@ -929,28 +940,3 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
   );
 }
 
-function SelBtn({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={activo}
-      className={cn(
-        "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        activo
-          ? "bg-[var(--text)] text-white"
-          : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
-      )}
-    >
-      {children}
-    </button>
-  );
-}

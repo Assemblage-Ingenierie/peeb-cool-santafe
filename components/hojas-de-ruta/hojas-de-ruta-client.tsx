@@ -1,6 +1,6 @@
 "use client";
 
-import type { DragEvent, ReactNode } from "react";
+import type { DragEvent } from "react";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import {
@@ -27,6 +27,7 @@ import { useComponentFilters } from "@/components/filter-context";
 import { isAdmin } from "@/lib/auth";
 import { useAuthUser } from "@/components/auth-context";
 import { CheckIcon } from "@/components/icons";
+import { SubproyectoSelect, type SubOpcion } from "@/components/subproyecto-select";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import {
@@ -293,7 +294,22 @@ export function HojasDeRutaClient() {
   });
   const [tick, setTick] = useState(0);
 
-  const subproyectos = snap.status === "ready" ? snap.data.subproyectos : [];
+  // Mémoïsé : le repli `[]` créerait sinon un tableau neuf à chaque rendu, ce qui
+  // invaliderait en permanence les useMemo qui en dépendent.
+  const subproyectos = useMemo(
+    () => (snap.status === "ready" ? snap.data.subproyectos : []),
+    [snap],
+  );
+
+  // Options du sélecteur : « Proyecto global » puis les sous-projets groupés par
+  // sección (l'ordre du snapshot est déjà celui de `orden`).
+  const opcionesSel = useMemo<SubOpcion[]>(
+    () => [
+      { uid: "global", nombre: "Proyecto global", seccion: "General" },
+      ...subproyectos.map((s) => ({ uid: s.uid, nombre: s.nombre, seccion: s.seccion })),
+    ],
+    [subproyectos],
+  );
 
   // Charge l'état persisté (realizadas, comentarios, ediciones, anoAfd, enlaces)
   // depuis le roadmap, une seule fois (ajuster l'état pendant le rendu). Attend
@@ -1215,21 +1231,16 @@ export function HojasDeRutaClient() {
         )}
       </div>
 
-      {/* Navegación entre hojas de ruta */}
-      {/* Hauteur bornée + scroll : au-delà d'une vingtaine de sous-projets, la
-          liste de boutons repousserait la feuille de route hors de l'écran. */}
-      <nav
-        aria-label="Hojas de ruta"
-        className="max-h-32 overflow-y-auto rounded-md flex flex-wrap items-center gap-2"
-      >
-        <RutaButton activo={seleccion === "global"} onClick={() => setSeleccion("global")}>
-          Proyecto global
-        </RutaButton>
-        {subproyectos.map((s) => (
-          <RutaButton key={s.uid} activo={seleccion === s.uid} onClick={() => setSeleccion(s.uid)}>
-            {s.nombre}
-          </RutaButton>
-        ))}
+      {/* Navegación entre hojas de ruta : liste déroulante avec recherche
+          (encombrement constant quel que soit le nombre de sous-projets). */}
+      <nav aria-label="Hojas de ruta" className="flex flex-wrap items-center gap-3">
+        <SubproyectoSelect
+          etiqueta="Elegir hoja de ruta"
+          opciones={opcionesSel}
+          valor={seleccion}
+          onChange={(uid) => setSeleccion(uid)}
+          className="w-full max-w-md"
+        />
         {snap.status === "loading" && (
           <span className="self-center text-sm text-[var(--text-muted)]">
             Cargando subproyectos…
@@ -1548,31 +1559,6 @@ function ComentariosPanel({ comp, texto }: { comp: ComponenteCode; texto: string
   );
 }
 
-function RutaButton({
-  activo,
-  onClick,
-  children,
-}: {
-  activo: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={activo}
-      className={cn(
-        "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]",
-        activo
-          ? "bg-[var(--text)] text-white"
-          : "border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 // Panneau de choix d'une liaison : raccourcis Paralela / Dependencia, ou réglage
 // fin de la source, décalage signé (antes/después) et unité.
