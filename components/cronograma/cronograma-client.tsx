@@ -377,7 +377,13 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
 // deux vues ne peuvent pas diverger. Les informes semblables sont regroupés sur
 // UNE ligne commune (GP ; AyS) ; les autres tâches ont chacune leur ligne. Le
 // titre est écrit À CÔTÉ de la barre (comme pour les sous-projets).
-function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion {
+// Construit d'un seul tenant les deux sections du haut de la vue globale : le
+// projet global et « Implementación del PAG ». Elles partagent le même calcul de
+// planning — les séparer en deux fonctions le referait deux fois.
+function seccionesGlobalRoadmap(
+  d: DatosCronograma,
+  filtros: Set<string>,
+): { global: Seccion; pag: Seccion } {
   const estado = new Map<string, RoadmapOverride>();
   const stored = new Map<string, PlanStored>();
   for (const r of d.roadmapEstado) {
@@ -441,6 +447,9 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
   const infGP: Fila & { _s: number } = { label: "Informe semestral / anual", barras: [], _s: Infinity };
   const infAyS: Fila & { _s: number } = { label: "Informe Semestral AyS", barras: [], _s: Infinity };
   const otras: (Fila & { _s: number })[] = [];
+  // Cartes de la composante Género (violettes) : elles partent dans la section
+  // « Implementación del PAG » au lieu de rester dans le projet global.
+  const genero: (Fila & { _s: number })[] = [];
   for (const it of items) {
     const b = barraCard(it.key, it.comp, it.nombre);
     if (!b) continue;
@@ -450,34 +459,38 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
     } else if (it.key.startsWith("informe-ays-")) {
       infAyS.barras.push(b);
       infAyS._s = Math.min(infAyS._s, b.startMs);
+    } else if (it.comp === "G") {
+      genero.push({ label: it.nombre, barras: [b], _s: b.startMs });
     } else {
       otras.push({ label: it.nombre, barras: [b], _s: b.startMs });
     }
   }
   otras.sort((a, b) => a._s - b._s);
+  genero.sort((a, b) => a._s - b._s);
   const filas: (Fila & { _s: number })[] = [];
   if (infGP.barras.length > 0) filas.push(infGP);
   if (infAyS.barras.length > 0) filas.push(infAyS);
   filas.push(...otras);
 
-  return {
-    titulo: "Proyecto global",
-    barras: [],
-    filas: filas.map(({ label, barras }) => ({ label, barras })),
-  };
-}
+  const desnudar = (f: (Fila & { _s: number })[]) => f.map(({ label, barras }) => ({ label, barras }));
 
-// Section « Implementación del PAG » (plan d'action genre), intercalée entre le
-// projet global et l'enchaînement des fases des sous-projets.
-// Contenu encore À DÉFINIR — comme le bouton homonyme du sélecteur : la section
-// tient sa place dans la vue globale et se remplira quand le PAG sera arrêté.
-// Sans filas, l'en-tête se rend non repliable (cf. `plegable`).
-function seccionPag(): Seccion {
   return {
-    titulo: "Implementación del PAG",
-    barras: [],
-    // Ligne d'attente vide : garde le quadrillage du Gantt, comme toute ligne.
-    filas: [{ label: "", barras: [] }],
+    global: {
+      titulo: "Proyecto global",
+      barras: [],
+      // Lignes de capacitaciones : libellés en place, planning À DÉFINIR.
+      filas: [
+        ...desnudar(filas),
+        { label: "Capacitaciones Eficiencia Energética", barras: [] },
+        { label: "Capacitaciones Género", barras: [] },
+      ],
+    },
+    pag: {
+      titulo: "Implementación del PAG",
+      barras: [],
+      // Si aucune carte Género n'est planifiée, une ligne vide tient la place.
+      filas: genero.length > 0 ? desnudar(genero) : [{ label: "", barras: [] }],
+    },
   };
 }
 
@@ -539,12 +552,10 @@ export function CronogramaClient() {
   const secciones: Seccion[] = useMemo(() => {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
     const datos: DatosCronograma = { ...snap.data, ...rm.data };
-    if (seleccion === "global")
-      return [
-        seccionGlobalRoadmap(datos, filtros),
-        seccionPag(),
-        seccionGlobal(datos.subproyectos, datos),
-      ];
+    if (seleccion === "global") {
+      const { global, pag } = seccionesGlobalRoadmap(datos, filtros);
+      return [global, pag, seccionGlobal(datos.subproyectos, datos)];
+    }
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros);
   }, [snap, rm, seleccion, filtros]);
