@@ -181,10 +181,8 @@ interface Fila {
   bold?: boolean;
   barras: Barra[];
   // Première ligne d'un nouveau groupe de typologie (Aeropuertos / Hospitales /
-  // Escuelas) : une respiration blanche est ménagée au-dessus.
+  // Escuelas) : une bande gris clair est ménagée au-dessus.
   separaGrupo?: boolean;
-  // Ligne d'attente : entièrement blanche, sans quadrillage ni trait de ligne.
-  blanca?: boolean;
 }
 interface Seccion {
   titulo: string;
@@ -478,7 +476,8 @@ function seccionPag(): Seccion {
   return {
     titulo: "Implementación del PAG",
     barras: [],
-    filas: [{ label: "", barras: [], blanca: true }],
+    // Ligne d'attente vide : garde le quadrillage du Gantt, comme toute ligne.
+    filas: [{ label: "", barras: [] }],
   };
 }
 
@@ -851,36 +850,20 @@ export function CronogramaClient() {
                     <div
                       key={fi}
                       className={cn(
-                        "flex",
-                        // Ligne d'attente : aucun trait, elle doit rester blanche.
-                        !fila.blanca && "border-b border-[var(--border)] last:border-b-0",
-                        // Rupture de typologie : respiration BLANCHE plutôt qu'un
-                        // filet — elle interrompt le trait de ligne, ce qui sépare
-                        // les groupes sans ajouter de ligne visible.
-                        fila.separaGrupo && "border-t-4 border-t-[var(--surface)]",
+                        "flex border-b border-[var(--border)] last:border-b-0",
+                        // Rupture de typologie : bande gris très clair (le gris de
+                        // fond de l'app), assez discrète pour ne pas faire titre.
+                        fila.separaGrupo && "border-t-4 border-t-[var(--app-bg)]",
                       )}
                     >
                       <div
-                        className="sticky left-0 z-10 flex shrink-0 items-center truncate bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
-                        style={{
-                          width: LABEL_W,
-                          height: ROW_H,
-                          // Le filet vertical de la colonne des noms disparaît lui
-                          // aussi sur une ligne d'attente.
-                          borderRight: fila.blanca ? "none" : "1px solid var(--border)",
-                        }}
+                        className="sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
+                        style={{ width: LABEL_W, height: ROW_H }}
                         title={fila.label}
                       >
                         {fila.label}
                       </div>
-                      <div
-                        className="relative"
-                        style={{
-                          width: totalW,
-                          height: ROW_H,
-                          ...(fila.blanca ? {} : gridStyle),
-                        }}
-                      >
+                      <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
                         <CapaBarras barras={fila.barras} x={x} />
                       </div>
                     </div>
