@@ -180,6 +180,9 @@ interface Fila {
   label: string;
   bold?: boolean;
   barras: Barra[];
+  // Première ligne d'un nouveau groupe de typologie (Aeropuertos / Hospitales /
+  // Escuelas) : un filet plus marqué est tracé au-dessus.
+  separaGrupo?: boolean;
 }
 interface Seccion {
   titulo: string;
@@ -479,9 +482,15 @@ function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Secc
   return {
     titulo: "Subproyectos — enlace de fases",
     barras: [],
-    filas: subs.map((s) => {
+    filas: subs.map((s, i) => {
       const { sched } = armar(s.uid, s.tipologia, d);
-      return { label: s.nombre, barras: barrasFases(sched) };
+      return {
+        label: s.nombre,
+        barras: barrasFases(sched),
+        // Les sous-projets arrivent triés par `orden`, donc groupés par typologie :
+        // il suffit de comparer avec la ligne précédente pour repérer la rupture.
+        separaGrupo: i > 0 && subs[i - 1].tipologia !== s.tipologia,
+      };
     }),
   };
 }
@@ -833,7 +842,15 @@ export function CronogramaClient() {
                 </div>
                 {!colapsada &&
                   sec.filas.map((fila, fi) => (
-                    <div key={fi} className="flex border-b border-[var(--border)] last:border-b-0">
+                    <div
+                      key={fi}
+                      className={cn(
+                        "flex border-b border-[var(--border)] last:border-b-0",
+                        // Rupture de typologie : filet plus épais et plus soutenu
+                        // que le trait de ligne ordinaire, sans faire titre.
+                        fila.separaGrupo && "border-t-2 border-t-[#c8ccd4]",
+                      )}
+                    >
                       <div
                         className="sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
                         style={{ width: LABEL_W, height: ROW_H }}
