@@ -114,30 +114,36 @@ export function AgendaGlobal({
                   return (
                     <li
                       key={t.id}
-                      className="grid grid-cols-[58px_1fr] items-start gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[58px_1fr_200px_104px] sm:items-center"
+                      className="grid grid-cols-[104px_1fr] items-start gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[104px_52px_1fr_104px] sm:items-center"
                     >
+                      {/* Bâtiment en tête, à la couleur de sa typologie. La feuille
+                          globale n'a pas de typologie : gris neutre. */}
+                      <span
+                        className="justify-self-start rounded px-2 py-0.5 text-sm font-semibold"
+                        style={{
+                          backgroundColor: tip?.color ?? UI.textMuted,
+                          color: tip?.onColor ?? "#ffffff",
+                        }}
+                        title={t.subproyecto}
+                      >
+                        {t.sigla}
+                      </span>
+
                       {t.esFase ? (
-                        <span className="justify-self-start rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--text-muted)]">
+                        <span className="justify-self-start rounded border border-[var(--border)] px-1.5 py-0.5 text-xs font-semibold text-[var(--text-muted)]">
                           Fase
                         </span>
                       ) : (
                         <span
-                          className="justify-self-start rounded px-2 py-0.5 text-[11px] font-bold"
+                          className="justify-self-start rounded px-2 py-0.5 text-xs font-bold"
                           style={{ backgroundColor: tono?.head, color: tono?.headText }}
                         >
                           {t.componente}
                         </span>
                       )}
 
-                      <span className="text-sm leading-snug text-[var(--text)]">{t.nombre}</span>
-
-                      <span className="col-start-2 flex min-w-0 items-center gap-2 text-xs text-[var(--text-muted)] sm:col-start-3">
-                        <span
-                          aria-hidden="true"
-                          className="h-2 w-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: tip?.color ?? UI.textMuted }}
-                        />
-                        <span className="truncate">{t.subproyecto}</span>
+                      <span className="col-start-2 text-sm leading-snug text-[var(--text)] sm:col-start-3">
+                        {t.nombre}
                       </span>
 
                       <span className="col-start-2 text-xs tabular-nums text-[var(--text-muted)] sm:col-start-4 sm:text-right">

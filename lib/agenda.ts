@@ -34,7 +34,8 @@ export interface TareaAgenda {
   componente: ComponenteCode | null; // null = démarrage de phase
   esFase: boolean;
   feuille: string; // "global" ou uid de sous-projet
-  subproyecto: string; // libellé affiché
+  subproyecto: string; // libellé complet (info-bulle)
+  sigla: string; // forme courte affichée (AIR, Cullen, N°67…)
   tipologia: string | null; // A | H | E ; null pour la feuille globale
   inicioMs: number;
   finMs: number;
@@ -63,7 +64,7 @@ const NOMBRE_FASE = new Map<string, string>([
 ]);
 
 /** Calcule le planning d'UNE feuille (sous-projet ou global) et en tire les tâches. */
-function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subproyecto" | "tipologia">[] {
+function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subproyecto" | "sigla" | "tipologia">[] {
   const esGlobal = feuille === "global";
   const estado = new Map<string, RoadmapOverride>();
   const planes = new Map<string, PlanStored>();
@@ -157,7 +158,7 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
 
   const sched = computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
 
-  const out: Omit<TareaAgenda, "subproyecto" | "tipologia">[] = [];
+  const out: Omit<TareaAgenda, "subproyecto" | "sigla" | "tipologia">[] = [];
   for (const [key, r] of sched) {
     // `end` (et non `solidEnd`) : une tâche court jusqu'au bord de sa barre,
     // hachures comprises.
@@ -199,6 +200,21 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
 // Même origine de projet que le Cronograma et les Hojas de ruta.
 const PROJECT_START = "2026-01-01";
 
+/**
+ * Forme courte d'un sous-projet, pour tenir en tête de ligne.
+ * Les écoles sont désignées par leur NUMÉRO d'établissement — seul repère court
+ * qui les distingue ; leur uid (SUB-ESC-007) ne dirait rien. Les autres sont
+ * dérivés de l'uid : sigle tel quel s'il fait 3 lettres (AIR, ASV), sinon
+ * capitalisé (CENTENARIO -> Centenario).
+ */
+export function siglaSubproyecto(uid: string, nombre: string): string {
+  if (uid === "global") return "Global";
+  const num = /N[°º]\s*(\d+)/.exec(nombre);
+  if (num) return `N°${num[1]}`;
+  const base = uid.replace(/^SUB-/, "");
+  return base.length <= 3 ? base : base.charAt(0) + base.slice(1).toLowerCase();
+}
+
 /** Ajoute `n` mois à un instant, en restant sur le même quantième si possible. */
 function masMeses(ms: number, n: number): number {
   const d = new Date(ms);
@@ -222,9 +238,11 @@ export function construirAgenda(datos: Datos, hoyMs: number): Agenda {
 
   for (const f of feuilles) {
     for (const t of tareasDeFeuille(datos, f)) {
+      const nombreSub = f === "global" ? "Proyecto global" : nombreDe.get(f) ?? f;
       const tarea: TareaAgenda = {
         ...t,
-        subproyecto: f === "global" ? "Proyecto global" : nombreDe.get(f) ?? f,
+        subproyecto: nombreSub,
+        sigla: siglaSubproyecto(f, nombreSub),
         tipologia: f === "global" ? null : tipoDe.get(f) ?? null,
       };
       // Ordre des tests = ordre de priorité : une tâche en cours n'est jamais
