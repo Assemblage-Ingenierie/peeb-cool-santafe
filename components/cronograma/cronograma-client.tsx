@@ -462,6 +462,15 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
   };
 }
 
+// Section « Implementación del PAG » (plan d'action genre), intercalée entre le
+// projet global et l'enchaînement des fases des sous-projets.
+// Contenu encore À DÉFINIR — comme le bouton homonyme du sélecteur : la section
+// tient sa place dans la vue globale et se remplira quand le PAG sera arrêté.
+// Sans filas, l'en-tête se rend non repliable (cf. `plegable`).
+function seccionPag(): Seccion {
+  return { titulo: "Implementación del PAG", barras: [], filas: [] };
+}
+
 // Vue globale : une ligne par sous-projet, montrant l'ENCHAÎNEMENT des fases
 // (chaque fase = un segment coloré avec sa date de démarrage et sa durée).
 function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Seccion {
@@ -515,7 +524,11 @@ export function CronogramaClient() {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
     const datos: DatosCronograma = { ...snap.data, ...rm.data };
     if (seleccion === "global")
-      return [seccionGlobalRoadmap(datos, filtros), seccionGlobal(datos.subproyectos, datos)];
+      return [
+        seccionGlobalRoadmap(datos, filtros),
+        seccionPag(),
+        seccionGlobal(datos.subproyectos, datos),
+      ];
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros);
   }, [snap, rm, seleccion, filtros]);
