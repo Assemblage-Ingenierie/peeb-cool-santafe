@@ -2,6 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { TIPOLOGIAS } from "@/lib/constants";
+
+// Couleur de charte par section. Les sections de la liste portent le même
+// libellé que les typologies (Aeropuertos / Hospitales / Escuelas) — on réutilise
+// donc leur couleur plutôt que d'en inventer une (lib/constants = source unique).
+const COLOR_SECCION: Record<string, string> = Object.fromEntries(
+  TIPOLOGIAS.map((t) => [t.nombre, t.color]),
+);
 
 // ============================================================
 // Sélecteurs de sous-projet — deux présentations, une même liste de recherche.
@@ -133,10 +141,22 @@ function ListaBuscable({
         {planas.length === 0 && (
           <li className="px-3 py-3 text-sm text-[var(--text-muted)]">Sin resultados.</li>
         )}
-        {grupos.map(([seccion, items]) => (
-          <li key={seccion}>
-            {/* En-tête de groupe : purement visuel, jamais sélectionnable. */}
-            <p className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+        {grupos.map(([seccion, items], gi) => {
+          const colorSec = COLOR_SECCION[seccion] ?? "var(--text-muted)";
+          return (
+          <li key={seccion} className={cn(gi > 0 && "mt-1")}>
+            {/* En-tête de groupe : bandeau contrasté, jamais sélectionnable.
+                Reste collé en haut pendant le défilement → on sait toujours dans
+                quelle section on se trouve. Couleur = celle de la typologie. */}
+            <p
+              className="sticky top-0 z-10 flex items-center gap-2 border-y border-[var(--border)] bg-[var(--app-bg)] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider"
+              style={{ color: colorSec }}
+            >
+              <span
+                aria-hidden="true"
+                className="h-3.5 w-1 shrink-0 rounded-sm"
+                style={{ backgroundColor: colorSec }}
+              />
               {seccion}
             </p>
             <ul>
@@ -153,7 +173,9 @@ function ListaBuscable({
                       onClick={() => onElegir(o.uid)}
                       onMouseEnter={() => setActivo(i)}
                       className={cn(
-                        "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+                        // pl-5 : entrées légèrement rentrées sous leur bandeau de
+                        // section, pour que la hiérarchie se lise au premier coup d'œil.
+                        "flex w-full items-center gap-2 py-1.5 pl-5 pr-3 text-left text-sm transition-colors",
                         i === activo && "bg-[var(--app-bg)]",
                         sel ? "font-semibold text-[var(--text)]" : "text-[var(--text-muted)]",
                       )}
@@ -172,7 +194,8 @@ function ListaBuscable({
               })}
             </ul>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </>
   );
