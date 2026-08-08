@@ -48,6 +48,16 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 5. ✅ Calendario (vue mensuelle, fuseau AR/FR, CRUD événements pour tous + alerte « +N »)
 6. ✅ Requisitos AyS (checklist MGAS dédiée — n'est plus une « medida »)
 7. ✅ Hojas de ruta (feuille de route interactive : phases verticales, cartes par composante, contenu AyS + cartes dynamiques par plan ; édition admin realizada/comentario/editar/enlazar + case ANO AFD ; persistance DB)
+   - ⚠ La feuille **« Proyecto global » ne suit plus ce format** : c'est désormais
+     « Próximas tareas » (`lib/agenda.ts` + `components/hojas-de-ruta/agenda-global.tsx`).
+     On part de la barre « hoy » : les tâches qu'elle **traverse** sont « en curso »,
+     celles qui **démarrent** ensuite vont dans 15 jours / 1 mois / 2 mois (fenêtres
+     **exclusives**). Le démarrage d'une phase compte comme une tâche.
+   - **Ne stocke rien** : `lib/agenda.ts` rejoue `computeSchedule` sur les 27 sous-projets
+     + la feuille globale. C'est obligatoire — la plupart des dates de démarrage
+     n'existent pas en base, elles se déduisent des ancres, durées et liaisons.
+   - Les données de la feuille `global` restent en base : le Cronograma et la section
+     « Implementación del PAG » s'en servent toujours.
 8. ⏳ PWA offline (lecture)
 9. ✅ Auth Supabase + RLS productif + gestion des rôles
 
@@ -114,7 +124,13 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   refusés sortent du tableau principal vers un `<details>` repliable
   « Accesos rechazados ». Figé par `guard_self_update` pour les non-admins.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 031**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 034**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 032 : noms des 5 écoles préexistantes alignés sur le format officiel (`EPCD N°67 "…"`).
+- 033 : phases des **9 sous-projets d'origine** relevées sur l'Excel « AT Etapa 1 —
+  Cronograma » (Gantt en cellules colorées, 4 colonnes = 1 mois, origine août 2026,
+  initiales de mois **françaises**). État antérieur dans `peebcoolsf_bak_fases_031`.
+- 034 : les 18 écoles du périmètre décalées de +7 mois. **Non idempotente** — la rejouer
+  ajouterait 7 mois de plus.
 
 ## Escuelas del alcance (migration 031)
 - Les **18 écoles du périmètre** (17 sites — San Jorge en compte 2) sont en base, en
