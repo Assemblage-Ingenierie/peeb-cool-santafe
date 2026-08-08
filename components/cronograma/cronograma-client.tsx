@@ -12,7 +12,7 @@ import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/seme
 import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
-import { SubproyectoSelect, type SubOpcion } from "@/components/subproyecto-select";
+import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
 import type { Roadmap, Snapshot } from "@/lib/snapshot";
 
 // Données combinées consommées par le Gantt : snapshot de base + roadmap
@@ -500,13 +500,10 @@ export function CronogramaClient() {
     [snap],
   );
 
-  // Options du sélecteur : « Proyecto global » puis les sous-projets groupés par
-  // sección (l'ordre du snapshot est déjà celui de `orden`).
+  // Options de la liste déroulante « Subproyectos » (groupées par sección ; les
+  // écoles y sont classées par numéro d'établissement, cf. HojaSelector).
   const opcionesSel = useMemo<SubOpcion[]>(
-    () => [
-      { uid: "global", nombre: "Proyecto global", seccion: "General" },
-      ...subproyectos.map((s) => ({ uid: s.uid, nombre: s.nombre, seccion: s.seccion })),
-    ],
+    () => subproyectos.map((s) => ({ uid: s.uid, nombre: s.nombre, seccion: s.seccion })),
     [subproyectos],
   );
 
@@ -678,17 +675,13 @@ export function CronogramaClient() {
         </div>
       </div>
 
-      {/* Sélecteur de feuille : liste déroulante avec recherche (encombrement
-          constant quel que soit le nombre de sous-projets). */}
-      <nav aria-label="Cronograma">
-        <SubproyectoSelect
-          etiqueta="Elegir cronograma"
-          opciones={opcionesSel}
-          valor={seleccion}
-          onChange={(uid) => setSeleccion(uid)}
-          className="w-full max-w-md"
-        />
-      </nav>
+      {/* Sélecteur de feuille : trois boutons, seul « Subproyectos » déroule. */}
+      <HojaSelector
+        etiqueta="Elegir cronograma"
+        subproyectos={opcionesSel}
+        valor={seleccion}
+        onChange={(uid) => setSeleccion(uid)}
+      />
 
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>

@@ -4,14 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
 // ============================================================
-// Sélecteur de sous-projet — bouton d'UNE ligne + panneau de recherche.
+// Sélecteurs de sous-projet — deux présentations, une même liste de recherche.
 //
-// Remplace la barre de pastilles (une par sous-projet) devenue impraticable :
-// 27 sous-projets aux noms officiels longs occupaient une dizaine de lignes et
-// repoussaient le contenu hors de l'écran. Ici l'encombrement est constant quel
-// que soit le nombre d'entrées.
+//   • HojaSelector      : Cronograma et Hojas de ruta. Trois boutons
+//     rectangulaires (Proyecto global / Implementación del PAG / Subproyectos) ;
+//     seul le troisième ouvre la liste déroulante.
+//   • SubproyectoSelect : Admin. Un seul bouton qui ouvre la même liste.
 //
-// Surfaces : Cronograma, Hojas de ruta, Admin (gestión de subproyectos).
+// Motif commun : avec 27 sous-projets aux noms officiels longs, une barre de
+// pastilles occupait une dizaine de lignes. Ici l'encombrement est constant.
 // ============================================================
 
 export interface SubOpcion {
@@ -21,37 +22,61 @@ export interface SubOpcion {
   color?: string; // pastille de typologie, si la surface en affiche une
 }
 
-interface SubproyectoSelectProps {
-  opciones: SubOpcion[];
-  valor: string;
-  onChange: (uid: string) => void;
-  etiqueta: string; // libellé accessible (aria-label du bouton)
-  placeholder?: string;
-  className?: string;
+/** Clé de feuille du plan d'action genre. Feuille à définir — bouton inactif. */
+export const FEUILLE_PAG = "pag";
+
+// Numéro d'établissement extrait du nom (« EPCD N°749 "…" » → 749). Sert à
+// classer les écoles par numéro plutôt que par ordre d'insertion. Le premier
+// numéro l'emporte quand le nom en cite deux (« EESO N°331 y EPCD N°1250 »).
+function numeroEstablecimiento(nombre: string): number | null {
+  const m = /N[°º]\s*(\d+)/.exec(nombre);
+  return m ? Number(m[1]) : null;
 }
 
-export function SubproyectoSelect({
+/** Tri d'un groupe : par numéro d'établissement croissant ; sans numéro, ordre reçu. */
+function ordenarPorNumero(items: SubOpcion[]): SubOpcion[] {
+  return items
+    .map((o, i) => ({ o, i, n: numeroEstablecimiento(o.nombre) }))
+    .sort((a, b) => {
+      if (a.n == null && b.n == null) return a.i - b.i;
+      if (a.n == null) return 1; // sans numéro : à la fin
+      if (b.n == null) return -1;
+      return a.n - b.n;
+    })
+    .map((x) => x.o);
+}
+
+// Recherche insensible à la casse et aux accents (« martin » trouve « Martín »),
+// SANS toucher aux chiffres : on doit pouvoir chercher « 6093 ».
+const norm = (s: string) =>
+  s
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+
+// ------------------------------------------------------------
+// Panneau commun : champ de recherche + liste groupée, navigable au clavier.
+// ------------------------------------------------------------
+function ListaBuscable({
   opciones,
   valor,
-  onChange,
+  onElegir,
   etiqueta,
-  placeholder = "Buscar subproyecto…",
-  className,
-}: SubproyectoSelectProps) {
-  const [abierto, setAbierto] = useState(false);
+  placeholder,
+}: {
+  opciones: SubOpcion[];
+  valor: string;
+  onElegir: (uid: string) => void;
+  etiqueta: string;
+  placeholder: string;
+}) {
   const [busqueda, setBusqueda] = useState("");
-  const [activo, setActivo] = useState(0); // index surligné au clavier
-  const raiz = useRef<HTMLDivElement>(null);
+  const [activo, setActivo] = useState(0);
   const campo = useRef<HTMLInputElement>(null);
 
-  const seleccionada = opciones.find((o) => o.uid === valor) ?? null;
-
-  // Recherche insensible à la casse et aux accents (« martin » trouve « Martín »).
-  const norm = (s: string) =>
-    s
-      .normalize("NFD")
-      .replace(/\p{Diacritic}/gu, "")
-      .toLowerCase();
+  useEffect(() => {
+    campo.current?.focus();
+  }, []);
 
   const filtradas = useMemo(() => {
     const q = norm(busqueda.trim());
@@ -59,7 +84,7 @@ export function SubproyectoSelect({
     return opciones.filter((o) => norm(o.nombre).includes(q) || norm(o.seccion).includes(q));
   }, [opciones, busqueda]);
 
-  // Regroupement par sección, dans l'ordre d'apparition des options.
+  // Groupes dans l'ordre d'apparition, chaque groupe trié par numéro.
   const grupos = useMemo(() => {
     const m = new Map<string, SubOpcion[]>();
     for (const o of filtradas) {
@@ -67,37 +92,11 @@ export function SubproyectoSelect({
       if (g) g.push(o);
       else m.set(o.seccion, [o]);
     }
-    return [...m.entries()];
+    return [...m.entries()].map(([sec, items]) => [sec, ordenarPorNumero(items)] as const);
   }, [filtradas]);
 
   // Liste à plat DANS L'ORDRE AFFICHÉ : garde l'index clavier aligné sur le rendu.
   const planas = useMemo(() => grupos.flatMap(([, items]) => items), [grupos]);
-
-  const cerrar = () => {
-    setAbierto(false);
-    setBusqueda("");
-    setActivo(0);
-  };
-
-  const elegir = (uid: string) => {
-    onChange(uid);
-    cerrar();
-  };
-
-  // Fermeture au clic extérieur.
-  useEffect(() => {
-    if (!abierto) return;
-    const fuera = (e: MouseEvent) => {
-      if (raiz.current && !raiz.current.contains(e.target as Node)) cerrar();
-    };
-    document.addEventListener("mousedown", fuera);
-    return () => document.removeEventListener("mousedown", fuera);
-  }, [abierto]);
-
-  // Focus sur le champ à l'ouverture (pas de setState ici : effet de bord DOM seul).
-  useEffect(() => {
-    if (abierto) campo.current?.focus();
-  }, [abierto]);
 
   const teclas = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown") {
@@ -109,20 +108,214 @@ export function SubproyectoSelect({
     } else if (e.key === "Enter") {
       e.preventDefault();
       const o = planas[activo];
-      if (o) elegir(o.uid);
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      cerrar();
+      if (o) onElegir(o.uid);
     }
   };
 
-  let indice = -1; // compteur de rendu, pour retrouver l'index clavier
+  let indice = -1;
+
+  return (
+    <>
+      <input
+        ref={campo}
+        type="text"
+        value={busqueda}
+        onChange={(e) => {
+          setBusqueda(e.target.value);
+          setActivo(0);
+        }}
+        onKeyDown={teclas}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="w-full border-b border-[var(--border)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+      />
+      <ul role="listbox" aria-label={etiqueta} className="max-h-72 overflow-y-auto py-1">
+        {planas.length === 0 && (
+          <li className="px-3 py-3 text-sm text-[var(--text-muted)]">Sin resultados.</li>
+        )}
+        {grupos.map(([seccion, items]) => (
+          <li key={seccion}>
+            {/* En-tête de groupe : purement visuel, jamais sélectionnable. */}
+            <p className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+              {seccion}
+            </p>
+            <ul>
+              {items.map((o) => {
+                indice += 1;
+                const i = indice;
+                const sel = o.uid === valor;
+                return (
+                  <li key={o.uid}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={sel}
+                      onClick={() => onElegir(o.uid)}
+                      onMouseEnter={() => setActivo(i)}
+                      className={cn(
+                        "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+                        i === activo && "bg-[var(--app-bg)]",
+                        sel ? "font-semibold text-[var(--text)]" : "text-[var(--text-muted)]",
+                      )}
+                    >
+                      {o.color && (
+                        <span
+                          aria-hidden="true"
+                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: o.color }}
+                        />
+                      )}
+                      <span className="truncate">{o.nombre}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** Ferme au clic extérieur tant que `abierto`. */
+function useCierreExterior(abierto: boolean, cerrar: () => void) {
+  const raiz = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!abierto) return;
+    const fuera = (e: MouseEvent) => {
+      if (raiz.current && !raiz.current.contains(e.target as Node)) cerrar();
+    };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cerrar();
+    };
+    document.addEventListener("mousedown", fuera);
+    document.addEventListener("keydown", tecla);
+    return () => {
+      document.removeEventListener("mousedown", fuera);
+      document.removeEventListener("keydown", tecla);
+    };
+  }, [abierto, cerrar]);
+  return raiz;
+}
+
+// ------------------------------------------------------------
+// HojaSelector — Cronograma / Hojas de ruta.
+// ------------------------------------------------------------
+export function HojaSelector({
+  subproyectos,
+  valor,
+  onChange,
+  etiqueta,
+}: {
+  subproyectos: SubOpcion[];
+  valor: string; // "global" | FEUILLE_PAG | uid
+  onChange: (uid: string) => void;
+  etiqueta: string;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const raiz = useCierreExterior(abierto, () => setAbierto(false));
+
+  const subActivo = valor !== "global" && valor !== FEUILLE_PAG;
+  const nombreActivo = subproyectos.find((s) => s.uid === valor)?.nombre;
+
+  // Rectangulaires (rounded-md), pas de pastilles ovales.
+  const base =
+    "rounded-md border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus)]";
+  const activo = "border-[var(--text)] bg-[var(--text)] text-white";
+  const inactivo =
+    "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:border-[var(--text-muted)] hover:text-[var(--text)]";
+
+  return (
+    <nav aria-label={etiqueta} className="flex flex-wrap items-start gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          setAbierto(false);
+          onChange("global");
+        }}
+        aria-pressed={valor === "global"}
+        className={cn(base, valor === "global" ? activo : inactivo)}
+      >
+        Proyecto global
+      </button>
+
+      {/* Plan d'action genre : feuille non encore définie → bouton INACTIF. */}
+      <button
+        type="button"
+        disabled
+        title="Por definir"
+        className={cn(
+          base,
+          "cursor-not-allowed border-dashed border-[var(--border)] bg-[var(--app-bg)] text-[var(--text-muted)] opacity-60",
+        )}
+      >
+        Implementación del PAG
+      </button>
+
+      <div ref={raiz} className="relative">
+        <button
+          type="button"
+          onClick={() => setAbierto((v) => !v)}
+          aria-expanded={abierto}
+          aria-haspopup="listbox"
+          aria-pressed={subActivo}
+          className={cn(base, "flex items-center gap-2", subActivo ? activo : inactivo)}
+        >
+          <span className="max-w-[22rem] truncate">
+            {subActivo && nombreActivo ? nombreActivo : "Subproyectos"}
+          </span>
+          <span aria-hidden="true" className="shrink-0 opacity-70">
+            ▾
+          </span>
+        </button>
+
+        {abierto && (
+          <div className="absolute left-0 z-30 mt-1 w-[min(30rem,90vw)] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg">
+            <ListaBuscable
+              opciones={subproyectos}
+              valor={valor}
+              etiqueta={etiqueta}
+              placeholder="Buscar subproyecto…"
+              onElegir={(uid) => {
+                onChange(uid);
+                setAbierto(false);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+// ------------------------------------------------------------
+// SubproyectoSelect — Admin (bouton unique + même liste).
+// ------------------------------------------------------------
+export function SubproyectoSelect({
+  opciones,
+  valor,
+  onChange,
+  etiqueta,
+  placeholder = "Buscar subproyecto…",
+  className,
+}: {
+  opciones: SubOpcion[];
+  valor: string;
+  onChange: (uid: string) => void;
+  etiqueta: string;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const raiz = useCierreExterior(abierto, () => setAbierto(false));
+  const seleccionada = opciones.find((o) => o.uid === valor) ?? null;
 
   return (
     <div ref={raiz} className={cn("relative inline-block", className)}>
       <button
         type="button"
-        onClick={() => (abierto ? cerrar() : setAbierto(true))}
+        onClick={() => setAbierto((v) => !v)}
         aria-label={etiqueta}
         aria-expanded={abierto}
         aria-haspopup="listbox"
@@ -145,64 +338,16 @@ export function SubproyectoSelect({
 
       {abierto && (
         <div className="absolute left-0 z-30 mt-1 w-[min(28rem,90vw)] overflow-hidden rounded-md border border-[var(--border)] bg-[var(--surface)] shadow-lg">
-          <input
-            ref={campo}
-            type="text"
-            value={busqueda}
-            onChange={(e) => {
-              setBusqueda(e.target.value);
-              setActivo(0);
-            }}
-            onKeyDown={teclas}
+          <ListaBuscable
+            opciones={opciones}
+            valor={valor}
+            etiqueta={etiqueta}
             placeholder={placeholder}
-            aria-label={placeholder}
-            className="w-full border-b border-[var(--border)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)] outline-none placeholder:text-[var(--text-muted)]"
+            onElegir={(uid) => {
+              onChange(uid);
+              setAbierto(false);
+            }}
           />
-          <ul role="listbox" aria-label={etiqueta} className="max-h-72 overflow-y-auto py-1">
-            {planas.length === 0 && (
-              <li className="px-3 py-3 text-sm text-[var(--text-muted)]">Sin resultados.</li>
-            )}
-            {grupos.map(([seccion, items]) => (
-              <li key={seccion}>
-                {/* En-tête de groupe : purement visuel, jamais sélectionnable. */}
-                <p className="px-3 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                  {seccion}
-                </p>
-                <ul>
-                  {items.map((o) => {
-                    indice += 1;
-                    const i = indice;
-                    const sel = o.uid === valor;
-                    return (
-                      <li key={o.uid}>
-                        <button
-                          type="button"
-                          role="option"
-                          aria-selected={sel}
-                          onClick={() => elegir(o.uid)}
-                          onMouseEnter={() => setActivo(i)}
-                          className={cn(
-                            "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-                            i === activo ? "bg-[var(--app-bg)]" : "",
-                            sel ? "font-semibold text-[var(--text)]" : "text-[var(--text-muted)]",
-                          )}
-                        >
-                          {o.color && (
-                            <span
-                              aria-hidden="true"
-                              className="h-2.5 w-2.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: o.color }}
-                            />
-                          )}
-                          <span className="truncate">{o.nombre}</span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

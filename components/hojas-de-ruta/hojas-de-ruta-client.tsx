@@ -27,7 +27,7 @@ import { useComponentFilters } from "@/components/filter-context";
 import { isAdmin } from "@/lib/auth";
 import { useAuthUser } from "@/components/auth-context";
 import { CheckIcon } from "@/components/icons";
-import { SubproyectoSelect, type SubOpcion } from "@/components/subproyecto-select";
+import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import {
@@ -301,13 +301,10 @@ export function HojasDeRutaClient() {
     [snap],
   );
 
-  // Options du sélecteur : « Proyecto global » puis les sous-projets groupés par
-  // sección (l'ordre du snapshot est déjà celui de `orden`).
+  // Options de la liste déroulante « Subproyectos » (groupées par sección ; les
+  // écoles y sont classées par numéro d'établissement, cf. HojaSelector).
   const opcionesSel = useMemo<SubOpcion[]>(
-    () => [
-      { uid: "global", nombre: "Proyecto global", seccion: "General" },
-      ...subproyectos.map((s) => ({ uid: s.uid, nombre: s.nombre, seccion: s.seccion })),
-    ],
+    () => subproyectos.map((s) => ({ uid: s.uid, nombre: s.nombre, seccion: s.seccion })),
     [subproyectos],
   );
 
@@ -1231,27 +1228,23 @@ export function HojasDeRutaClient() {
         )}
       </div>
 
-      {/* Navegación entre hojas de ruta : liste déroulante avec recherche
-          (encombrement constant quel que soit le nombre de sous-projets). */}
-      <nav aria-label="Hojas de ruta" className="flex flex-wrap items-center gap-3">
-        <SubproyectoSelect
+      {/* Navegación entre hojas de ruta : trois boutons, seul « Subproyectos » déroule. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <HojaSelector
           etiqueta="Elegir hoja de ruta"
-          opciones={opcionesSel}
+          subproyectos={opcionesSel}
           valor={seleccion}
           onChange={(uid) => setSeleccion(uid)}
-          className="w-full max-w-md"
         />
         {snap.status === "loading" && (
-          <span className="self-center text-sm text-[var(--text-muted)]">
-            Cargando subproyectos…
-          </span>
+          <span className="text-sm text-[var(--text-muted)]">Cargando subproyectos…</span>
         )}
         {snap.status === "error" && (
-          <span className="self-center text-sm text-[var(--text-muted)]">
+          <span className="text-sm text-[var(--text-muted)]">
             No se pudieron cargar los subproyectos.
           </span>
         )}
-      </nav>
+      </div>
 
       {linking && (
         <div className="flex items-center justify-between gap-3 rounded-md border border-[var(--focus)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text)]">
