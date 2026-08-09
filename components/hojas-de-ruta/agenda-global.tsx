@@ -80,7 +80,7 @@ export function AgendaGlobal({
                 sidebar, lib/constants). Les repères colorés en tête de bandeau
                 ont été retirés — la fenêtre se lit au libellé, pas à la couleur. */}
             <div
-              className="flex items-center gap-2.5 px-4 py-1.5"
+              className="flex items-center gap-2.5 px-4 py-1"
               style={{ backgroundColor: UI.sidebarBg }}
             >
               <h3
@@ -98,7 +98,7 @@ export function AgendaGlobal({
             </div>
 
             {tareas.length === 0 ? (
-              <p className="px-4 py-3 text-sm text-[var(--text-muted)]">
+              <p className="px-4 py-1.5 text-[13px] text-[var(--text-muted)]">
                 {enCurso ? "Ninguna tarea en curso." : "Nada previsto en esta ventana."}
               </p>
             ) : (
@@ -112,48 +112,52 @@ export function AgendaGlobal({
                   return (
                     <li
                       key={t.id}
-                      className="grid grid-cols-[96px_1fr] items-stretch gap-x-3 gap-y-1 border-b border-[var(--border)] px-4 py-2 last:border-b-0 sm:grid-cols-[96px_48px_1fr_104px]"
+                      // Liseré de typologie SUR LE BORD de la ligne (pas un trait
+                      // au milieu), comme ailleurs dans l'app. Lignes serrées :
+                      // la vue doit se balayer d'un coup d'œil.
+                      className="grid grid-cols-[88px_1fr] items-stretch gap-x-3 border-b border-l-[3px] border-[var(--border)] py-1 pl-3 pr-4 last:border-b-0 sm:grid-cols-[88px_44px_1fr_112px]"
+                      style={{ borderLeftColor: tip?.color ?? UI.textMuted }}
                     >
-                      {/* Bâtiment : texte courant, encadré d'un liseré à la couleur
-                          de sa typologie à gauche et d'un filet léger à droite qui
-                          le sépare du reste du tableau. La pastille pleine était
-                          jugée trop appuyée. La feuille globale n'a pas de
-                          typologie : liseré gris neutre. */}
+                      {/* Bâtiment : texte courant, séparé du reste du tableau par
+                          un filet léger. La pastille pleine était trop appuyée. */}
                       <span
-                        className="flex items-center border-l-[3px] border-r pl-2 pr-2 text-xs leading-snug text-[var(--text)]"
-                        style={{
-                          borderLeftColor: tip?.color ?? UI.textMuted,
-                          borderRightColor: UI.border,
-                        }}
+                        className="flex items-center border-r border-[var(--border)] pr-2 text-xs leading-tight text-[var(--text)]"
                         title={t.subproyecto}
                       >
                         {t.sigla}
                       </span>
 
                       {t.esFase ? (
-                        <span className="justify-self-start self-center rounded border border-[var(--border)] px-1.5 py-0.5 text-xs font-semibold text-[var(--text-muted)]">
+                        <span className="justify-self-start self-center rounded border border-[var(--border)] px-1.5 text-[11px] font-semibold leading-tight text-[var(--text-muted)]">
                           Fase
                         </span>
                       ) : (
                         <span
-                          className="justify-self-start self-center rounded px-2 py-0.5 text-xs font-bold"
+                          className="justify-self-start self-center rounded px-1.5 text-[11px] font-bold leading-tight"
                           style={{ backgroundColor: tono?.head, color: tono?.headText }}
                         >
                           {t.componente}
                         </span>
                       )}
 
-                      <span className="col-start-2 self-center text-sm leading-snug text-[var(--text)] sm:col-start-3">
+                      <span className="col-start-2 self-center text-[13px] leading-tight text-[var(--text)] sm:col-start-3">
                         {t.nombre}
                       </span>
 
-                      <span className="col-start-2 self-center text-xs tabular-nums text-[var(--text-muted)] sm:col-start-4 sm:text-right">
-                        <b className="block font-semibold text-[var(--text)]">
-                          {enCurso ? `hasta ${fmtCorta(ref)}` : fmtCorta(ref)}
-                        </b>
-                        {enCurso
-                          ? `quedan ${n} ${n === 1 ? "día" : "días"}`
-                          : `en ${n} ${n === 1 ? "día" : "días"}`}
+                      {/* Une seule ligne : la date de référence puis le nombre de
+                          jours. « hasta / en » est déjà porté par le bandeau de
+                          la fenêtre — la phrase complète reste au survol. */}
+                      <span
+                        className="col-start-2 self-center text-[11px] leading-tight tabular-nums text-[var(--text-muted)] sm:col-start-4 sm:text-right"
+                        title={
+                          enCurso
+                            ? `Hasta el ${fmtCorta(ref)} · quedan ${n} ${n === 1 ? "día" : "días"}`
+                            : `Empieza el ${fmtCorta(ref)} · en ${n} ${n === 1 ? "día" : "días"}`
+                        }
+                      >
+                        <b className="font-semibold text-[var(--text)]">{fmtCorta(ref)}</b>
+                        {" · "}
+                        {n} {n === 1 ? "día" : "días"}
                       </span>
                     </li>
                   );
