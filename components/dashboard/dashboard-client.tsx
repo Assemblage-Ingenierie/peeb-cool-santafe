@@ -61,7 +61,7 @@ export function DashboardClient() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-4">
 
       {/* Fases en curso (tracker) + Estado de implementación del PAG — juste sous l'agenda */}
       {snap.status === "ready" && <FasesTracker snapshot={snap.data} />}
@@ -92,7 +92,9 @@ export function DashboardClient() {
         </div>
       </section>
 
-      {/* Panneau central — déplié uniquement en mode « Subproyectos » */}
+      {/* Panneau central — rendu uniquement en mode « Subproyectos » : évite la
+          zone vide (double gap autour d'un panneau replié) en mode global. */}
+      {mode === "subproyectos" && (
       <div
         className={cn(
           "grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none",
@@ -120,6 +122,7 @@ export function DashboardClient() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Mode « Proyecto global » : grand tableau « Resumen » au-dessus des blocs */}
       {mode === "global" && snap.status === "ready" && (

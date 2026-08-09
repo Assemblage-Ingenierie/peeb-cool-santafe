@@ -65,19 +65,19 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
   const showPag = filtros.has("G");
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Fases en curso · subproyectos */}
       <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-4 py-3">
-          <h2 className="text-[15px] font-bold text-[var(--text)]">Fases en curso · subproyectos</h2>
-          <span className="inline-flex items-center gap-1.5 text-[11.5px] text-[var(--text-muted)] tabular-nums">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] px-3.5 py-1.5">
+          <h2 className="text-[13px] font-bold text-[var(--text)]">Fases en curso · subproyectos</h2>
+          <span className="inline-flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] tabular-nums">
             <span className="h-3 w-0.5 rounded-sm bg-[var(--accent)]" />
             hoy
           </span>
         </div>
 
         {/* Leyenda de fases (colores del cronograma) */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1.5 border-b border-[var(--border)] px-4 py-2.5 text-[11px] text-[var(--text-muted)]">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-[var(--border)] px-3.5 py-1.5 text-[11px] text-[var(--text-muted)]">
           {LEYENDA_FASES.map((code) => {
             const color = colorDeFase(code);
             const nombre = GESTION_FASES.find((f) => f.code === code)?.nombre ?? code;
@@ -95,7 +95,7 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
           })}
         </div>
 
-        <div className="p-4">
+        <div className="p-3">
           {error ? (
             <p className="py-2 text-center text-sm text-[var(--text-muted)]">No se pudieron cargar las fases.</p>
           ) : cargando ? (
@@ -146,12 +146,12 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
       {/* Estado de implementación del PAG (componente Género → sigue el filtro) */}
       {showPag && (
         <section className="overflow-hidden rounded-lg border-0">
-          <div className="px-4 py-3" style={{ backgroundColor: G_HEAD }}>
-            <h2 className="text-[15px] font-bold" style={{ color: G_HEAD_TXT }}>
+          <div className="px-3.5 py-1.5" style={{ backgroundColor: G_HEAD }}>
+            <h2 className="text-[13px] font-bold" style={{ color: G_HEAD_TXT }}>
               Estado de implementación del PAG
             </h2>
           </div>
-          <div className="bg-[var(--surface)] px-4 py-3">
+          <div className="bg-[var(--surface)] px-3.5 py-2.5">
             {error ? (
               <p className="text-sm text-[var(--text-muted)]">No se pudo cargar el PAG.</p>
             ) : cargando ? (
