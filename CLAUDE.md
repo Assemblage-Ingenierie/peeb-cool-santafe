@@ -245,9 +245,10 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   famille B (`punto: fin`) → `__ent__` avec `extremo: "fin"` et l'écart
   `-desfase - durée` (0 dans 12 cas sur 14) ; `validacion_anteproyecto` → après
   la fin de `__ent__`.
-- ⚠ **Noms de livrables À CONFIRMER** : `Entrega de los estudios preliminares`,
-  `Entrega del informe de evaluación`, `Recepción de obra`. Les trois autres se
-  déduisent du contenu de la phase et du CNO qui suit.
+- **Noms de livrables validés avec le client** (août 2026), les six :
+  `Entrega de los estudios preliminares`, `Entrega del anteproyecto`,
+  `Entrega del proyecto ejecutivo`, `Entrega del pliego`,
+  `Entrega del informe de evaluación`, `Recepción de obra`.
 - **Une seule date absolue par sous-projet** (migration 037) : le démarrage de la
   chaîne, `__ini__estudios_preliminares`. Tout le reste se déduit — déplacer ce
   seul repère décale le sous-projet entier. Une date saisie au milieu de la
