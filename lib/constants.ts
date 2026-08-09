@@ -38,10 +38,16 @@ export const COMPONENTES: Componente[] = [
 ];
 
 // --- Typologies de bâtiment (CDC §2.4) ---
+// Charte revue avec le client : ámbar / burdeos / sarcelle (texte blanc pour les
+// trois). Remplace les deux rouges d'origine (A #990000 / H #cc0000, quasi
+// indiscernables et en conflit avec le rouge de marque) et le bleu Escuelas
+// #3c78d8 (qui empiétait sur le dégradé de bleus des fases, cf. cronograma-client).
+// Teintes choisies hors des familles déjà prises : GP gris, EE doré/orange,
+// AyS vert, Género violet, marque/AFD rouge, fases bleu.
 export const TIPOLOGIAS: Tipologia[] = [
-  { code: "A", nombre: "Aeropuertos", color: "#990000", textoClaro: true, onColor: TEXTO_CLARO },
-  { code: "H", nombre: "Hospitales",  color: "#cc0000", textoClaro: true, onColor: TEXTO_CLARO },
-  { code: "E", nombre: "Escuelas",    color: "#3c78d8", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "A", nombre: "Aeropuertos", color: "#b45f10", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "H", nombre: "Hospitales",  color: "#8c3a52", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "E", nombre: "Escuelas",    color: "#0b7d71", textoClaro: true, onColor: TEXTO_CLARO },
 ];
 
 export const getComponente = (code: string): Componente | undefined =>
@@ -431,7 +437,8 @@ export const GESTION_FASES: { code: string; nombre: string }[] = FASES.flatMap((
 // ============================================================
 // Tokens de surface (UI neutre). NE SONT PAS des couleurs de marque :
 // implémentation du « fond gris clair » et de la sidebar #30323e (CDC §2.1).
-// `focus` réutilise le bleu Escuelas (#3c78d8) de la palette — pas une couleur nouvelle.
+// `focus` = bleu neutre #3c78d8 (anciennement aussi la couleur Escuelas, avant la
+// refonte de la charte des typologies ; conservé tel quel pour l'anneau de focus).
 // ============================================================
 export const UI = {
   sidebarBg: "#30323e",
@@ -446,8 +453,9 @@ export const UI = {
   text: TEXTO_OSCURO,
   textMuted: "#646b78",
   focus: "#3c78d8",
-  // Accent de marque = rouge Assemblage (#E30513, charte graphique).
-  // Distinct de la typologie H (#cc0000) pour éviter toute confusion.
+  // Accent de marque = rouge Assemblage (#E30513, charte graphique). Depuis la
+  // refonte des typologies, plus aucune typologie n'est rouge → le rouge redevient
+  // le signal exclusif « marque / actif ».
   // Usage : indicateur de l'item de navigation actif (CDC §2.1 / charte §8).
   accent: "#E30513",
   // Vert « action positive » (accorder un accès). PAS une couleur nouvelle :
