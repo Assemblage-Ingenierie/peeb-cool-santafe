@@ -10,6 +10,7 @@ import {
   CARD_TONOS,
   RESPONSABLE_DEFECTO,
   DURACION_UNIDADES,
+  GESTION_FASES,
   HITO_CNO_PREFIX,
   esModeloEnvolvente,
   type ComponenteCode,
@@ -583,19 +584,18 @@ export function HojasDeRutaClient() {
         desfaseUnidad: e.desfaseUnidad,
         extremo: e.extremo,
       }));
+    // Nœuds de phase : la LISTE vient du référentiel, plus de `gestion_lineas`.
+    // En modèle enveloppe la phase découle de ses lignes — la table n'avait
+    // plus rien à apporter, et la feuille ne dépend plus de l'Admin.
     const faseInicio: Record<string, string | null> = {};
-    for (const f of snap.data.fases) {
-      if (f.subproyecto_uid !== seleccion) continue;
-      faseInicio[f.fase] = f.fecha_inicio;
-      // Nœud de phase planifiable/enlazable (dates/durée = Gestión de subproyectos).
-      // En mode enveloppe il n'a plus de dates propres : elles découlent des lignes.
+    for (const f of GESTION_FASES) {
       tasks.push({
-        key: faseNodeKey(f.fase),
+        key: faseNodeKey(f.code),
         fase: "",
-        durValor: envolvente ? null : f.dur_valor ?? null,
-        durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
-        fechaInicio: envolvente ? null : f.fecha_inicio,
-        fechaFin: envolvente ? null : f.fecha_fin,
+        durValor: null,
+        durUnidad: null,
+        fechaInicio: null,
+        fechaFin: null,
       });
     }
     return {

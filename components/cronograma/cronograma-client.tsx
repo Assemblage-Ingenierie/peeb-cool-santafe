@@ -268,19 +268,19 @@ function armar(uid: string, tipologia: string, d: DatosCronograma) {
       fechaFin: p?.fechaFin ?? null,
     });
   }
+  // Nœuds de phase : la LISTE vient du référentiel (`GESTION_FASES`), pas de
+  // `gestion_lineas`. En modèle enveloppe la phase n'a ni date ni durée propre
+  // — elle découle de ses lignes — donc la table n'avait plus rien à apporter
+  // ici, et le cronograma ne dépend plus de ce que l'Admin y saisit.
   const faseInicio: Record<string, string | null> = {};
-  for (const f of d.fases) {
-    if (f.subproyecto_uid !== uid) continue;
-    faseInicio[f.fase] = f.fecha_inicio;
+  for (const f of GESTION_FASES) {
     tasks.push({
-      key: faseNodeKey(f.fase),
+      key: faseNodeKey(f.code),
       fase: "",
-      // En mode enveloppe, la phase n'a plus ni date ni durée propre : elle
-      // découle de ses lignes. On garde le nœud pour pouvoir l'enlacer.
-      durValor: envolvente ? null : f.dur_valor,
-      durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
-      fechaInicio: envolvente ? null : f.fecha_inicio,
-      fechaFin: envolvente ? null : f.fecha_fin,
+      durValor: null,
+      durUnidad: null,
+      fechaInicio: null,
+      fechaFin: null,
     });
   }
   const links = d.roadmapEnlace

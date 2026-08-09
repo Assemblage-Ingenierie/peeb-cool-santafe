@@ -111,20 +111,19 @@ function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: numb
       });
     }
   }
-  // Nœuds de phase. En mode enveloppe ils n'ont plus ni date ni durée propres.
+  // Nœuds de phase : la LISTE vient du référentiel, plus de `gestion_lineas`.
+  // En modèle enveloppe la phase découle de ses lignes, et une phase sans ligne
+  // datée se signale par `sinAncla` — plus besoin de savoir laquelle portait
+  // une date en base.
   const faseInicio: Record<string, string | null> = {};
-  const anclada = new Set<string>(); // phases réellement programmées (modèle historique)
-  for (const f of datos.fases) {
-    if (f.subproyecto_uid !== uid) continue;
-    faseInicio[f.fase] = f.fecha_inicio;
-    if (f.fecha_inicio != null) anclada.add(f.fase);
+  for (const f of GESTION_FASES) {
     tasks.push({
-      key: faseNodeKey(f.fase),
+      key: faseNodeKey(f.code),
       fase: "",
-      durValor: envolvente ? null : f.dur_valor,
-      durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
-      fechaInicio: envolvente ? null : f.fecha_inicio,
-      fechaFin: envolvente ? null : f.fecha_fin,
+      durValor: null,
+      durUnidad: null,
+      fechaInicio: null,
+      fechaFin: null,
     });
   }
 
@@ -151,10 +150,9 @@ function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: numb
   const enveloppes: { code: string; startMs: number; endMs: number }[] = [];
   for (const f of FASES_ORD) {
     const sr = sched.get(faseNodeKey(f.code));
+    // `sinAncla` suffit désormais : une phase sans ligne datée n'a pas
+    // d'enveloppe, et le moteur le dit au lieu de la poser au début du projet.
     if (!sr || sr.sinAncla) continue;
-    // Modèle historique : ignorer les phases SANS fecha_inicio (computeSchedule
-    // les pose au début du projet faute d'ancre → artefact, cf. écoles del alcance).
-    if (!envolvente && !anclada.has(f.code)) continue;
     const s = isoMs(sr.start);
     const e = isoMs(sr.end);
     if (s == null || e == null) continue;

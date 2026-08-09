@@ -235,11 +235,23 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   chaîne : « Negociación y firma del contrato » (GP) s'affichait avant les
   jalons AFD dont elle découle. À date égale, `ORDEN_ROL` fait entrer par le
   repère `Inicio` et sortir par la remise puis les CNO.
-- ⚠ **Les dates de phase de `peebcoolsf_gestion_lineas` deviennent inertes** pour
-  ces sous-projets (elles pilotent encore Inicio et Gestión de subproyectos → la
-  divergence est attendue, pas un bug). Avant 036 elles écrasaient les liaisons
-  entre phases : celles-ci existaient mais **ne servaient à rien** (la date
-  manuelle gagne, priorité 1 de `computeSchedule`).
+- ⚠ **`peebcoolsf_gestion_lineas` ne pilote plus AUCUNE date du planning.** Les
+  quatre points de calcul (`cronograma-client`, `hojas-de-ruta-client`,
+  `agenda`, `fases-actuales`) construisent leurs nœuds `__fase__` depuis
+  **`GESTION_FASES`** (le référentiel du code). La table a servi une seule fois,
+  à la migration 039, pour fabriquer les repères ; ensuite les repères ont pris
+  le relais. Avant 036 ses dates écrasaient les liaisons entre phases : celles-ci
+  existaient mais **ne servaient à rien** (la date manuelle gagne, priorité 1).
+  - Objectif : **tout se pilote depuis le cronograma**, et la section
+    « Gestión de subproyectos » de l'Admin sera supprimée. Étapes restantes :
+    décider où vit l'avancement (proposition : `realizada` sur le repère
+    `__ent__<fase>`), migrer les 3 lecteurs « métier » (`bottom-band`,
+    `GlobalTable`, `export-resumen`, qui lisent encore `estado`), passer la
+    section en lecture seule, puis la retirer.
+  - ⚠ **Ne jamais supprimer la table** : elle porte aussi les **documents** des
+    sous-projets (`tipo_linea <> 'etapa'`). Et même les lignes `etapa` doivent
+    rester : la migration 039 les relit pour fabriquer les repères, et elles
+    sont la seule trace de l'échelonnement d'origine.
 - **Conversion des liaisons** (SUB-AIR, 30 liaisons « tarea → sa propre fase »
   reconverties sans arbitrage manuel) : famille A (`punto: inicio`) → `__ini__` ;
   famille B (`punto: fin`) → `__ent__` avec `extremo: "fin"` et l'écart

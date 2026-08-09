@@ -1,4 +1,4 @@
-import { FASES, HITOS_FASE, esModeloEnvolvente, type ComponenteCode } from "@/lib/constants";
+import { FASES, GESTION_FASES, HITOS_FASE, esModeloEnvolvente, type ComponenteCode } from "@/lib/constants";
 import { construirCartasPorFila, lineasHito, type RoadmapOverride } from "@/lib/roadmap";
 import { computeSchedule, faseNodeKey, type Unidad } from "@/lib/schedule";
 import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/semestres";
@@ -149,21 +149,21 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
     }
   }
 
-  // Ancres de phase : nœuds `__fase__*`, qui servent aussi de tâches à part
-  // entière (le démarrage d'une phase est un jalon en soi). En mode enveloppe
-  // ils n'ont plus de dates propres : elles découlent des lignes de la phase.
+  // Nœuds de phase : la LISTE vient du référentiel, plus de `gestion_lineas`.
+  // En modèle enveloppe la phase découle de ses lignes ; la feuille globale
+  // n'a pas de phases du tout.
   const faseInicio: Record<string, string | null> = {};
-  const fasesFeuille = esGlobal ? [] : datos.fases.filter((f) => f.subproyecto_uid === feuille);
-  for (const f of fasesFeuille) {
-    faseInicio[f.fase] = f.fecha_inicio;
-    tasks.push({
-      key: faseNodeKey(f.fase),
-      fase: "",
-      durValor: envolvente ? null : f.dur_valor,
-      durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
-      fechaInicio: envolvente ? null : f.fecha_inicio,
-      fechaFin: envolvente ? null : f.fecha_fin,
-    });
+  if (!esGlobal) {
+    for (const f of GESTION_FASES) {
+      tasks.push({
+        key: faseNodeKey(f.code),
+        fase: "",
+        durValor: null,
+        durUnidad: null,
+        fechaInicio: null,
+        fechaFin: null,
+      });
+    }
   }
 
   const links = datos.roadmapEnlace
