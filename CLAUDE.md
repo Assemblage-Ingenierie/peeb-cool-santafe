@@ -231,16 +231,20 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   Inicio pliegos → Entrega pliego → No objeción AFD → Inicio licitación →
   Análisis → Entrega informe → CNO Atribución → Negociación → CNO Contrato →
   Inicio obra → Recepción.
-- ⚠ `Pre-categorización provincial digital` démarre avec l'**anteproyecto** mais
-  appartient à la fase **Proyecto ejecutivo** : l'enveloppe de cette phase
-  commence donc deux mois et demi avant son propre repère `Inicio`, et recouvre
-  l'anteproyecto. Assumé, à trancher (déplacer la carte de fase ou l'accepter).
+- **Détecteur de câblage douteux** : une phase dont l'enveloppe démarre AVANT
+  son propre repère `Inicio` signale toujours qu'une de ses tâches pend de
+  quelque chose d'antérieur. C'est arrivé avec `Pre-categorización provincial
+  digital`, accrochée un temps au début de l'anteproyecto alors qu'elle
+  appartient au proyecto ejecutivo (corrigé en 038). Sur SUB-AIR, chaque
+  enveloppe va désormais exactement de son `Inicio` à son terme.
 - **Pas encore fait** : le mode édition interactif du cronograma (bouton
   « Editar », fiche durée/ancrage au clic sur une barre, insertion et
   suppression de ligne au survol, réordonnancement au glisser, mode « Ver
   dependencias », annulation). Maquette de référence validée, à porter.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 037**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 038**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 038 : `Pre-categorización provincial digital` (SUB-AIR) démarre avec le
+  proyecto ejecutivo, sa propre fase — corrige la liaison de 037.
 - 037 : recâblage de la chaîne d'avancement de **SUB-AIR** (une seule date
   absolue, cf. ci-dessus) et création de `validacion_proyecto_ejecutivo` dans
   `ROADMAP_TAREAS` → semée avec sa durée (2 semaines) pour **les 27
