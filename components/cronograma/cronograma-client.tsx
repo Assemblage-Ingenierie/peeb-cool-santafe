@@ -7,6 +7,8 @@ import {
   GESTION_FASES,
   HITO_COLOR,
   HITO_CNO_PREFIX,
+  ROJO_AFD,
+  GP_BARRA,
   esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
@@ -86,12 +88,8 @@ const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep",
 
 // Bleus progressifs pour les barres de phase (clair → foncé).
 const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"];
-// Rouge des fases « No objeción AFD » (jalons critiques mis en évidence).
-const ROJO_AFD = "#cc0000";
-// Gris des barres GP dans le Gantt : plus clair que le noir des cartes GP de la
-// feuille de route (CARD_TONOS.GP.head = #434343), pour alléger la lecture du
-// cronograma. Spécifique au Gantt (n'affecte pas les cartes des Hojas de ruta).
-const GP_BARRA = "#808080";
+// Rouge des « No objeción AFD » : importé de la charte, plus redéfini ici — il
+// est partagé avec les losanges de jalon (HITO_COLOR.cno).
 // Couleurs spécifiques par fase (priment sur le dégradé de bleus).
 // Reprises du cronograma de référence (« PEEB Santa Fe - AT Etapa 1 ») pour que
 // l'app et l'Excel se lisent avec le même code couleur.

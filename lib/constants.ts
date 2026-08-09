@@ -373,12 +373,24 @@ export function rolDeHito(tareaKey: string): HitoRol | null {
 
 export const esHitoKey = (tareaKey: string): boolean => rolDeHito(tareaKey) !== null;
 
-// Couleur du repère selon son rôle. Reprises de la palette existante : gris et
-// noir GP (ce sont des étapes de processus), rouge des « No objeción AFD ».
+// Rouge des « No objeción AFD ». Depuis la refonte de la charte des typologies
+// il n'appartient plus qu'à la famille marque/AFD : c'était aussi la couleur de
+// Hospitales (#cc0000), qui est passée au burdeos. Source unique — le Gantt
+// l'importe au lieu de le redéfinir.
+export const ROJO_AFD = "#cc0000";
+
+// Gris des barres GP dans le Gantt : plus clair que le noir des cartes GP de la
+// feuille de route (CARD_TONOS.GP.head), pour alléger la lecture du cronograma.
+// Spécifique au Gantt — n'affecte pas les cartes des Hojas de ruta.
+export const GP_BARRA = "#808080";
+
+// Couleur du repère selon son rôle — aucune teinte nouvelle : le début de phase
+// prend le gris GP du Gantt, la remise le noir GP des cartes (c'est un
+// livrable, plus appuyé), le jalon le rouge AFD.
 export const HITO_COLOR: Record<HitoRol, string> = {
-  inicio: "#808080",
-  entrega: "#434343",
-  cno: "#cc0000",
+  inicio: GP_BARRA,
+  entrega: CARD_TONOS.GP.head,
+  cno: ROJO_AFD,
 };
 
 // Unités de « duración estimada » (planification des tâches/fases). Source unique

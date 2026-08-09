@@ -15,6 +15,15 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 
 ## Règles importantes
 - Toutes les couleurs et libellés de composantes/typologies sont dans `lib/constants.ts`
+  - Typologies (charte revue, août 2026) : A ámbar `#b45f10`, H burdeos `#8c3a52`,
+    E sarcelle `#0b7d71`, texte blanc. Variante vibrante `TIPOLOGIA_COLOR_MAPA`
+    réservée aux **marqueurs de carte**. Plus aucune typologie n'est rouge : le
+    rouge appartient à la marque (`UI.accent`) et à l'AFD (`ROJO_AFD`).
+  - `ROJO_AFD` / `GP_BARRA` / `HITO_COLOR` : source unique dans `constants.ts`.
+    Le Gantt les importe — il les redéfinissait, d'où deux valeurs à maintenir.
+  - ⚠ Les couleurs de **fase** du cronograma (dégradé de bleus, `FASE_COLOR`)
+    restent en dur dans `cronograma-client.tsx` : toute nouvelle teinte doit
+    éviter cette famille de bleus.
 - Les calculs dérivés (économie kWh, %, kWh/m²) ne sont JAMAIS stockés en DB — calculés à l'affichage
 - Calculs dérivés dans `lib/calc.ts` ; formatage d'affichage dans `lib/format.ts`
 - Données manquantes = NULL → afficher « — », jamais 0 (milliers en espace insécable)
