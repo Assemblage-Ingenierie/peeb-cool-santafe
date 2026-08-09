@@ -303,6 +303,9 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   // --- Gestión de proyecto (GP) — étapes de processus (palette noir/gris),
   // rendues dans la colonne EE. Timing géré par liaisons (Excel Hojaruta). ---
   { id: "validacion_anteproyecto", fase: "anteproyecto", componente: "GP", nombre: "Validación de anteproyecto" },
+  // Jumelle de la précédente, à la fin du proyecto ejecutivo : la remise du
+  // livrable est suivie de sa validation, qui seule ouvre la phase suivante.
+  { id: "validacion_proyecto_ejecutivo", fase: "proyecto_ejecutivo", componente: "GP", nombre: "Validación de proyecto ejecutivo" },
   { id: "gp-lic-publicacion", fase: "licitacion", componente: "GP", nombre: "Publicación del pliego" },
   { id: "gp-lic-analisis", fase: "licitacion", componente: "GP", nombre: "Análisis y atribución" },
   { id: "gp-lic-negociacion", fase: "licitacion", componente: "GP", nombre: "Negociación y firma del contrato" },

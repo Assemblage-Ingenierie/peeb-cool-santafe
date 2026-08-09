@@ -222,11 +222,31 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 - ⚠ **Noms de livrables À CONFIRMER** : `Entrega de los estudios preliminares`,
   `Entrega del informe de evaluación`, `Recepción de obra`. Les trois autres se
   déduisent du contenu de la phase et du CNO qui suit.
+- **Une seule date absolue par sous-projet** (migration 037) : le démarrage de la
+  chaîne, `__ini__estudios_preliminares`. Tout le reste se déduit — déplacer ce
+  seul repère décale le sous-projet entier. Une date saisie au milieu de la
+  chaîne fige son maillon et bloque la propagation : c'est le défaut à traquer.
+- **Chaîne d'avancement** (SUB-AIR, migration 037) : Entrega EP → Inicio AP →
+  Entrega AP → Validación AP → Inicio PE → Entrega PE → **Validación PE** →
+  Inicio pliegos → Entrega pliego → No objeción AFD → Inicio licitación →
+  Análisis → Entrega informe → CNO Atribución → Negociación → CNO Contrato →
+  Inicio obra → Recepción.
+- ⚠ `Pre-categorización provincial digital` démarre avec l'**anteproyecto** mais
+  appartient à la fase **Proyecto ejecutivo** : l'enveloppe de cette phase
+  commence donc deux mois et demi avant son propre repère `Inicio`, et recouvre
+  l'anteproyecto. Assumé, à trancher (déplacer la carte de fase ou l'accepter).
 - **Pas encore fait** : le mode édition interactif du cronograma (bouton
-  « Editar », fiche durée/ancrage au clic sur une barre, insertion de ligne au
-  survol, réordonnancement au glisser). Maquette de référence validée.
+  « Editar », fiche durée/ancrage au clic sur une barre, insertion et
+  suppression de ligne au survol, réordonnancement au glisser, mode « Ver
+  dependencias », annulation). Maquette de référence validée, à porter.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 036**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 037**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 037 : recâblage de la chaîne d'avancement de **SUB-AIR** (une seule date
+  absolue, cf. ci-dessus) et création de `validacion_proyecto_ejecutivo` dans
+  `ROADMAP_TAREAS` → semée avec sa durée (2 semaines) pour **les 27
+  sous-projets**. Chez les 26 restés au modèle historique elle se pose au début
+  de sa fase (aucune liaison) et ne déplace rien. État antérieur des liaisons
+  SUB-AIR dans `peebcoolsf_bak_enlace_037`.
 - 036 : modèle enveloppe sur **SUB-AIR** (voir section ci-dessus). Colonne
   `extremo`, 15 lignes-repère, réécriture des 46 liaisons en 53. État antérieur
   dans `peebcoolsf_bak_enlace_036`. Inserts idempotents, mais le `delete` des
