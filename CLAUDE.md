@@ -140,20 +140,38 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   dans la seule famille `CARD_TONOS.G` : ACEFE aplat `#674ea7`, UG aplat `#d9d2e9`
   **sans contour**, AT **fond blanc à contour `#674ea7`**. Pas de hachures : elles
   gardent leur sens actuel (excédent au-delà de la durée estimée, `CapaBarras`).
-- **Cronograma** : `seccionesPag` (une section par cadena + les hitos) et
+- **Un impacto = un seul eje.** À cheval, on ne sait plus où chercher une acción.
+  `5.1.1` (module de communication de la formation 4.1.4) relève de l'impacto 5 :
+  il est dans l'eje `com`, pas dans `cap`. Le lien vers 4.1.4 est écrit sur la carte.
+- **Liaisons : rien d'inféré.** `PAG_ENLACES` ne contient que les **13 paires
+  réellement écrites** dans les colonnes M/N du fichier ; une flèche n'est
+  dessinée que si elle y figure. Les « cadenas » d'une première version étaient
+  inventées à 17 flèches sur 26 et en contredisaient trois — elles ont disparu au
+  profit d'un regroupement par **eje** (le même partout : cronograma détaillé,
+  vue globale, hoja de ruta). `accionesDeEje` ordonne par date en remontant chaque
+  cible juste après sa source, pour que les vraies liaisons tombent en voisinage.
+  Ce qui ne tombe pas en voisinage est écrit sur la carte (« Después de / Antes
+  de »), et `PAG_RESTRICCIONES` porte ce qui ne peut pas être une flèche : ancres
+  de phase, échéances vers la fase Obras, et l'alerte 9.2.2 (acción inexistante).
+- **Cronograma** : `seccionesPag` (une section par eje, hitos intercalés) et
   `seccionPagGlobal` (une ligne par eje, dans « Proyecto global »).
   - Colonne de gauche = `code · titre`, tronqué, titre complet au survol (largeur
-    `LABEL_W` normale). À droite de la barre, **seulement** la durée et la phase
-    d'application — jamais de dates, pour rester aligné sur le reste du cronograma.
+    `LABEL_W` normale). **Le titre est AUSSI écrit à côté de la barre**, suivi en
+    gris de la durée et de la phase d'application : la colonne reste collée à
+    gauche et tronquée quand on fait défiler l'axe, c'est à côté de la barre qu'on
+    lit la ligne en entier. Jamais de dates à côté des barres (ni pour les
+    acciones, ni pour les hitos) — elles se lisent à la position sur l'axe.
   - Vue globale : barres en **violet clair** `CARD_TONOS.G.head` avec le libellé
     écrit **DANS** la barre (`dentro`), repli sur `etiquetaCorta` si trop étroit.
-  - **Hitos = une ligne chacun**, nom en clair dans la colonne et date à côté du
-    repère (`filaHito`). Un rang de repères muets ne disait pas ce qu'ils étaient.
+  - **Hitos = une ligne chacun**, rangée sous la ligne dont le jalon est le
+    livrable. Nom en clair des deux côtés — dans la colonne, précédé d'un petit
+    triangle violet (`Fila.hito`), et à côté du repère. Jamais la date : elle se
+    lit à la position sur l'axe.
 - **Hoja de ruta** : `components/hojas-de-ruta/pag-board.tsx` — format sur mesure
-  (ni fases ni colonnes de composante), sept **rangées horizontales défilantes** de
-  cartes. Une seule rangée par cadena, sans retour à la ligne : chaque flèche relie
-  donc bien deux cartes voisines, et rappelle sous elle le **code de la carte
-  précédente** pour que le lien reste explicite après défilement.
+  (ni fases ni colonnes de composante), une **rangée horizontale défilante par
+  eje**. Les cartes ne passent jamais à la ligne : une flèche relie donc toujours
+  deux cartes voisines, et rappelle sous elle le code de la précédente. Pas de
+  liaison dans le fichier = pas de flèche, simple espace.
 - **Édition** : uniquement depuis le mode Admin de la feuille. Le PAG n'est
   **pas branché dans la section `/admin`** (choix explicite).
 - **Dates = proposition** : la colonne « Fecha en la que podría iniciarse » du fichier

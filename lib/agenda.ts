@@ -222,14 +222,29 @@ function masMeses(ms: number, n: number): number {
 }
 
 /**
+ * Fenêtre d'une tâche par rapport à « hoy » — SOURCE UNIQUE du découpage,
+ * partagée par « Próximas tareas » (feuille globale) et par la feuille PAG :
+ * les deux vues doivent classer avec les mêmes bornes, sinon le lecteur ne sait
+ * plus ce que « próximo mes » veut dire selon l'écran où il se trouve.
+ * Les fenêtres sont EXCLUSIVES : l'ordre des tests est l'ordre de priorité.
+ * `null` = hors des deux prochains mois (ou déjà terminée).
+ */
+export function ventanaDe(hoyMs: number, inicioMs: number, finMs: number): Ventana | null {
+  const lim15 = hoyMs + 15 * 86_400_000;
+  const lim1m = masMeses(hoyMs, 1);
+  const lim2m = masMeses(hoyMs, 2);
+  if (inicioMs <= hoyMs && finMs > hoyMs) return "en_curso";
+  if (inicioMs > hoyMs && inicioMs <= lim15) return "d15";
+  if (inicioMs > lim15 && inicioMs <= lim1m) return "m1";
+  if (inicioMs > lim1m && inicioMs <= lim2m) return "m2";
+  return null;
+}
+
+/**
  * Construit l'agenda à partir de TOUTES les feuilles (globale + sous-projets).
  * `hoyMs` est injecté (jamais `Date.now()` ici) pour rester testable.
  */
 export function construirAgenda(datos: Datos, hoyMs: number): Agenda {
-  const lim15 = hoyMs + 15 * 86_400_000;
-  const lim1m = masMeses(hoyMs, 1);
-  const lim2m = masMeses(hoyMs, 2);
-
   const nombreDe = new Map(datos.subproyectos.map((s) => [s.uid, s.nombre]));
   const tipoDe = new Map(datos.subproyectos.map((s) => [s.uid, s.tipologia]));
 
@@ -245,12 +260,8 @@ export function construirAgenda(datos: Datos, hoyMs: number): Agenda {
         sigla: siglaSubproyecto(f, nombreSub),
         tipologia: f === "global" ? null : tipoDe.get(f) ?? null,
       };
-      // Ordre des tests = ordre de priorité : une tâche en cours n'est jamais
-      // recomptée dans une fenêtre à venir.
-      if (tarea.inicioMs <= hoyMs && tarea.finMs > hoyMs) cubos.en_curso.push(tarea);
-      else if (tarea.inicioMs > hoyMs && tarea.inicioMs <= lim15) cubos.d15.push(tarea);
-      else if (tarea.inicioMs > lim15 && tarea.inicioMs <= lim1m) cubos.m1.push(tarea);
-      else if (tarea.inicioMs > lim1m && tarea.inicioMs <= lim2m) cubos.m2.push(tarea);
+      const v = ventanaDe(hoyMs, tarea.inicioMs, tarea.finMs);
+      if (v) cubos[v].push(tarea);
     }
   }
 

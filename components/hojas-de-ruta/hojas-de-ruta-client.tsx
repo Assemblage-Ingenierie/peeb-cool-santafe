@@ -1284,15 +1284,21 @@ export function HojasDeRutaClient() {
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
           <div className="flex items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]">
-              <input
-                type="checkbox"
-                checked={mostrarEnlaces}
-                onChange={(e) => setMostrarEnlaces(e.target.checked)}
-                className="h-3.5 w-3.5 accent-[var(--focus)]"
-              />
-              Mostrar dependencias
-            </label>
+            {/* La case n'a de sens que sur une feuille de sous-projet : c'est la
+                seule qui affiche une grille de cartes reliables. « Proyecto
+                global » (Próximas tareas) et le PAG ont leur propre format —
+                la case n'y pilotait rien. */}
+            {seleccion !== "global" && seleccion !== FEUILLE_PAG && (
+              <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]">
+                <input
+                  type="checkbox"
+                  checked={mostrarEnlaces}
+                  onChange={(e) => setMostrarEnlaces(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-[var(--focus)]"
+                />
+                Mostrar dependencias
+              </label>
+            )}
             {esAdmin && ocultasFeuille > 0 && (
               <button
                 type="button"

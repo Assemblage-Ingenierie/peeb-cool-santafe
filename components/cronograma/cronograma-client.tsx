@@ -19,16 +19,16 @@ import {
 import {
   FEUILLE_PAG,
   PAG_ACCIONES,
-  PAG_CADENAS,
   PAG_EJES,
   PAG_FASE_NOMBRE,
   PAG_HITOS,
   PAG_RELLENO,
   PAG_RESPONSABLES,
   PAG_RESP_NOMBRE,
-  getPagAccion,
+  accionesDeEje,
   pagTareaKey,
   type PagAccion,
+  type PagHito,
 } from "@/lib/pag";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
@@ -55,9 +55,9 @@ type Seleccion = "global" | string;
 
 const PROJECT_START = "2026-01-01";
 
-// Fenêtre temporelle affichée : 2026 → 2030 inclus.
+// Fenêtre temporelle affichée : 2026 → 2031 inclus.
 const ANIO_INI = 2026;
-const ANIO_FIN = 2030;
+const ANIO_FIN = 2031;
 const START = new Date(ANIO_INI, 0, 1).getTime();
 const END = new Date(ANIO_FIN + 1, 0, 1).getTime();
 const SPAN = END - START;
@@ -207,6 +207,8 @@ interface Barra {
 interface Fila {
   label: string;
   bold?: boolean;
+  // Ligne de jalon : un petit triangle violet précède le nom dans la colonne.
+  hito?: boolean;
   barras: Barra[];
   // Première ligne d'un nouveau groupe de typologie (Aeropuertos / Hospitales /
   // Escuelas) : une bande gris clair est ménagée au-dessus.
@@ -405,9 +407,12 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
 // deux vues ne peuvent pas diverger. Les informes semblables sont regroupés sur
 // UNE ligne commune (GP ; AyS) ; les autres tâches ont chacune leur ligne. Le
 // titre est écrit À CÔTÉ de la barre (comme pour les sous-projets).
-// La section « Implementación del PAG » est construite à part (seccionPagGlobal) :
-// son contenu ne vient plus de cette feuille mais du catalogue lib/pag.
-function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion {
+// Les cartes de composante GÉNERO sont mises à part : elles ne restent pas dans
+// le projet global, elles rejoignent la section « Implementación del PAG ».
+function seccionGlobalRoadmap(
+  d: DatosCronograma,
+  filtros: Set<string>,
+): { global: Seccion; genero: Fila[] } {
   const estado = new Map<string, RoadmapOverride>();
   const stored = new Map<string, PlanStored>();
   for (const r of d.roadmapEstado) {
@@ -471,6 +476,9 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
   const infGP: Fila & { _s: number } = { label: "Informe semestral / anual", barras: [], _s: Infinity };
   const infAyS: Fila & { _s: number } = { label: "Informe Semestral AyS", barras: [], _s: Infinity };
   const otras: (Fila & { _s: number })[] = [];
+  // Cartes Género créées à la main sur la feuille globale : elles partent dans
+  // la section « Implementación del PAG », pas dans le projet global.
+  const genero: (Fila & { _s: number })[] = [];
   for (const it of items) {
     const b = barraCard(it.key, it.comp, it.nombre);
     if (!b) continue;
@@ -480,11 +488,14 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
     } else if (it.key.startsWith("informe-ays-")) {
       infAyS.barras.push(b);
       infAyS._s = Math.min(infAyS._s, b.startMs);
+    } else if (it.comp === "G") {
+      genero.push({ label: it.nombre, barras: [b], _s: b.startMs });
     } else {
       otras.push({ label: it.nombre, barras: [b], _s: b.startMs });
     }
   }
   otras.sort((a, b) => a._s - b._s);
+  genero.sort((a, b) => a._s - b._s);
   const filas: (Fila & { _s: number })[] = [];
   if (infGP.barras.length > 0) filas.push(infGP);
   if (infAyS.barras.length > 0) filas.push(infAyS);
@@ -493,14 +504,17 @@ function seccionGlobalRoadmap(d: DatosCronograma, filtros: Set<string>): Seccion
   const desnudar = (f: (Fila & { _s: number })[]) => f.map(({ label, barras }) => ({ label, barras }));
 
   return {
-    titulo: "Proyecto global",
-    barras: [],
-    // Lignes de capacitaciones : libellés en place, planning À DÉFINIR.
-    filas: [
-      ...desnudar(filas),
-      { label: "Capacitaciones Eficiencia Energética", barras: [] },
-      { label: "Capacitaciones Género", barras: [] },
-    ],
+    global: {
+      titulo: "Proyecto global",
+      barras: [],
+      // Lignes de capacitaciones : libellés en place, planning À DÉFINIR.
+      filas: [
+        ...desnudar(filas),
+        { label: "Capacitaciones Eficiencia Energética", barras: [] },
+        { label: "Capacitaciones Género", barras: [] },
+      ],
+    },
+    genero: desnudar(genero),
   };
 }
 
@@ -539,22 +553,28 @@ function tareasPag(d: DatosCronograma): ScheduleTask[] {
 
 const UNIDAD_CORTA: Record<string, string> = { dia: "d", semana: "sem", mes: "meses" };
 
-// Barre d'une acción : remplissage du responsable ; à côté, seulement la durée
-// et la phase d'application (le titre est dans la colonne de gauche).
+// Barre d'une acción : remplissage du responsable, puis le titre écrit À CÔTÉ,
+// suivi en gris de la durée et de la phase d'application. Le titre est aussi
+// dans la colonne de gauche, mais elle est tronquée et reste collée à gauche
+// quand on fait défiler l'axe : c'est ici qu'on lit la ligne en entier.
 function barraPag(a: PagAccion, sr: ScheduleResult | undefined): Barra | null {
   if (!sr) return null;
   const rel = PAG_RELLENO[a.responsable];
-  const b = barraDe(sr, rel.color, "", false);
+  const b = barraDe(sr, rel.color, a.titulo, false);
   if (!b) return null;
+  // Les acciones sans terme le disent en toutes lettres (« 4 sem, luego
+  // continuo ») : les hachures seules ne se comprenaient pas.
+  const dur = `${a.durValor} ${UNIDAD_CORTA[a.durUnidad] ?? a.durUnidad}${
+    a.continua ? `, luego ${a.continuaTxt}` : ""
+  }`;
   const meta = [
-    `${a.durValor} ${UNIDAD_CORTA[a.durUnidad] ?? a.durUnidad}`,
+    dur,
     a.aplicaFase ? `se aplica en ${PAG_FASE_NOMBRE[a.aplicaFase] ?? a.aplicaFase}` : null,
   ]
     .filter(Boolean)
     .join(" · ");
   return {
     ...b,
-    etiqueta: undefined,
     patron: rel.patron,
     borde: rel.borde,
     interior: a.responsable,
@@ -566,21 +586,23 @@ function barraPag(a: PagAccion, sr: ScheduleResult | undefined): Barra | null {
   };
 }
 
-// Ligne d'un hito : un repère daté, avec son libellé écrit à côté. Chaque hito a
-// SA ligne — un rang de repères muets était illisible.
-function filaHito(h: { fecha: string; nombre: string }): Fila {
+// Ligne d'un hito : un repère, avec son NOM écrit à côté (jamais la date — elle
+// se lit à la position du repère, comme partout ailleurs dans le cronograma).
+// Chaque hito se range sous la ligne dont il est le livrable.
+function filaHito(h: PagHito): Fila {
   const ms = isoMs(h.fecha) ?? START;
   return {
     label: h.nombre,
+    hito: true,
     barras: [
       {
         startMs: ms,
         solidMs: ms + 6 * 86_400_000,
         endMs: ms + 6 * 86_400_000,
         color: CARD_TONOS.G.foot,
-        etiquetaMeta: fmtFecha(ms),
+        etiqueta: h.nombre,
         dentro: false,
-        tooltip: `${h.nombre} — ${fmtFecha(ms)}`,
+        tooltip: `${h.nombre} — entregable de ${h.accion} · ${fmtFecha(ms)}`,
       },
     ],
   };
@@ -594,31 +616,26 @@ function seccionesPag(d: DatosCronograma): Seccion[] {
     faseInicio: {},
     projectStart: PROJECT_START,
   });
-  const secs: Seccion[] = PAG_CADENAS.map((cad) => ({
-    titulo: `${cad.code} · ${cad.nombre}`,
-    barras: [],
-    filas: cad.orden
-      .map((code) => {
-        const a = getPagAccion(code);
-        if (!a) return null;
-        const barra = barraPag(a, sched.get(code));
-        // Code + titre : tronqué dans la colonne, complet au survol.
-        return { label: `${a.code} · ${a.titulo}`, barras: barra ? [barra] : [] } as Fila;
-      })
-      .filter((f): f is Fila => f !== null),
-  }));
-  secs.push({
-    titulo: "Hitos del PAG — entregables comprometidos",
-    barras: [],
-    filas: PAG_HITOS.map(filaHito),
+  // Une section par EJE (et non plus par « cadena ») : le fichier ne définit pas
+  // de chaînes, seulement 13 liaisons éparses. Les acciones y sont ordonnées par
+  // date, en remontant chaque cible juste après sa source (lib/pag).
+  return PAG_EJES.map((eje) => {
+    const filas: Fila[] = [];
+    for (const a of accionesDeEje(eje.code)) {
+      const barra = barraPag(a, sched.get(a.code));
+      // Code + titre : tronqué dans la colonne, complet au survol.
+      filas.push({ label: `${a.code} · ${a.titulo}`, barras: barra ? [barra] : [] });
+      // Le jalon livré par cette acción se range JUSTE EN DESSOUS d'elle.
+      for (const h of PAG_HITOS) if (h.accion === a.code) filas.push(filaHito(h));
+    }
+    return { titulo: `${eje.nombre} · impactos ${eje.impactos}`, barras: [], filas };
   });
-  return secs;
 }
 
 // Section « Implementación del PAG » de la vue globale : une ligne par eje
 // (agrégat de plusieurs responsables → pas de texture, elle n'aurait rien de
 // vrai à dire), plus une frise de hitos.
-function seccionPagGlobal(d: DatosCronograma): Seccion {
+function seccionPagGlobal(d: DatosCronograma, generoFeuilleGlobal: Fila[]): Seccion {
   const sched = computeSchedule({
     tasks: tareasPag(d),
     links: [],
@@ -651,10 +668,18 @@ function seccionPagGlobal(d: DatosCronograma): Seccion {
         },
       ],
     });
+    // Les jalons de cet eje se rangent JUSTE SOUS sa barre, dans l'ordre.
+    for (const h of PAG_HITOS.filter((x) => x.eje === eje.code).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))) {
+      filas.push(filaHito(h));
+    }
   }
-  // Un hito par ligne, avec son nom en clair : un rang de repères muets ne
-  // disait pas ce qu'ils étaient.
-  filas.push(...PAG_HITOS.map(filaHito));
+  // Cartes Género saisies à la main sur la feuille globale, avant le catalogue
+  // PAG. Conservées ici (elles ne sont pas dans lib/pag) et signalées comme
+  // telles — elles font aujourd'hui doublon avec les acciones ci-dessus.
+  if (generoFeuilleGlobal.length > 0) {
+    filas.push({ label: "— Fichas Género de la hoja global —", barras: [] });
+    filas.push(...generoFeuilleGlobal);
+  }
   return { titulo: "Implementación del PAG", barras: [], filas };
 }
 
@@ -717,11 +742,8 @@ export function CronogramaClient() {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
     const datos: DatosCronograma = { ...snap.data, ...rm.data };
     if (seleccion === "global") {
-      return [
-        seccionGlobalRoadmap(datos, filtros),
-        seccionPagGlobal(datos),
-        seccionGlobal(datos.subproyectos, datos),
-      ];
+      const { global, genero } = seccionGlobalRoadmap(datos, filtros);
+      return [global, seccionPagGlobal(datos, genero), seccionGlobal(datos.subproyectos, datos)];
     }
     if (seleccion === FEUILLE_PAG) return seccionesPag(datos);
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
@@ -932,15 +954,6 @@ export function CronogramaClient() {
                 </span>
               );
             })}
-            <span className="inline-flex items-center gap-1.5">
-              <span
-                className="inline-block h-4 w-6 rounded-sm"
-                style={{
-                  backgroundImage: `repeating-linear-gradient(45deg, ${CARD_TONOS.G.foot} 0 5px, #fff 5px 10px)`,
-                }}
-              />
-              <span>Continúa después</span>
-            </span>
           </>
         ) : (
         LEYENDA_FASES.map((code) => {
@@ -1073,11 +1086,18 @@ export function CronogramaClient() {
                       )}
                     >
                       <div
-                        className="sticky left-0 z-10 flex shrink-0 items-center truncate border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
+                        className="sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
                         style={{ width: LW, height: ROW_H }}
                         title={fila.label}
                       >
-                        {fila.label}
+                        {fila.hito && (
+                          <span
+                            aria-hidden="true"
+                            className="mr-2 h-0 w-0 shrink-0 border-y-[4px] border-l-[6px] border-y-transparent"
+                            style={{ borderLeftColor: CARD_TONOS.G.foot }}
+                          />
+                        )}
+                        <span className="truncate">{fila.label}</span>
                       </div>
                       <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
                         <CapaBarras barras={fila.barras} x={x} />
