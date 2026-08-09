@@ -4,6 +4,7 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { useSnapshot } from "./use-snapshot";
 import { Agenda } from "./agenda";
+import { FasesTracker } from "./fases-tracker";
 import { NuevosEventosBadge } from "./nuevos-eventos-badge";
 import { SeguimientoPanel } from "./seguimiento-panel";
 import { GlobalTable } from "./global-table";
@@ -41,7 +42,7 @@ export function DashboardClient() {
       {/* Agenda — bandeau pleine largeur (full-bleed : annule le px/pt de <main>,
           va de la sidebar au bord droit). Le reste du dashboard reste en max-w-7xl. */}
       <div
-        className="-mx-4 -mt-6 mb-6 px-4 py-4 sm:-mx-6 sm:px-6"
+        className="-mx-4 -mt-6 mb-6 px-4 py-2.5 sm:-mx-6 sm:px-6"
         style={{ backgroundColor: "#434343" }}
       >
         {/* Contenu re-contraint au même max-w-7xl centré que le reste → « Agenda » aligné avec « Gestión ». */}
@@ -61,6 +62,9 @@ export function DashboardClient() {
       </div>
 
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
+
+      {/* Fases en curso (tracker) + Estado de implementación del PAG — juste sous l'agenda */}
+      {snap.status === "ready" && <FasesTracker snapshot={snap.data} />}
 
       {/* Gestión : projet global (par défaut) ou subproyectos */}
       <section className="flex items-start gap-4">

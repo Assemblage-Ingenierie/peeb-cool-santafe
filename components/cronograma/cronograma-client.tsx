@@ -7,11 +7,18 @@ import {
   GESTION_FASES,
   HITO_COLOR,
   HITO_CNO_PREFIX,
-  ROJO_AFD,
   GP_BARRA,
   esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
+import {
+  FASES_ORD,
+  FASE_SIGLA,
+  LEYENDA_FASES,
+  colorDeFase,
+  colorFase,
+  textoSobre,
+} from "@/lib/fases-cronograma";
 import {
   construirCartasPorFila,
   lineasHito,
@@ -86,58 +93,8 @@ const VISTA_INICIO = new Date(2026, 5, 1).getTime(); // juin 2026
 const OFFSET_HOY_CASES = 3.5;
 const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-// Bleus progressifs pour les barres de phase (clair → foncé).
-const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"];
-// Rouge des « No objeción AFD » : importé de la charte, plus redéfini ici — il
-// est partagé avec les losanges de jalon (HITO_COLOR.cno).
-// Couleurs spécifiques par fase (priment sur le dégradé de bleus).
-// Reprises du cronograma de référence (« PEEB Santa Fe - AT Etapa 1 ») pour que
-// l'app et l'Excel se lisent avec le même code couleur.
-const FASE_COLOR: Record<string, string> = {
-  estudios_preliminares: "#d9d9d9", // gris clair
-  redaccion_pliegos: "#ea9999", // même rouge clair que licitación
-  licitacion: "#ea9999",
-  obra: "#fce5cd", // orange clair de l'Excel (Obras)
-};
-
-// Sigles des fases sur les frises (comme le tableau Inicio). Règle :
-// toutes les « No objeción AFD » → « CNO ».
-const FASE_SIGLA: Record<string, string> = {
-  estudios_preliminares: "EP",
-  anteproyecto: "AP",
-  proyecto_ejecutivo: "PE",
-  redaccion_pliegos: "PL",
-  no_objecion_afd: "CNO",
-  licitacion: "LI",
-  no_objecion_afd_atribucion: "CNO",
-  no_objecion_afd_contrato: "CNO",
-  obra: "OB",
-};
-
-// Fases affichées dans la légende (au-dessus du cronograma), dans l'ordre.
-const LEYENDA_FASES = [
-  "estudios_preliminares",
-  "anteproyecto",
-  "proyecto_ejecutivo",
-  "redaccion_pliegos",
-  "no_objecion_afd",
-  "licitacion",
-  "obra",
-];
-
-// Couleur de texte lisible sur un fond donné (luminance perçue).
-function textoSobre(hex: string): string {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? "#1f2733" : "#ffffff";
-}
-
-// Phases affichées (ordre chronologique canonique, hors « general »).
-// « Validación de anteproyecto » n'est plus une fase : c'est une tarea GP de la
-// fase Anteproyecto (ROADMAP_TAREAS) → rendue naturellement parmi les tareas.
-const FASES_ORD = GESTION_FASES.filter((f) => f.code !== "general");
+// Couleurs, sigles et helpers des fases : source unique dans lib/fases-cronograma
+// (partagée avec le tracker « Fases en curso » de l'Inicio).
 // Composantes en sections (ordre d'affichage).
 const COMPS: ComponenteCode[] = ["GP", "EE", "AyS", "G"];
 
@@ -345,15 +302,6 @@ function armar(uid: string, tipologia: string, d: DatosCronograma) {
   });
   return { columnas, sched, hitos, envolvente };
 }
-
-// Couleur d'une fase (bande de temps) : bleu progressif par ordre, ROUGE pour
-// « No objeción AFD » et ses jalons. Source unique (global + détail par fase).
-const colorFase = (code: string, i: number): string =>
-  FASE_COLOR[code] ?? (code.includes("no_objecion_afd") ? ROJO_AFD : BLUES[i % BLUES.length]);
-
-// Couleur d'une fase par son code (index dans l'ordre canonique) — pour la légende.
-const colorDeFase = (code: string): string =>
-  colorFase(code, FASES_ORD.findIndex((f) => f.code === code));
 
 // Barre d'une fase avec son libellé centré (texte lisible selon le fond).
 // `label` : libellé forcé (sinon sigle). La vue « enlace de fases » y met le nom

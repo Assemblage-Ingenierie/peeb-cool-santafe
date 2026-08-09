@@ -112,7 +112,7 @@ export function Agenda({ eventos, loading, error, labelClassName, labelFooter }:
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="no-scrollbar relative flex min-w-0 flex-1 cursor-grab select-none gap-3 overflow-x-auto pb-2 active:cursor-grabbing"
+        className="no-scrollbar relative flex min-w-0 flex-1 cursor-grab select-none gap-2 overflow-x-auto active:cursor-grabbing"
       >
         {loading ? (
           <p className="py-6 text-sm text-[var(--text-muted)]">Cargando…</p>
@@ -128,28 +128,22 @@ export function Agenda({ eventos, loading, error, labelClassName, labelFooter }:
               <article
                 key={e.uid}
                 className={cn(
-                  "min-w-[200px] max-w-[220px] shrink-0 rounded-md p-3 transition-opacity",
+                  "min-w-[172px] max-w-[210px] shrink-0 rounded-md px-2.5 py-2 leading-tight transition-opacity",
                   past && "opacity-30",
                   !comp && "border border-[var(--border)] bg-[var(--surface)]",
                 )}
                 style={comp ? { backgroundColor: comp.color, color: comp.onColor } : undefined}
+                title={
+                  [e.nombre, e.participantesLabels.join(", "), e.lugar].filter(Boolean).join(" · ")
+                }
               >
-                <h3 className={cn("truncate text-sm font-semibold", !comp && "text-[var(--text)]")} title={e.nombre}>
+                {/* Compact : título + fecha·hora. Participantes / lugar → info-bulle (title). */}
+                <h3 className={cn("truncate text-[13px] font-semibold", !comp && "text-[var(--text)]")}>
                   {e.nombre}
                 </h3>
-                <p className={cn("mt-1 text-xs", comp ? "opacity-80" : "text-[var(--text-muted)]")}>
+                <p className={cn("mt-0.5 text-[11px] tabular-nums", comp ? "opacity-80" : "text-[var(--text-muted)]")}>
                   {fmtFechaHora(e.fecha, e.hora_inicio)}
                 </p>
-                {e.participantesLabels.length > 0 && (
-                  <p className={cn("mt-1 line-clamp-2 text-xs", comp ? "opacity-80" : "text-[var(--text-muted)]")}>
-                    {e.participantesLabels.join(", ")}
-                  </p>
-                )}
-                {e.lugar && (
-                  <p className={cn("mt-1 truncate text-xs", comp ? "opacity-80" : "text-[var(--text-muted)]")} title={e.lugar}>
-                    {e.lugar}
-                  </p>
-                )}
               </article>
             );
           })
