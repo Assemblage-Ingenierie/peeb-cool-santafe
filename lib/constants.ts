@@ -56,6 +56,21 @@ export const getComponente = (code: string): Componente | undefined =>
 export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
+// Variante VIBRANTE réservée aux marqueurs de carte géographique. Les points
+// n'ont pas de texte dessus → on peut saturer sans contrainte de contraste, ce
+// qui aide les disques (volontairement petits) à ressortir sur le fond clair des
+// tuiles OSM. Mêmes teintes que TIPOLOGIAS, en plus vif.
+// ⚠ NE PAS utiliser ailleurs : badges-lettre, pastilles de select et tableau
+// gardent la palette sobre de TIPOLOGIAS (texte blanc dessus).
+export const TIPOLOGIA_COLOR_MAPA: Record<TipologiaCode, string> = {
+  A: "#ee8a12", // ámbar vif
+  H: "#bd3c63", // burdeos vif
+  E: "#10a596", // sarcelle vif
+};
+
+export const getTipologiaColorMapa = (code: string): string | undefined =>
+  TIPOLOGIA_COLOR_MAPA[code as TipologiaCode];
+
 // --- Tons des cartes de la feuille de route (Hojas de ruta) ---
 // Format de carte validé : EN-TÊTE (nom) / CORPS (description) / PIED (responsable),
 // par composante. Nuances DÉRIVÉES des couleurs §2.3 (mêmes familles) — pas de

@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip, Popup, useMap } from "r
 import type { LatLngTuple, LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { SnapshotSubproyecto } from "@/lib/snapshot";
-import { getTipologia, UI } from "@/lib/constants";
+import { getTipologiaColorMapa, UI } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 
 // Carte OSM réutilisable (tuiles directes, CDC §6) : un point par sous-projet
@@ -123,9 +123,9 @@ export function SubproyectosMap({
       <FitBounds points={coords} initialBounds={initialBounds} />
       {wheelZoom === "ctrl" && <CtrlWheelZoom />}
       {puntos.map((s) => {
-        const tp = getTipologia(s.tipologia);
         const sel = s.uid === selected;
-        const color = tp?.color ?? UI.textMuted;
+        // Palette vibrante spécifique aux marqueurs (cf. TIPOLOGIA_COLOR_MAPA).
+        const color = getTipologiaColorMapa(s.tipologia) ?? UI.textMuted;
         const tip = renderTooltip ? renderTooltip(s) : { text: s.nombre, permanent: false };
         return (
           <CircleMarker
