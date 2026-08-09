@@ -7,7 +7,7 @@
 // (section Fases) → les tâches restent synchronisées (même DB, même logique).
 // ============================================================
 
-import { ROADMAP_TAREAS, type ComponenteCode } from "./constants";
+import { ROADMAP_TAREAS, esHitoKey, rolDeHito, type ComponenteCode, type HitoRol } from "./constants";
 
 export interface RoadmapCard {
   key: string;
@@ -95,6 +95,32 @@ export function cartasBaseGlobal(semestres: string[]): (RoadmapCard & { fila: st
   return cards;
 }
 
+/** Ligne-repère d'une phase (migration 036) : ni carte, ni tâche du référentiel. */
+export interface LineaHito {
+  key: string;
+  rol: HitoRol;
+  nombre: string;
+  fase: string; // pour `inicio`/`entrega` : la phase qu'elle borne — elle compte
+  // dans son enveloppe. Pour `cno` : la phase SOUS LAQUELLE on l'affiche, sans
+  // entrer dans l'enveloppe (un jalon ne rallonge pas une phase).
+  orden: number;
+}
+
+/**
+ * Repères et jalons d'une feuille, dans l'ordre d'affichage. Lus depuis les
+ * lignes `creada` dont la clé porte le préfixe de rôle : aucune colonne de plus
+ * en base, le rôle se lit dans la clé.
+ */
+export function lineasHito(estado: Map<string, RoadmapOverride>): LineaHito[] {
+  const out: LineaHito[] = [];
+  for (const [key, ov] of estado) {
+    const rol = rolDeHito(key);
+    if (!rol || !ov.creada || !ov.fila) continue;
+    out.push({ key, rol, nombre: ov.nombre ?? "", fase: ov.fila, orden: ov.orden ?? 0 });
+  }
+  return out.sort((a, b) => a.orden - b.orden || (a.key < b.key ? -1 : 1));
+}
+
 /**
  * Cartes d'une feuille groupées par colonne `${fila}|${componente}`, triées par
  * orden. `estado` = overrides par tarea_key (pour CETTE feuille uniquement).
@@ -134,8 +160,11 @@ export function construirCartasPorFila(opts: {
       add(ov?.fila ?? card.fila, card.componente, card, ov?.orden ?? idx, ov?.banda ?? 0);
     }
   }
-  // Cartes créées.
+  // Cartes créées. Les lignes-repère (`__ini__`/`__ent__`/`__cno__`, migration
+  // 036) sont créées elles aussi, mais ce ne sont PAS des cartes de feuille de
+  // route : elles n'existent que pour porter le planning dans le cronograma.
   for (const [tareaKey, ov] of estado) {
+    if (esHitoKey(tareaKey)) continue;
     if (!ov.creada || !ov.componente || !ov.fila) continue;
     add(
       ov.fila,

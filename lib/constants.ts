@@ -308,6 +308,56 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { id: "gp-lic-negociacion", fase: "licitacion", componente: "GP", nombre: "Negociación y firma del contrato" },
 ];
 
+// ============================================================
+// Modèle « la fase est l'ENVELOPPE de ses tâches » (cronograma de subproyecto).
+//
+// La barre d'une phase n'est plus saisie : elle commence avec sa première ligne
+// et finit avec la dernière. Pour que les tâches aient un point d'accroche qui
+// ne soit pas leur propre phase (ce serait circulaire), chaque phase reçoit
+// deux REPÈRES d'un jour, lignes comme les autres :
+//   • `__ini__<fase>` — début de la phase : les tâches qui « démarrent avec la
+//     phase » s'y accrochent, et déplacer ce seul repère décale toute la phase ;
+//   • `__ent__<fase>` — remise du livrable : les tâches qui « finissent avec la
+//     phase » y accrochent leur FIN. Distinct de la fin de phase, car la
+//     validation (ou la no objeción AFD) vient après la remise.
+// Les jalons `__cno__<code>` (No objeción AFD) sont hors phase : ils pendent de
+// la fin d'une autre ligne et n'allongent aucune enveloppe.
+//
+// ⚠ Déploiement PROGRESSIF : seuls les sous-projets listés ici suivent ce
+// modèle. Les autres restent au modèle historique (phase planifiée à la main).
+// ============================================================
+export const SUBS_MODELO_ENVOLVENTE = ["SUB-AIR"];
+
+export const esModeloEnvolvente = (feuille: string): boolean =>
+  SUBS_MODELO_ENVOLVENTE.includes(feuille);
+
+export const HITO_INICIO_PREFIX = "__ini__";
+export const HITO_ENTREGA_PREFIX = "__ent__";
+export const HITO_CNO_PREFIX = "__cno__";
+
+export const hitoInicioKey = (fase: string): string => HITO_INICIO_PREFIX + fase;
+export const hitoEntregaKey = (fase: string): string => HITO_ENTREGA_PREFIX + fase;
+
+export type HitoRol = "inicio" | "entrega" | "cno";
+
+/** Rôle d'une ligne-repère, ou null si c'est une tâche ordinaire. */
+export function rolDeHito(tareaKey: string): HitoRol | null {
+  if (tareaKey.startsWith(HITO_INICIO_PREFIX)) return "inicio";
+  if (tareaKey.startsWith(HITO_ENTREGA_PREFIX)) return "entrega";
+  if (tareaKey.startsWith(HITO_CNO_PREFIX)) return "cno";
+  return null;
+}
+
+export const esHitoKey = (tareaKey: string): boolean => rolDeHito(tareaKey) !== null;
+
+// Couleur du repère selon son rôle. Reprises de la palette existante : gris et
+// noir GP (ce sont des étapes de processus), rouge des « No objeción AFD ».
+export const HITO_COLOR: Record<HitoRol, string> = {
+  inicio: "#808080",
+  entrega: "#434343",
+  cno: "#cc0000",
+};
+
 // Unités de « duración estimada » (planification des tâches/fases). Source unique
 // des libellés (singulier/pluriel) pour le menu déroulant día / semana / mes.
 export interface DuracionUnidad {

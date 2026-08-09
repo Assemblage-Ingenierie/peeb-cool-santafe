@@ -166,6 +166,9 @@ export interface SnapshotRoadmapEnlace {
   punto: "inicio" | "fin"; // point d'accroche sur la source
   desfaseValor: number; // décalage signé (négatif = avant, positif = après)
   desfaseUnidad: "dia" | "semana" | "mes";
+  // Extrémité de la CIBLE qui se cale sur ce point (migration 036) : « inicio »
+  // (défaut) = elle démarre là ; « fin » = elle TERMINE là.
+  extremo: "inicio" | "fin";
 }
 
 export interface Snapshot {
@@ -500,7 +503,7 @@ export async function getRoadmap(): Promise<Roadmap> {
     fetchAllRows((desde, hasta) =>
       sb
         .from("peebcoolsf_roadmap_enlace")
-        .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad")
+        .select("feuille, desde, hacia, punto, desfase_valor, desfase_unidad, extremo")
         .order("feuille", { ascending: true })
         .order("desde", { ascending: true })
         .order("hacia", { ascending: true })
@@ -561,6 +564,7 @@ export async function getRoadmap(): Promise<Roadmap> {
       punto: string | null;
       desfase_valor: number | null;
       desfase_unidad: string | null;
+      extremo: string | null;
     }[]
   ).map((r) => ({
     feuille: r.feuille,
@@ -570,6 +574,8 @@ export async function getRoadmap(): Promise<Roadmap> {
     desfaseValor: r.desfase_valor ?? 0,
     desfaseUnidad:
       r.desfase_unidad === "semana" || r.desfase_unidad === "mes" ? r.desfase_unidad : "dia",
+    // Défaut « inicio » = comportement historique (la cible DÉMARRE à la date visée).
+    extremo: r.extremo === "fin" ? "fin" : "inicio",
   }));
 
   return {

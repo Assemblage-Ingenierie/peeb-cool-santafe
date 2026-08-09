@@ -36,13 +36,16 @@ export interface ScheduleTask {
   fechaFin: string | null; // date ISO fixée à la main (excédent hachuré) — optionnelle
 }
 
-// Liaison : « hacia » démarre par rapport à un point de « desde », + décalage signé.
+// Liaison : « hacia » se cale par rapport à un point de « desde », + décalage signé.
 export interface ScheduleLink {
   desde: string; // clé de la tâche source (préalable)
   hacia: string; // clé de la tâche qui en découle
-  punto: Punto; // point d'accroche sur la source (inicio | fin)
+  punto: Punto; // point d'accroche sur la SOURCE (inicio | fin)
   desfaseValor: number; // décalage signé (négatif = avant, positif = après)
   desfaseUnidad: Unidad;
+  // Extrémité de la CIBLE qui se cale sur ce point. « inicio » (défaut) = la
+  // tâche démarre là ; « fin » = elle TERMINE là, son début recule de sa durée.
+  extremo?: Punto;
 }
 
 export interface ScheduleInput {
@@ -50,6 +53,16 @@ export interface ScheduleInput {
   links: ScheduleLink[];
   faseInicio: Record<string, string | null>; // code de phase → date ISO d'ancre
   projectStart: string; // date ISO de repli (aucune ancre de phase)
+  /**
+   * Modèle « la fase est l'ENVELOPPE de ses tâches » (cf. maquette validée) :
+   * un nœud `__fase__X` n'a plus ni date ni durée propre — il commence avec la
+   * première ligne de la phase et finit avec la dernière. Conséquence : une
+   * tâche ne peut plus s'ancrer sur sa propre phase (ce serait circulaire) ;
+   * elle se cale sur les repères `Inicio` / `Entrega` de la phase, qui sont des
+   * lignes comme les autres. Faux = modèle historique (phase planifiée à la
+   * main, les tâches s'y accrochent).
+   */
+  fasesEnvolventes?: boolean;
 }
 
 export interface ScheduleResult {
@@ -59,6 +72,13 @@ export interface ScheduleResult {
   startFijada: boolean; // début fixé à la main (≠ calculé par la chaîne)
   finFijada: boolean; // fecha_fin prolonge au-delà de la durée (hachures présentes)
   enCiclo: boolean; // impliquée dans une boucle → une liaison entrante a été ignorée
+  // Aucune ancre exploitable (ni date, ni liaison) : les dates ci-dessus sont un
+  // repli, pas un planning. Seulement en mode `fasesEnvolventes` — sans ancre de
+  // phase à laquelle retomber, la ligne doit se signaler comme non programmée.
+  sinAncla?: boolean;
+  // Nœud de phase : lignes qui définissent les deux bouts de l'enveloppe.
+  primera?: string;
+  ultima?: string;
 }
 
 const DIA = 86_400_000;
@@ -106,7 +126,7 @@ export function addUnidad(ms: number, valor: number, unidad: Unidad): number {
  * refermerait un cycle est ignorée et la tâche concernée est marquée `enCiclo`.
  */
 export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResult> {
-  const { tasks, links, faseInicio, projectStart } = input;
+  const { tasks, links, faseInicio, projectStart, fasesEnvolventes = false } = input;
   const taskMap = new Map(tasks.map((t) => [t.key, t]));
 
   // Liaisons entrantes par tâche cible (orphelines ignorées).
@@ -118,9 +138,69 @@ export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResul
     else incoming.set(l.hacia, [l]);
   }
 
+  // Mode enveloppe : lignes de chaque phase (les nœuds de phase en sont exclus).
+  const porFase = new Map<string, ScheduleTask[]>();
+  if (fasesEnvolventes) {
+    for (const t of tasks) {
+      if (!t.fase || t.key.startsWith(FASE_NODE_PREFIX)) continue;
+      const arr = porFase.get(t.fase);
+      if (arr) arr.push(t);
+      else porFase.set(t.fase, [t]);
+    }
+  }
+
   const projMs = toMs(projectStart) ?? Date.UTC(2026, 0, 1);
   const done = new Map<string, ScheduleResult>();
   const visiting = new Set<string>();
+  // Lignes qu'une enveloppe a dû sauter parce qu'elles étaient en cours de
+  // résolution : elles dépendent (directement ou non) de leur propre phase.
+  // L'enveloppe renvoyée est alors PARTIELLE — s'en servir pour dater la ligne
+  // fautive donnerait une date fausse et instable.
+  const saltadasPorEnvolvente = new Set<string>();
+
+  // Enveloppe d'une phase : du début de sa première ligne à la fin de sa
+  // dernière. Une ligne qui ne se résout pas (boucle) est ignorée — l'enveloppe
+  // reste alors partielle, ce que `enCiclo` signale.
+  const resolveEnvolvente = (key: string): ScheduleResult => {
+    const code = key.slice(FASE_NODE_PREFIX.length);
+    let iniMs: number | null = null;
+    let finMs: number | null = null;
+    let primera: string | undefined;
+    let ultima: string | undefined;
+    let enCiclo = false;
+    for (const t of porFase.get(code) ?? []) {
+      const r = resolve(t.key);
+      if (r == null) {
+        enCiclo = true;
+        saltadasPorEnvolvente.add(t.key);
+        continue;
+      }
+      const s = toMs(r.start)!;
+      const e = toMs(r.end)!;
+      if (iniMs == null || s < iniMs) {
+        iniMs = s;
+        primera = t.key;
+      }
+      if (finMs == null || e > finMs) {
+        finMs = e;
+        ultima = t.key;
+      }
+    }
+    const vacia = iniMs == null;
+    const s = iniMs ?? projMs;
+    const e = finMs ?? s;
+    return {
+      start: toIso(s),
+      solidEnd: toIso(e),
+      end: toIso(e),
+      startFijada: false,
+      finFijada: false,
+      enCiclo,
+      sinAncla: vacia, // phase sans aucune ligne datée → pas de barre à dessiner
+      primera,
+      ultima,
+    };
+  };
 
   const resolve = (key: string): ScheduleResult | null => {
     const cached = done.get(key);
@@ -130,11 +210,22 @@ export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResul
     if (!t) return null;
     visiting.add(key);
 
+    if (fasesEnvolventes && key.startsWith(FASE_NODE_PREFIX)) {
+      const env = resolveEnvolvente(key);
+      visiting.delete(key);
+      done.set(key, env);
+      return env;
+    }
+
     let startMs: number;
     let startFijada = false;
     let enCiclo = false;
+    let sinAncla = false;
 
     const manualInicio = toMs(t.fechaInicio);
+    const durValor = t.durValor != null && t.durValor > 0 ? t.durValor : 0;
+    const durUnidad = t.durUnidad ?? "dia";
+
     if (manualInicio != null) {
       startMs = manualInicio;
       startFijada = true;
@@ -147,13 +238,33 @@ export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResul
           continue;
         }
         const base = l.punto === "inicio" ? toMs(src.start)! : toMs(src.end)!;
-        candidatos.push(addUnidad(base, l.desfaseValor, l.desfaseUnidad));
+        const objetivo = addUnidad(base, l.desfaseValor, l.desfaseUnidad);
+        // « extremo: fin » = c'est la FIN de la cible qui se cale là : son début
+        // recule de sa durée estimée.
+        candidatos.push(
+          l.extremo === "fin" && durValor > 0
+            ? addUnidad(objetivo, -durValor, durUnidad)
+            : objetivo,
+        );
       }
-      if (candidatos.length > 0) {
+      if (saltadasPorEnvolvente.has(key)) {
+        // Une enveloppe traversée en chemin a dû nous sauter : la date qu'elle
+        // renvoie ne tient pas compte de nous. Refus de dater plutôt qu'une
+        // date fausse (cf. le même garde-fou dans la maquette).
+        startMs = projMs;
+        enCiclo = true;
+        sinAncla = true;
+      } else if (candidatos.length > 0) {
         startMs = Math.max(...candidatos);
       } else if (key.startsWith(FASE_NODE_PREFIX)) {
         // Nœud de phase sans date ni liaison → repli projet (pas d'auto-chaînage).
         startMs = projMs;
+      } else if (fasesEnvolventes) {
+        // Plus d'ancre de phase à laquelle retomber : la phase DÉCOULE de ses
+        // lignes. Sans date ni liaison, la ligne n'est pas programmée — on la
+        // signale au lieu de la poser silencieusement au début du projet.
+        startMs = projMs;
+        sinAncla = true;
       } else {
         // Carte : ancre = début CALCULÉ de son nœud de phase (qui peut lui-même
         // découler d'une liaison) ; à défaut, date de phase brute, puis projet.
@@ -164,8 +275,6 @@ export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResul
       }
     }
 
-    const durValor = t.durValor != null && t.durValor > 0 ? t.durValor : 0;
-    const durUnidad = t.durUnidad ?? "dia";
     const solidMs = durValor > 0 ? addUnidad(startMs, durValor, durUnidad) : startMs;
 
     let endMs = solidMs;
@@ -183,6 +292,7 @@ export function computeSchedule(input: ScheduleInput): Map<string, ScheduleResul
       startFijada,
       finFijada,
       enCiclo,
+      sinAncla,
     };
     visiting.delete(key);
     done.set(key, res);

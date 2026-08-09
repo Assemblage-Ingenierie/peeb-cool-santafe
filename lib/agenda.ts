@@ -1,5 +1,5 @@
-import { FASES, HITOS_FASE, type ComponenteCode } from "@/lib/constants";
-import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import { FASES, HITOS_FASE, esModeloEnvolvente, type ComponenteCode } from "@/lib/constants";
+import { construirCartasPorFila, lineasHito, type RoadmapOverride } from "@/lib/roadmap";
 import { computeSchedule, faseNodeKey, type Unidad } from "@/lib/schedule";
 import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/semestres";
 import type { Roadmap, Snapshot } from "@/lib/snapshot";
@@ -130,8 +130,28 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
     }
   }
 
+  // Repères et jalons (modèle enveloppe, migration 036) : ce sont des tâches de
+  // plein droit — « Inicio de la obra » ou une « No objeción AFD » sont des
+  // échéances à afficher dans « Próximas tareas » comme les autres.
+  const envolvente = !esGlobal && esModeloEnvolvente(feuille);
+  if (envolvente) {
+    for (const h of lineasHito(estado)) {
+      const p = planes.get(h.key) ?? null;
+      tasks.push({
+        key: h.key,
+        fase: h.rol === "cno" ? "" : h.fase,
+        durValor: p?.durValor ?? null,
+        durUnidad: asUnidad(p?.durUnidad),
+        fechaInicio: p?.fechaInicio ?? null,
+        fechaFin: p?.fechaFin ?? null,
+      });
+      meta.set(h.key, { nombre: h.nombre, comp: "GP" });
+    }
+  }
+
   // Ancres de phase : nœuds `__fase__*`, qui servent aussi de tâches à part
-  // entière (le démarrage d'une phase est un jalon en soi).
+  // entière (le démarrage d'une phase est un jalon en soi). En mode enveloppe
+  // ils n'ont plus de dates propres : elles découlent des lignes de la phase.
   const faseInicio: Record<string, string | null> = {};
   const fasesFeuille = esGlobal ? [] : datos.fases.filter((f) => f.subproyecto_uid === feuille);
   for (const f of fasesFeuille) {
@@ -139,10 +159,10 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
     tasks.push({
       key: faseNodeKey(f.fase),
       fase: "",
-      durValor: f.dur_valor,
-      durUnidad: asUnidad(f.dur_unidad),
-      fechaInicio: f.fecha_inicio,
-      fechaFin: f.fecha_fin,
+      durValor: envolvente ? null : f.dur_valor,
+      durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
+      fechaInicio: envolvente ? null : f.fecha_inicio,
+      fechaFin: envolvente ? null : f.fecha_fin,
     });
   }
 
@@ -154,9 +174,16 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
       punto: e.punto,
       desfaseValor: e.desfaseValor,
       desfaseUnidad: e.desfaseUnidad,
+      extremo: e.extremo,
     }));
 
-  const sched = computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
+  const sched = computeSchedule({
+    tasks,
+    links,
+    faseInicio,
+    projectStart: PROJECT_START,
+    fasesEnvolventes: envolvente,
+  });
 
   const out: Omit<TareaAgenda, "subproyecto" | "sigla" | "tipologia">[] = [];
   for (const [key, r] of sched) {

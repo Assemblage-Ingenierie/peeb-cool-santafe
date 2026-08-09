@@ -269,7 +269,7 @@ export async function roadmapAddEnlace(
   feuille: string,
   desde: string,
   hacia: string,
-  liaison?: { punto?: string; desfaseValor?: number; desfaseUnidad?: string },
+  liaison?: { punto?: string; desfaseValor?: number; desfaseUnidad?: string; extremo?: string },
 ): Promise<void> {
   await assertAdmin();
   assertFeuille(feuille);
@@ -280,11 +280,15 @@ export async function roadmapAddEnlace(
   const dv = liaison?.desfaseValor;
   const desfaseValor = dv == null || Number.isNaN(dv) ? 0 : Math.trunc(dv);
   const desfaseUnidad = UNIDADES_VALIDAS.has(liaison?.desfaseUnidad ?? "") ? liaison!.desfaseUnidad : "dia";
+  // Extrémité de la CIBLE (migration 036). Toujours transmise explicitement :
+  // sans elle, ré-enregistrer depuis la feuille de route une liaison convertie
+  // en « fin » la laisserait dans un état qu'on ne voit pas dans ce panneau.
+  const extremo = liaison?.extremo === "fin" ? "fin" : "inicio";
   const sb = await createServerSupabase();
   const { error } = await sb
     .from(ENLACE)
     .upsert(
-      { feuille, desde, hacia, punto, desfase_valor: desfaseValor, desfase_unidad: desfaseUnidad },
+      { feuille, desde, hacia, punto, desfase_valor: desfaseValor, desfase_unidad: desfaseUnidad, extremo },
       { onConflict: "feuille,desde,hacia" },
     );
   if (error) throw new Error(error.message);

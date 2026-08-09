@@ -181,7 +181,56 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   inexistante ; 9.1.1 a deux libellés selon l'onglet ; 9.5.1 daté S2 2027 alors que les
   premières licitaciones tombent en févr 2027.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 035**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+## Cronograma de subproyecto — la fase est l'ENVELOPPE de ses tâches (migration 036)
+- **Principe** : la barre d'une phase n'est plus saisie. Elle commence avec sa
+  première ligne et finit avec la dernière (`fasesEnvolventes` dans
+  `computeSchedule`). Une phase sans aucune ligne datée n'a **pas de barre**
+  (`sinAncla`) et sa section disparaît du cronograma.
+- **Repères** : pour que les tâches aient une accroche qui ne soit pas leur
+  propre phase (ce serait circulaire), chaque phase reçoit deux lignes d'un jour,
+  rendues en **losange** (une barre d'un jour ferait 2 px) :
+  - `__ini__<fase>` — début de phase. Les tâches qui « démarrent avec la phase »
+    s'y accrochent ; **déplacer ce seul repère décale toute la suite**.
+  - `__ent__<fase>` — remise du livrable. Les tâches qui « finissent avec la
+    phase » y accrochent leur **fin**. Distinct de la fin de phase : la
+    validation (`Validación de anteproyecto`) et la no objeción AFD viennent après.
+- **`__cno__<code>`** : les « No objeción AFD » cessent d'être des phases vides.
+  Ce sont des jalons **hors phase** (`fase: ""`) → ils n'allongent aucune
+  enveloppe. Affichés sous la phase dont ils dépendent (colonne `fila`).
+- Le rôle se lit dans **le préfixe de la clé** — aucune colonne de plus en base.
+  `rolDeHito()` / `esHitoKey()` / `lineasHito()`. Ces lignes sont `creada=true`
+  mais **exclues des cartes** de hoja de ruta (`construirCartasPorFila`) : elles
+  ne portent que du planning.
+- **Nouveau champ de liaison `extremo`** (`inicio` par défaut = comportement
+  historique, `fin` = la cible TERMINE à la date visée, son début recule de sa
+  durée). Colonne ajoutée pour toutes les feuilles, sans effet sur les autres.
+- ⚠ **Périmètre progressif** : `SUBS_MODELO_ENVOLVENTE` (`lib/constants.ts`) =
+  **SUB-AIR uniquement**. Les 26 autres restent au modèle historique. Le drapeau
+  doit être passé aux **trois** points d'assemblage, sinon les vues divergent :
+  `cronograma-client.tsx` (`armar`), `hojas-de-ruta-client.tsx` (useMemo
+  `schedule`) et `lib/agenda.ts`.
+- ⚠ **Les dates de phase de `peebcoolsf_gestion_lineas` deviennent inertes** pour
+  ces sous-projets (elles pilotent encore Inicio et Gestión de subproyectos → la
+  divergence est attendue, pas un bug). Avant 036 elles écrasaient les liaisons
+  entre phases : celles-ci existaient mais **ne servaient à rien** (la date
+  manuelle gagne, priorité 1 de `computeSchedule`).
+- **Conversion des liaisons** (SUB-AIR, 30 liaisons « tarea → sa propre fase »
+  reconverties sans arbitrage manuel) : famille A (`punto: inicio`) → `__ini__` ;
+  famille B (`punto: fin`) → `__ent__` avec `extremo: "fin"` et l'écart
+  `-desfase - durée` (0 dans 12 cas sur 14) ; `validacion_anteproyecto` → après
+  la fin de `__ent__`.
+- ⚠ **Noms de livrables À CONFIRMER** : `Entrega de los estudios preliminares`,
+  `Entrega del informe de evaluación`, `Recepción de obra`. Les trois autres se
+  déduisent du contenu de la phase et du CNO qui suit.
+- **Pas encore fait** : le mode édition interactif du cronograma (bouton
+  « Editar », fiche durée/ancrage au clic sur une barre, insertion de ligne au
+  survol, réordonnancement au glisser). Maquette de référence validée.
+
+**Migrations** : dans `supabase/migrations/`, **dernière = 036**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 036 : modèle enveloppe sur **SUB-AIR** (voir section ci-dessus). Colonne
+  `extremo`, 15 lignes-repère, réécriture des 46 liaisons en 53. État antérieur
+  dans `peebcoolsf_bak_enlace_036`. Inserts idempotents, mais le `delete` des
+  liaisons SUB-AIR se rejoue sans risque (elles sont toutes réinsérées).
 - 035 : sème le **planning** des 33 acciones du PAG (feuille `pag`, clés `pag-<code>`).
   Idempotente (`on conflict do nothing`) — ne réécrit aucune date saisie à la main.
 - 032 : noms des 5 écoles préexistantes alignés sur le format officiel (`EPCD N°67 "…"`).

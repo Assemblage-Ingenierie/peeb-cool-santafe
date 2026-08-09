@@ -5,9 +5,16 @@ import { cn } from "@/lib/cn";
 import {
   CARD_TONOS,
   GESTION_FASES,
+  HITO_COLOR,
+  esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
-import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import {
+  construirCartasPorFila,
+  lineasHito,
+  type LineaHito,
+  type RoadmapOverride,
+} from "@/lib/roadmap";
 import { SEMESTRES_CODES, planGlobalEfectivo, type PlanStored } from "@/lib/semestres";
 import {
   computeSchedule,
@@ -201,6 +208,9 @@ interface Barra {
   // Sigle écrit DANS la barre (s'il y tient) alors que l'étiquette est à côté.
   interior?: string;
   interiorColor?: string;
+  // Repère ponctuel (1 jour) : un losange centré sur la date, pas une barre —
+  // à l'échelle du mois une barre d'un jour ferait 2 px, illisible.
+  rombo?: boolean;
   // Complément gris écrit après l'étiquette extérieure (durée, phase d'application).
   etiquetaMeta?: string;
 }
@@ -209,6 +219,9 @@ interface Fila {
   bold?: boolean;
   // Ligne de jalon : un petit triangle violet précède le nom dans la colonne.
   hito?: boolean;
+  // Repère de phase (modèle enveloppe) : losange de la couleur du rôle devant
+  // le nom, et nom en gras — ces lignes structurent la phase.
+  marca?: string;
   barras: Barra[];
   // Première ligne d'un nouveau groupe de typologie (Aeropuertos / Hospitales /
   // Escuelas) : une bande gris clair est ménagée au-dessus.
@@ -237,6 +250,7 @@ function barraDe(
 
 // Assemble le planning d'un sous-projet (mêmes entrées que la feuille de route).
 function armar(uid: string, tipologia: string, d: DatosCronograma) {
+  const envolvente = esModeloEnvolvente(uid);
   const estado = new Map<string, RoadmapOverride>();
   const planes = new Map<
     string,
@@ -283,6 +297,21 @@ function armar(uid: string, tipologia: string, d: DatosCronograma) {
       });
     }
   }
+  // Repères et jalons (modèle enveloppe) : ce sont des lignes de planning, pas
+  // des cartes — `construirCartasPorFila` les écarte, on les ajoute ici. Un
+  // jalon `cno` n'a pas de phase : il ne doit allonger aucune enveloppe.
+  const hitos = envolvente ? lineasHito(estado) : [];
+  for (const h of hitos) {
+    const p = planes.get(h.key);
+    tasks.push({
+      key: h.key,
+      fase: h.rol === "cno" ? "" : h.fase,
+      durValor: p?.durValor ?? null,
+      durUnidad: asUnidad(p?.durUnidad),
+      fechaInicio: p?.fechaInicio ?? null,
+      fechaFin: p?.fechaFin ?? null,
+    });
+  }
   const faseInicio: Record<string, string | null> = {};
   for (const f of d.fases) {
     if (f.subproyecto_uid !== uid) continue;
@@ -290,10 +319,12 @@ function armar(uid: string, tipologia: string, d: DatosCronograma) {
     tasks.push({
       key: faseNodeKey(f.fase),
       fase: "",
-      durValor: f.dur_valor,
-      durUnidad: asUnidad(f.dur_unidad),
-      fechaInicio: f.fecha_inicio,
-      fechaFin: f.fecha_fin,
+      // En mode enveloppe, la phase n'a plus ni date ni durée propre : elle
+      // découle de ses lignes. On garde le nœud pour pouvoir l'enlacer.
+      durValor: envolvente ? null : f.dur_valor,
+      durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
+      fechaInicio: envolvente ? null : f.fecha_inicio,
+      fechaFin: envolvente ? null : f.fecha_fin,
     });
   }
   const links = d.roadmapEnlace
@@ -304,9 +335,16 @@ function armar(uid: string, tipologia: string, d: DatosCronograma) {
       punto: e.punto,
       desfaseValor: e.desfaseValor,
       desfaseUnidad: e.desfaseUnidad,
+      extremo: e.extremo,
     }));
-  const sched = computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START });
-  return { columnas, sched };
+  const sched = computeSchedule({
+    tasks,
+    links,
+    faseInicio,
+    projectStart: PROJECT_START,
+    fasesEnvolventes: envolvente,
+  });
+  return { columnas, sched, hitos, envolvente };
 }
 
 // Couleur d'une fase (bande de temps) : bleu progressif par ordre, ROUGE pour
@@ -347,6 +385,27 @@ const fmtFecha = (ms: number): string => {
   return `${d.getDate()} ${MES_ABBR[d.getMonth()]} ${d.getFullYear()}`;
 };
 
+// Barre d'un repère ou d'un jalon (modèle enveloppe). Les repères de phase
+// durent un jour → losange centré sur la date, avec le nom écrit à côté ; les
+// « No objeción AFD » durent deux semaines → vraie barre rouge, sigle « CNO »
+// dedans s'il y tient (même règle que les autres barres : jamais de troncature).
+function barraHito(sr: ScheduleResult | undefined, h: LineaHito): Barra | null {
+  if (!sr) return null;
+  const color = HITO_COLOR[h.rol];
+  const puntual = h.rol !== "cno";
+  const b = barraDe(sr, color, h.nombre, false, "#ffffff");
+  if (!b) return null;
+  return {
+    ...b,
+    rombo: puntual,
+    interior: puntual ? undefined : "CNO",
+    interiorColor: "#ffffff",
+    tooltip: puntual
+      ? `${h.nombre} · ${fmtFecha(b.startMs)}`
+      : `${h.nombre} · ${fmtFecha(b.startMs)} → ${fmtFecha(b.endMs)}`,
+  };
+}
+
 // Enchaînement des fases d'un planning sur UNE ligne (segments colorés). Libellé
 // = nom complet de la fase (tronqué si la bande est trop étroite), sauf les
 // jalons « No objeción AFD » → « CNO » (bandes rouges courtes). Nom + date au survol.
@@ -366,16 +425,27 @@ function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
 // fase : 1re ligne = la barre de la fase elle-même (sa ligne de temps), puis les
 // tareas regroupées par composante (GP → EE → AyS → G), les unes sous les autres.
 function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtros: Set<string>): Seccion[] {
-  const { columnas, sched } = armar(uid, tipologia, d);
+  const { columnas, sched, hitos, envolvente } = armar(uid, tipologia, d);
   const out: Seccion[] = [];
 
   FASES_ORD.forEach((f, i) => {
     // Barre de la fase : rendue sur la ligne du TITRE (plus de ligne dédiée).
     // Sigle centré ; « No objeción AFD » (et ses jalons) en rouge.
-    const bFase = barraFase(sched.get(faseNodeKey(f.code)), f.code, i);
+    // En mode enveloppe, une phase sans aucune ligne datée n'a pas de barre du
+    // tout (`sinAncla`) — c'est le cas des anciennes phases « No objeción AFD »,
+    // devenues des jalons : la section entière disparaît plus bas.
+    const srFase = sched.get(faseNodeKey(f.code));
+    const bFase = srFase?.sinAncla ? null : barraFase(srFase, f.code, i);
 
     // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
     const filas: Fila[] = [];
+    // Repère d'entrée de la phase, en tête de section : c'est de lui que pendent
+    // les tâches qui démarrent avec la phase, et le déplacer décale toute la suite.
+    for (const h of hitos) {
+      if (h.rol !== "inicio" || h.fase !== f.code) continue;
+      const b = barraHito(sched.get(h.key), h);
+      if (b) filas.push({ label: h.nombre, marca: HITO_COLOR[h.rol], barras: [b] });
+    }
     for (const comp of COMPS) {
       if (!filtros.has(comp)) continue;
       const cards = [...(columnas.get(`${f.code}|${comp}`) ?? [])].filter((c) => !c.nota);
@@ -393,10 +463,38 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
         .forEach(({ label, barras }) => filas.push({ label, barras }));
     }
 
+    // Fin de section : la remise du livrable, puis les « No objeción AFD » qui
+    // en découlent. Les jalons viennent après parce qu'ils suivent la phase —
+    // ils n'entrent pas dans son enveloppe.
+    for (const rol of ["entrega", "cno"] as const) {
+      for (const h of hitos) {
+        if (h.rol !== rol || h.fase !== f.code) continue;
+        const b = barraHito(sched.get(h.key), h);
+        if (b) filas.push({ label: h.nombre, marca: HITO_COLOR[h.rol], barras: [b] });
+      }
+    }
+
     // On masque une fase entièrement vide (pas de barre + aucune tarea visible).
     if (!bFase && filas.length === 0) return;
     out.push({ titulo: f.nombre, barras: bFase ? [bFase] : [], filas });
   });
+
+  // En mode enveloppe, une tâche sans ancre n'est plus rattrapée par sa phase :
+  // elle serait posée en 2026 sans le dire. On la remonte en tête, en clair.
+  if (envolvente) {
+    const sueltas: Fila[] = [];
+    for (const [colKey, cards] of columnas) {
+      const comp = colKey.split("|")[1] as ComponenteCode;
+      if (!filtros.has(comp)) continue;
+      for (const c of cards) {
+        if (c.nota || !sched.get(c.key)?.sinAncla) continue;
+        sueltas.push({ label: c.nombre, barras: [] });
+      }
+    }
+    if (sueltas.length > 0) {
+      out.unshift({ titulo: "Sin programar", barras: [], filas: sueltas });
+    }
+  }
 
   return out;
 }
@@ -1097,6 +1195,13 @@ export function CronogramaClient() {
                             style={{ borderLeftColor: CARD_TONOS.G.foot }}
                           />
                         )}
+                        {fila.marca && (
+                          <span
+                            aria-hidden="true"
+                            className="mr-2 h-2 w-2 shrink-0 rotate-45"
+                            style={{ backgroundColor: fila.marca }}
+                          />
+                        )}
                         <span className="truncate">{fila.label}</span>
                       </div>
                       <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
@@ -1138,6 +1243,33 @@ function CapaBarras({ barras, x }: { barras: Barra[]; x: (ms: number) => number 
         const left = x(b.startMs);
         const rPlena = x(b.solidMs);
         const rFin = x(b.endMs);
+        // Repère ponctuel : losange centré sur la date, nom écrit à côté.
+        if (b.rombo) {
+          return (
+            <div key={bi}>
+              <div
+                className="absolute"
+                style={{
+                  left: left - 5,
+                  width: 10,
+                  height: 10,
+                  top: ROW_H / 2 - 5,
+                  backgroundColor: b.color,
+                  transform: "rotate(45deg)",
+                }}
+                title={b.tooltip}
+              />
+              {b.etiqueta ? (
+                <span
+                  className="pointer-events-none absolute whitespace-nowrap text-[11px] font-semibold leading-none text-[var(--text)]"
+                  style={{ left: left + 9, top: ROW_H / 2 - 5 }}
+                >
+                  {b.etiqueta}
+                </span>
+              ) : null}
+            </div>
+          );
+        }
         return (
           <div key={bi}>
             <div

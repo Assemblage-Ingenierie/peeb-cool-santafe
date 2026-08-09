@@ -10,9 +10,15 @@ import {
   CARD_TONOS,
   RESPONSABLE_DEFECTO,
   DURACION_UNIDADES,
+  esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
-import { construirCartasPorFila, type RoadmapOverride } from "@/lib/roadmap";
+import {
+  construirCartasPorFila,
+  lineasHito,
+  type LineaHito,
+  type RoadmapOverride,
+} from "@/lib/roadmap";
 import { SEMESTRES, planGlobalEfectivo } from "@/lib/semestres";
 import {
   computeSchedule,
@@ -170,6 +176,10 @@ interface Enlace {
   punto: Punto; // point d'accroche sur la source (inicio | fin)
   desfaseValor: number; // décalage signé (négatif = avant, positif = après)
   desfaseUnidad: Unidad;
+  // Extrémité de la CIBLE qui se cale sur ce point (migration 036) : « inicio »
+  // (défaut) = elle démarre là ; « fin » = elle TERMINE là. L'édition depuis
+  // cette page ne pose que « inicio » ; « fin » vient des données converties.
+  extremo?: Punto;
 }
 
 // Brouillon d'édition d'une liaison (panneau de choix accroche + décalage).
@@ -179,6 +189,10 @@ interface LiaisonDraft {
   punto: Punto;
   desfaseValor: number;
   desfaseUnidad: Unidad;
+  // Conservé tel quel : ce panneau ne le règle pas, mais ré-enregistrer une
+  // liaison convertie en « fin » (migration 036) ne doit pas la ramener à
+  // « inicio » dans le dos de l'utilisateur.
+  extremo?: Punto;
   editing: boolean; // true = liaison existante en cours d'édition
 }
 
@@ -367,6 +381,7 @@ export function HojasDeRutaClient() {
         punto: e.punto,
         desfaseValor: e.desfaseValor,
         desfaseUnidad: e.desfaseUnidad,
+        extremo: e.extremo,
       })),
     );
     setHydrated(true);
@@ -422,6 +437,29 @@ export function HojasDeRutaClient() {
       estado,
     }) as Map<string, CardModel[]>;
   }, [snap, seleccion, ocultas, creadas, posiciones, ediciones]);
+  // Repères et jalons de la feuille (modèle enveloppe, migration 036). Ce ne
+  // sont pas des cartes — `construirCartasPorFila` les écarte — mais ils portent
+  // le planning, donc ils doivent entrer dans `computeSchedule` : sinon la
+  // feuille de route et le cronograma calculeraient des dates différentes.
+  const hitosHoja = useMemo<LineaHito[]>(() => {
+    if (!esModeloEnvolvente(seleccion)) return [];
+    const pref = `${seleccion}::`;
+    const estado = new Map<string, RoadmapOverride>();
+    for (const [sk, comp] of Object.entries(creadas)) {
+      if (!sk.startsWith(pref)) continue;
+      const tarea = splitKey(sk).tarea;
+      const p = posiciones[sk];
+      estado.set(tarea, {
+        creada: true,
+        componente: comp,
+        nombre: ediciones[sk]?.nombre ?? null,
+        fila: p?.fila ?? null,
+        orden: p?.orden ?? null,
+      });
+    }
+    return lineasHito(estado);
+  }, [seleccion, creadas, posiciones, ediciones]);
+
   function cartasColumna(fila: string, comp: ComponenteCode): CardModel[] {
     return columnas.get(`${fila}|${comp}`) ?? [];
   }
@@ -518,6 +556,22 @@ export function HojasDeRutaClient() {
         });
       }
     }
+    // Modèle « la fase est l'enveloppe de ses tâches » (migration 036) : les
+    // repères `__ini__`/`__ent__`/`__cno__` portent le planning, ce ne sont pas
+    // des cartes. Ils doivent entrer dans le calcul, sinon la feuille de route
+    // et le cronograma divergeraient — c'est le MÊME moteur qui les nourrit.
+    const envolvente = esModeloEnvolvente(seleccion);
+    for (const h of hitosHoja) {
+      const p = planes[`${seleccion}::${h.key}`];
+      tasks.push({
+        key: h.key,
+        fase: h.rol === "cno" ? "" : h.fase,
+        durValor: p?.durValor ?? null,
+        durUnidad: asUnidad(p?.durUnidad),
+        fechaInicio: p?.fechaInicio ?? null,
+        fechaFin: p?.fechaFin ?? null,
+      });
+    }
     const links = enlaces
       .filter((e) => splitKey(e.from).feuille === seleccion)
       .map((e) => ({
@@ -526,26 +580,34 @@ export function HojasDeRutaClient() {
         punto: e.punto,
         desfaseValor: e.desfaseValor,
         desfaseUnidad: e.desfaseUnidad,
+        extremo: e.extremo,
       }));
     const faseInicio: Record<string, string | null> = {};
     for (const f of snap.data.fases) {
       if (f.subproyecto_uid !== seleccion) continue;
       faseInicio[f.fase] = f.fecha_inicio;
       // Nœud de phase planifiable/enlazable (dates/durée = Gestión de subproyectos).
+      // En mode enveloppe il n'a plus de dates propres : elles découlent des lignes.
       tasks.push({
         key: faseNodeKey(f.fase),
         fase: "",
-        durValor: f.dur_valor ?? null,
-        durUnidad: asUnidad(f.dur_unidad),
-        fechaInicio: f.fecha_inicio,
-        fechaFin: f.fecha_fin,
+        durValor: envolvente ? null : f.dur_valor ?? null,
+        durUnidad: envolvente ? null : asUnidad(f.dur_unidad),
+        fechaInicio: envolvente ? null : f.fecha_inicio,
+        fechaFin: envolvente ? null : f.fecha_fin,
       });
     }
     return {
-      schedule: computeSchedule({ tasks, links, faseInicio, projectStart: PROJECT_START }),
+      schedule: computeSchedule({
+        tasks,
+        links,
+        faseInicio,
+        projectStart: PROJECT_START,
+        fasesEnvolventes: envolvente,
+      }),
       planesGlobal: new Map(),
     };
-  }, [snap, seleccion, columnas, planes, enlaces]);
+  }, [snap, seleccion, columnas, planes, enlaces, hitosHoja]);
 
   function toggleRealizada(k: string) {
     setRealizadas((prev) => {
@@ -590,6 +652,7 @@ export function HojasDeRutaClient() {
       punto: d.punto,
       desfaseValor: d.desfaseValor,
       desfaseUnidad: d.desfaseUnidad,
+      extremo: d.extremo,
     };
     setEnlaces((prev) => {
       const i = prev.findIndex((e) => e.from === d.from && e.to === d.to);
@@ -606,6 +669,7 @@ export function HojasDeRutaClient() {
       punto: d.punto,
       desfaseValor: d.desfaseValor,
       desfaseUnidad: d.desfaseUnidad,
+      extremo: d.extremo,
     }).catch(() => {});
     setLiaisonDraft(null);
   }
@@ -620,6 +684,7 @@ export function HojasDeRutaClient() {
       punto: e.punto,
       desfaseValor: e.desfaseValor,
       desfaseUnidad: e.desfaseUnidad,
+      extremo: e.extremo,
       editing: true,
     });
   }
