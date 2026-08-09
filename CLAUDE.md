@@ -58,6 +58,12 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
      n'existent pas en base, elles se déduisent des ancres, durées et liaisons.
    - ⚠ La feuille **« Implementación del PAG »** ne suit pas non plus ce format :
      voir la section « Implementación del PAG » plus bas.
+   - Depuis le modèle enveloppe (039), « Próximas tareas » n'annonce **plus les
+     fases** : c'est le repère `Inicio de…` qui porte l'échéance. Les annoncer
+     toutes deux faisait doublon (« Inicio del anteproyecto » puis
+     « Anteproyecto », à un jour d'écart). Conséquence : ces lignes portent la
+     composante **GP**, donc le filtre GP les masque — avant, les fases
+     restaient visibles quel que soit le filtre.
 8. ⏳ PWA offline (lecture)
 9. ✅ Auth Supabase + RLS productif + gestion des rôles
 

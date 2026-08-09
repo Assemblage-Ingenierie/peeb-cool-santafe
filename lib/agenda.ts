@@ -192,8 +192,12 @@ function tareasDeFeuille(datos: Datos, feuille: string): Omit<TareaAgenda, "subp
     const inicioMs = isoMs(r.start);
     const finMs = isoMs(r.end);
     if (inicioMs == null || finMs == null) continue;
-    const esFase = key.startsWith("__fase__");
-    if (esFase) {
+    if (key.startsWith("__fase__")) {
+      // Modèle enveloppe : la fase n'est plus une échéance en soi, c'est le
+      // repère « Inicio de… » qui l'annonce (et il est déjà dans `sched`).
+      // L'annoncer aussi ferait doublon — « Inicio del anteproyecto » suivi de
+      // « Anteproyecto », à un jour d'écart.
+      if (envolvente) continue;
       const code = key.replace("__fase__", "");
       // La ligne « general » n'est pas une étape du déroulé : rien à annoncer.
       if (code === "general") continue;

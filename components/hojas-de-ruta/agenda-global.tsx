@@ -118,10 +118,11 @@ export function AgendaGlobal({
                       className="grid grid-cols-[88px_1fr] items-stretch gap-x-3 border-b border-l-[3px] border-[var(--border)] py-1 pl-3 pr-4 last:border-b-0 sm:grid-cols-[88px_44px_1fr_112px]"
                       style={{ borderLeftColor: tip?.color ?? UI.textMuted }}
                     >
-                      {/* Bâtiment : texte courant, séparé du reste du tableau par
-                          un filet léger. La pastille pleine était trop appuyée. */}
+                      {/* Bâtiment : en GRAS, c'est la première chose qu'on
+                          cherche en balayant la liste. Séparé du reste par un
+                          filet léger ; la pastille pleine était trop appuyée. */}
                       <span
-                        className="flex items-center border-r border-[var(--border)] pr-2 text-xs leading-tight text-[var(--text)]"
+                        className="flex items-center border-r border-[var(--border)] pr-2 text-xs font-semibold leading-tight text-[var(--text)]"
                         title={t.subproyecto}
                       >
                         {t.sigla}
