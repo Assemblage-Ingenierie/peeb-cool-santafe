@@ -437,42 +437,46 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
     const srFase = sched.get(faseNodeKey(f.code));
     const bFase = srFase?.sinAncla ? null : barraFase(srFase, f.code, i);
 
-    // Tareas de la fase, regroupées par composante (ordre COMPS), triées par début.
-    const filas: Fila[] = [];
-    // Repère d'entrée de la phase, en tête de section : c'est de lui que pendent
-    // les tâches qui démarrent avec la phase, et le déplacer décale toute la suite.
+    // Toutes les lignes de la fase — repères, jalons et tareas de toutes les
+    // composantes — dans UN SEUL tri CHRONOLOGIQUE. Grouper d'abord par
+    // composante cassait la lecture de la chaîne : « Negociación y firma del
+    // contrato » (GP) s'affichait avant les jalons AFD dont elle découle.
+    const pendientes: { label: string; barras: Barra[]; marca?: string; _s: number; _o: number }[] = [];
+    // `_o` départage les lignes de même date, dans l'ordre logique de la phase :
+    // on entre par le repère Inicio et on sort par la remise puis les CNO.
+    const ORDEN_ROL: Record<string, number> = { inicio: -1, entrega: 1, cno: 2 };
     for (const h of hitos) {
-      if (h.rol !== "inicio" || h.fase !== f.code) continue;
+      if (h.fase !== f.code) continue;
       const b = barraHito(sched.get(h.key), h);
-      if (b) filas.push({ label: h.nombre, marca: HITO_COLOR[h.rol], barras: [b] });
+      if (b) {
+        pendientes.push({
+          label: h.nombre,
+          marca: HITO_COLOR[h.rol],
+          barras: [b],
+          _s: b.startMs,
+          _o: ORDEN_ROL[h.rol] ?? 0,
+        });
+      }
     }
     for (const comp of COMPS) {
       if (!filtros.has(comp)) continue;
-      const cards = [...(columnas.get(`${f.code}|${comp}`) ?? [])].filter((c) => !c.nota);
-      if (cards.length === 0) continue;
-      cards
-        .map((c) => {
-          // Tons CLAIRS de composante (en-tête de carte) pour les détails ;
-          // GP en gris moyen (GP_BARRA) plutôt que le noir des cartes.
-          const color = comp === "GP" ? GP_BARRA : CARD_TONOS[comp].head;
-          const txtColor = comp === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[comp].headText;
-          const b = barraDe(sched.get(c.key), color, c.nombre, false, txtColor);
-          return { label: c.nombre, barras: b ? [b] : [], _s: b ? b.startMs : Infinity };
-        })
-        .sort((a, b) => a._s - b._s)
-        .forEach(({ label, barras }) => filas.push({ label, barras }));
-    }
-
-    // Fin de section : la remise du livrable, puis les « No objeción AFD » qui
-    // en découlent. Les jalons viennent après parce qu'ils suivent la phase —
-    // ils n'entrent pas dans son enveloppe.
-    for (const rol of ["entrega", "cno"] as const) {
-      for (const h of hitos) {
-        if (h.rol !== rol || h.fase !== f.code) continue;
-        const b = barraHito(sched.get(h.key), h);
-        if (b) filas.push({ label: h.nombre, marca: HITO_COLOR[h.rol], barras: [b] });
+      for (const c of columnas.get(`${f.code}|${comp}`) ?? []) {
+        if (c.nota) continue;
+        // Tons CLAIRS de composante (en-tête de carte) pour les détails ;
+        // GP en gris moyen (GP_BARRA) plutôt que le noir des cartes.
+        const color = comp === "GP" ? GP_BARRA : CARD_TONOS[comp].head;
+        const txtColor = comp === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[comp].headText;
+        const b = barraDe(sched.get(c.key), color, c.nombre, false, txtColor);
+        pendientes.push({
+          label: c.nombre,
+          barras: b ? [b] : [],
+          _s: b ? b.startMs : Infinity,
+          _o: 0,
+        });
       }
     }
+    pendientes.sort((a, b) => a._s - b._s || a._o - b._o);
+    const filas: Fila[] = pendientes.map(({ label, barras, marca }) => ({ label, barras, marca }));
 
     // On masque une fase entièrement vide (pas de barre + aucune tarea visible).
     if (!bFase && filas.length === 0) return;

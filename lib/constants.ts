@@ -326,13 +326,12 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
 // Les jalons `__cno__<code>` (No objeción AFD) sont hors phase : ils pendent de
 // la fin d'une autre ligne et n'allongent aucune enveloppe.
 //
-// ⚠ Déploiement PROGRESSIF : seuls les sous-projets listés ici suivent ce
-// modèle. Les autres restent au modèle historique (phase planifiée à la main).
+// Depuis la migration 039, TOUS les sous-projets suivent ce modèle (le
+// déploiement progressif a commencé par SUB-AIR, migrations 036-038). Les
+// feuilles « global » et « pag » gardent leur propre logique : elles n'ont ni
+// fases ni repères.
 // ============================================================
-export const SUBS_MODELO_ENVOLVENTE = ["SUB-AIR"];
-
-export const esModeloEnvolvente = (feuille: string): boolean =>
-  SUBS_MODELO_ENVOLVENTE.includes(feuille);
+export const esModeloEnvolvente = (feuille: string): boolean => feuille.startsWith("SUB-");
 
 export const HITO_INICIO_PREFIX = "__ini__";
 export const HITO_ENTREGA_PREFIX = "__ent__";

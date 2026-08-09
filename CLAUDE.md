@@ -204,11 +204,17 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 - **Nouveau champ de liaison `extremo`** (`inicio` par défaut = comportement
   historique, `fin` = la cible TERMINE à la date visée, son début recule de sa
   durée). Colonne ajoutée pour toutes les feuilles, sans effet sur les autres.
-- ⚠ **Périmètre progressif** : `SUBS_MODELO_ENVOLVENTE` (`lib/constants.ts`) =
-  **SUB-AIR uniquement**. Les 26 autres restent au modèle historique. Le drapeau
-  doit être passé aux **trois** points d'assemblage, sinon les vues divergent :
+- **Périmètre** : `esModeloEnvolvente()` (`lib/constants.ts`) = **tous les
+  `SUB-*`** depuis la migration 039 (le déploiement a commencé par SUB-AIR,
+  036-038). `global` et `pag` gardent leur logique propre. Le drapeau doit être
+  passé aux **trois** points d'assemblage, sinon les vues divergent :
   `cronograma-client.tsx` (`armar`), `hojas-de-ruta-client.tsx` (useMemo
   `schedule`) et `lib/agenda.ts`.
+- **Ordre des lignes = CHRONOLOGIQUE**, toutes composantes confondues. Grouper
+  d'abord par composante (comportement d'origine) cassait la lecture de la
+  chaîne : « Negociación y firma del contrato » (GP) s'affichait avant les
+  jalons AFD dont elle découle. À date égale, `ORDEN_ROL` fait entrer par le
+  repère `Inicio` et sortir par la remise puis les CNO.
 - ⚠ **Les dates de phase de `peebcoolsf_gestion_lineas` deviennent inertes** pour
   ces sous-projets (elles pilotent encore Inicio et Gestión de subproyectos → la
   divergence est attendue, pas un bug). Avant 036 elles écrasaient les liaisons
@@ -242,7 +248,14 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   suppression de ligne au survol, réordonnancement au glisser, mode « Ver
   dependencias », annulation). Maquette de référence validée, à porter.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 038**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 039**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 039 : modèle enveloppe étendu aux **26 sous-projets restants**. Conversion
+  mécanique (ils n'ont que deux formes : 48 liaisons avec Patrimonio, 46 sans).
+  ⚠ L'**échelonnement du programme** (attente entre fin des EP et début de
+  l'anteproyecto : Cullen 417 j, Centenario 318 j, ASV 75 j, les 23 autres ≈ 0)
+  était porté par les dates de fase ; il est reporté sur le **décalage de la
+  liaison** pour que la conversion reste neutre sans réintroduire de date
+  absolue. Sauvegardes `peebcoolsf_bak_enlace_039` / `_bak_fechas_039`.
 - 038 : `Pre-categorización provincial digital` (SUB-AIR) démarre avec le
   proyecto ejecutivo, sa propre fase — corrige la liaison de 037.
 - 037 : recâblage de la chaîne d'avancement de **SUB-AIR** (une seule date
