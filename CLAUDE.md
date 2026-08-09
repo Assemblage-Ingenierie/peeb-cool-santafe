@@ -244,10 +244,16 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   existaient mais **ne servaient à rien** (la date manuelle gagne, priorité 1).
   - Objectif : **tout se pilote depuis le cronograma**, et la section
     « Gestión de subproyectos » de l'Admin sera supprimée. Étapes restantes :
-    décider où vit l'avancement (proposition : `realizada` sur le repère
-    `__ent__<fase>`), migrer les 3 lecteurs « métier » (`bottom-band`,
-    `GlobalTable`, `export-resumen`, qui lisent encore `estado`), passer la
-    section en lecture seule, puis la retirer.
+    migrer les 3 lecteurs « métier » (`bottom-band`, `GlobalTable`,
+    `export-resumen`, qui lisent encore `estado`), passer la section en lecture
+    seule, puis la retirer.
+  - **L'avancement se saisit dans le cronograma** : une case sur la ligne
+    `__ent__<fase>` (le repère de remise), réservée aux admins, qui écrit
+    `realizada` via `roadmapSetRealizada`. C'est la SEULE saisie d'avancement du
+    modèle — le reste se déduit. Une remise **échue et non cochée** affiche
+    « atrasada » en rouge de marque : le planning ne colle plus au réel et il
+    faut le remettre à jour. Quatre états lisibles sans rien saisir de plus :
+    livrée / en cours / en retard / à venir.
   - ⚠ **Ne jamais supprimer la table** : elle porte aussi les **documents** des
     sous-projets (`tipo_linea <> 'etapa'`). Et même les lignes `etapa` doivent
     rester : la migration 039 les relit pour fabriquer les repères, et elles

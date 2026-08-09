@@ -8,6 +8,7 @@ import {
   HITO_COLOR,
   HITO_CNO_PREFIX,
   GP_BARRA,
+  UI,
   esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
@@ -56,6 +57,9 @@ import type { Roadmap, Snapshot, SnapshotRoadmapEstado } from "@/lib/snapshot";
 // (chargés par deux endpoints séparés, fusionnés côté client).
 type DatosCronograma = Snapshot & Roadmap;
 import { useComponentFilters } from "@/components/filter-context";
+import { isAdmin } from "@/lib/auth";
+import { useAuthUser } from "@/components/auth-context";
+import { roadmapSetRealizada } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
 // Cronograma (Gantt) — branché sur le MOTEUR de planning (lib/schedule) : les
@@ -178,6 +182,10 @@ interface Fila {
   // Repère de phase (modèle enveloppe) : losange de la couleur du rôle devant
   // le nom, et nom en gras — ces lignes structurent la phase.
   marca?: string;
+  // Remise du livrable : la SEULE saisie d'avancement du modèle. Cochée = phase
+  // livrée. Échue et non cochée = retard, signalé sur la ligne — c'est le signe
+  // qu'il faut remettre le cronograma à jour.
+  check?: { key: string; marcada: boolean; atrasada: boolean };
   barras: Barra[];
   // Première ligne d'un nouveau groupe de typologie (Aeropuertos / Hospitales /
   // Escuelas) : une bande gris clair est ménagée au-dessus.
@@ -300,7 +308,13 @@ function armar(uid: string, tipologia: string, d: DatosCronograma) {
     projectStart: PROJECT_START,
     fasesEnvolventes: envolvente,
   });
-  return { columnas, sched, hitos, envolvente };
+  // Avancement : une phase est LIVRÉE quand son repère `Entrega` est coché.
+  // C'est la seule saisie d'avancement du modèle — le reste se déduit.
+  const realizadas = new Set<string>();
+  for (const r of d.roadmapEstado) {
+    if (r.feuille === uid && r.realizada) realizadas.add(r.tareaKey);
+  }
+  return { columnas, sched, hitos, envolvente, realizadas };
 }
 
 // Barre d'une fase avec son libellé centré (texte lisible selon le fond).
@@ -377,8 +391,17 @@ function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
 // Sections d'un sous-projet : UNE section (bande noire) PAR FASE. Dans chaque
 // fase : 1re ligne = la barre de la fase elle-même (sa ligne de temps), puis les
 // tareas regroupées par composante (GP → EE → AyS → G), les unes sous les autres.
-function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtros: Set<string>): Seccion[] {
-  const { columnas, sched, hitos, envolvente } = armar(uid, tipologia, d);
+function seccionesSub(
+  uid: string,
+  tipologia: string,
+  d: DatosCronograma,
+  filtros: Set<string>,
+  hoyMs: number,
+  marcadas: Record<string, boolean>,
+): Seccion[] {
+  const { columnas, sched, hitos, envolvente, realizadas } = armar(uid, tipologia, d);
+  // La coche faite dans la session prime sur le snapshot, pas encore rechargé.
+  const estaMarcada = (key: string) => marcadas[`${uid}::${key}`] ?? realizadas.has(key);
   const out: Seccion[] = [];
 
   FASES_ORD.forEach((f, i) => {
@@ -394,7 +417,14 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
     // composantes — dans UN SEUL tri CHRONOLOGIQUE. Grouper d'abord par
     // composante cassait la lecture de la chaîne : « Negociación y firma del
     // contrato » (GP) s'affichait avant les jalons AFD dont elle découle.
-    const pendientes: { label: string; barras: Barra[]; marca?: string; _s: number; _o: number }[] = [];
+    const pendientes: {
+      label: string;
+      barras: Barra[];
+      marca?: string;
+      check?: Fila["check"];
+      _s: number;
+      _o: number;
+    }[] = [];
     // `_o` départage les lignes de même date, dans l'ordre logique de la phase :
     // on entre par le repère Inicio et on sort par la remise puis les CNO.
     const ORDEN_ROL: Record<string, number> = { inicio: -1, entrega: 1, cno: 2 };
@@ -405,6 +435,17 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
         pendientes.push({
           label: h.nombre,
           marca: HITO_COLOR[h.rol],
+          // Seule la REMISE porte la case : c'est elle qui dit « phase livrée ».
+          check:
+            h.rol === "entrega"
+              ? {
+                  key: h.key,
+                  marcada: estaMarcada(h.key),
+                  // Échue et non cochée : le planning ne correspond plus au
+                  // réel, il faut le remettre à jour.
+                  atrasada: !estaMarcada(h.key) && hoyMs > 0 && b.endMs <= hoyMs,
+                }
+              : undefined,
           barras: [b],
           _s: b.startMs,
           _o: ORDEN_ROL[h.rol] ?? 0,
@@ -429,7 +470,12 @@ function seccionesSub(uid: string, tipologia: string, d: DatosCronograma, filtro
       }
     }
     pendientes.sort((a, b) => a._s - b._s || a._o - b._o);
-    const filas: Fila[] = pendientes.map(({ label, barras, marca }) => ({ label, barras, marca }));
+    const filas: Fila[] = pendientes.map(({ label, barras, marca, check }) => ({
+      label,
+      barras,
+      marca,
+      check,
+    }));
 
     // On masque une fase entièrement vide (pas de barre + aucune tarea visible).
     if (!bFase && filas.length === 0) return;
@@ -763,8 +809,17 @@ export function CronogramaClient() {
   const snap = useSnapshot();
   const rm = useRoadmap();
   const filtros = useComponentFilters();
+  const esAdmin = isAdmin(useAuthUser());
   const [gran, setGran] = useState<Gran>("mes");
   const [seleccion, setSeleccion] = useState<Seleccion>("global");
+  // « hoy » : client-only (anti-décalage d'hydratation). Sert à la barre rouge
+  // ET au repérage des remises échues non cochées (retard).
+  const [hoyMs, setHoyMs] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) anti-décalage d'hydratation
+  useEffect(() => setHoyMs(Date.now()), []);
+  // Cases cochées dans la session, avant que le snapshot ne soit rechargé :
+  // sans ça la case reviendrait en arrière au clic suivant.
+  const [marcadas, setMarcadas] = useState<Record<string, boolean>>({});
   // Fases repliées (titres) — par défaut tout est déplié (détails visibles).
   const [colapsadas, setColapsadas] = useState<Set<string>>(new Set());
   const alternarSeccion = (titulo: string) =>
@@ -802,8 +857,8 @@ export function CronogramaClient() {
     }
     if (seleccion === FEUILLE_PAG) return seccionesPag(datos);
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
-    return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros);
-  }, [snap, rm, seleccion, filtros]);
+    return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros, hoyMs ?? 0, marcadas);
+  }, [snap, rm, seleccion, filtros, hoyMs, marcadas]);
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;
@@ -849,10 +904,15 @@ export function CronogramaClient() {
     setArrastrando(false);
   };
 
-  const [hoyMs, setHoyMs] = useState<number | null>(null);
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×) anti-décalage d'hydratation
-  useEffect(() => setHoyMs(Date.now()), []);
   const hoyEnRango = hoyMs != null && hoyMs >= START && hoyMs < END;
+
+  // Cocher la remise d'une phase = déclarer la phase livrée. Mise à jour
+  // optimiste : la RLS reste le rempart côté base.
+  function marcarEntrega(tareaKey: string, valor: boolean) {
+    if (!esAdmin || seleccion === "global" || seleccion === FEUILLE_PAG) return;
+    setMarcadas((prev) => ({ ...prev, [`${seleccion}::${tareaKey}`]: valor }));
+    roadmapSetRealizada(seleccion, tareaKey, valor).catch(() => {});
+  }
 
   // Position initiale (1×, une fois « hoy » connu) : la barre rouge « hoy » est
   // placée à OFFSET_HOY_CASES cases du bord gauche (colonne des titres), laissant
@@ -1160,6 +1220,36 @@ export function CronogramaClient() {
                           />
                         )}
                         <span className="truncate">{fila.label}</span>
+                        {/* Remise du livrable : la seule saisie d'avancement.
+                            Échue et non cochée → « atrasada » en rouge : le
+                            cronograma ne colle plus au réel. */}
+                        {fila.check && (
+                          <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-2">
+                            {fila.check.atrasada && (
+                              <span
+                                className="text-[9px] font-semibold uppercase tracking-wider"
+                                style={{ color: UI.accent }}
+                              >
+                                atrasada
+                              </span>
+                            )}
+                            <input
+                              type="checkbox"
+                              checked={fila.check.marcada}
+                              disabled={!esAdmin}
+                              onChange={(e) => marcarEntrega(fila.check!.key, e.target.checked)}
+                              className="h-3.5 w-3.5 cursor-pointer accent-[var(--ok)] disabled:cursor-default"
+                              title={
+                                esAdmin
+                                  ? "Marcar la entrega como realizada"
+                                  : fila.check.marcada
+                                    ? "Entrega realizada"
+                                    : "Entrega pendiente"
+                              }
+                              aria-label={`Entrega realizada — ${fila.label}`}
+                            />
+                          </span>
+                        )}
                       </div>
                       <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
                         <CapaBarras barras={fila.barras} x={x} />
