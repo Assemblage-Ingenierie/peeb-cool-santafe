@@ -10,6 +10,7 @@ import {
   CARD_TONOS,
   RESPONSABLE_DEFECTO,
   DURACION_UNIDADES,
+  HITO_CNO_PREFIX,
   esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
@@ -1403,8 +1404,17 @@ export function HojasDeRutaClient() {
           ) : (
             FILAS_RUTA.map((fila) => {
                 // Nœud de phase : planifiable (dates/durée de Gestión) + enlazable.
+                // En modèle enveloppe il n'a plus de dates propres : elles
+                // découlent de ses lignes, et une fase sans ligne datée
+                // (`sinAncla`) n'a aucune date à montrer — sans ce garde-fou
+                // elle afficherait le repli du moteur, le 1ᵉʳ janvier 2026.
                 const faseStatKey = `${seleccion}::${faseNodeKey(fila.code)}`;
-                const faseSched = schedule?.get(faseNodeKey(fila.code));
+                const faseSchedRaw = schedule?.get(faseNodeKey(fila.code));
+                // Les « No objeción AFD » ne sont plus des fases : leur nœud est
+                // vide et la date se lit sur le jalon qui les a remplacées.
+                const faseSched = faseSchedRaw?.sinAncla
+                  ? schedule?.get(HITO_CNO_PREFIX + fila.code)
+                  : faseSchedRaw;
                 const esFuenteFase = linkFrom === faseStatKey;
                 const inicioF = fmtFechaCorta(faseSched?.start);
                 const finF = fmtFechaCorta(faseSched?.end);

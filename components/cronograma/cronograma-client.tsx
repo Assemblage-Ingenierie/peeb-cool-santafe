@@ -6,6 +6,7 @@ import {
   CARD_TONOS,
   GESTION_FASES,
   HITO_COLOR,
+  HITO_CNO_PREFIX,
   esModeloEnvolvente,
   type ComponenteCode,
 } from "@/lib/constants";
@@ -412,9 +413,15 @@ function barraHito(sr: ScheduleResult | undefined, h: LineaHito): Barra | null {
 function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
   const barras: Barra[] = [];
   FASES_ORD.forEach((f, i) => {
-    const sr = sched.get(faseNodeKey(f.code));
+    // Modèle enveloppe : les « No objeción AFD » ne sont plus des fases mais
+    // des jalons hors fase — leur nœud de fase est vide (`sinAncla`) et il faut
+    // lire le jalon. Sans ça, la frise perdait ses trois bandes rouges et
+    // dessinait à la place un segment au repli du moteur (1ᵉʳ janvier 2026).
+    const srFase = sched.get(faseNodeKey(f.code));
+    const sr = srFase?.sinAncla ? sched.get(HITO_CNO_PREFIX + f.code) : srFase;
+    if (!sr || sr.sinAncla) return;
     const label = f.code.includes("no_objecion_afd") ? "CNO" : f.nombre;
-    const tooltip = sr ? `${f.nombre} · inicio ${fmtFecha(isoMs(sr.start) ?? 0)}` : undefined;
+    const tooltip = `${f.nombre} · inicio ${fmtFecha(isoMs(sr.start) ?? 0)}`;
     const b = barraFase(sr, f.code, i, tooltip, label);
     if (b) barras.push(b);
   });

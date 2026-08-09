@@ -203,6 +203,11 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
 - **`__cno__<code>`** : les « No objeción AFD » cessent d'être des phases vides.
   Ce sont des jalons **hors phase** (`fase: ""`) → ils n'allongent aucune
   enveloppe. Affichés sous la phase dont ils dépendent (colonne `fila`).
+- ⚠ **Toute vue qui lit `sched.get(faseNodeKey(code))` doit gérer `sinAncla`** :
+  le nœud d'une fase sans ligne datée (les trois CNO) renvoie le repli du
+  moteur, le 1ᵉʳ janvier 2026, qui s'afficherait comme une vraie date. Les
+  frises de la vue globale du cronograma (`barrasFases`) et les lignes de fase
+  des Hojas de ruta basculent dans ce cas sur `HITO_CNO_PREFIX + code`.
 - Le rôle se lit dans **le préfixe de la clé** — aucune colonne de plus en base.
   `rolDeHito()` / `esHitoKey()` / `lineasHito()`. Ces lignes sont `creada=true`
   mais **exclues des cartes** de hoja de ruta (`construirCartasPorFila`) : elles
