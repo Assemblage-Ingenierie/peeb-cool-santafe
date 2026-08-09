@@ -199,7 +199,19 @@ export interface PagEjeActual {
   progreso: number; // 0..1 dans l'acción en cours (la plus avancée de l'eje)
 }
 
-export function pagEjesEnCurso(datos: Datos, hoyMs: number): PagEjeActual[] {
+export interface PagEjeProximo {
+  code: PagEje;
+  nombre: string;
+  inicioMs: number; // début de sa 1re acción à venir
+}
+
+export interface PagEstado {
+  enCurso: PagEjeActual[];
+  proximos: PagEjeProximo[]; // ejes pas encore démarrés (aucune acción en cours), triés par date
+}
+
+/** État du PAG par eje : ce qui court aujourd'hui, et ce qui reste à démarrer. */
+export function pagEstado(datos: Datos, hoyMs: number): PagEstado {
   const stored = new Map<string, { durValor: number | null; durUnidad: string | null; fechaInicio: string | null; fechaFin: string | null }>();
   for (const r of datos.roadmapEstado) {
     if (r.feuille === FEUILLE_PAG)
@@ -225,10 +237,12 @@ export function pagEjesEnCurso(datos: Datos, hoyMs: number): PagEjeActual[] {
   });
   const sched = computeSchedule({ tasks, links: [], faseInicio: {}, projectStart: PROJECT_START });
 
-  const out: PagEjeActual[] = [];
+  const enCurso: PagEjeActual[] = [];
+  const proximos: PagEjeProximo[] = [];
   for (const eje of PAG_EJES) {
     let mejor: PagEjeActual["accion"] | null = null;
     let mejorProg = -1;
+    let inicioFuturo: number | null = null; // début de la 1re acción à venir
     for (const a of PAG_ACCIONES) {
       if (a.eje !== eje.code) continue;
       const sr = sched.get(a.code);
@@ -244,11 +258,16 @@ export function pagEjesEnCurso(datos: Datos, hoyMs: number): PagEjeActual[] {
           mejorProg = prog;
           mejor = { code: a.code, titulo: a.titulo, responsable: a.responsable };
         }
+      } else if (s > hoyMs && (inicioFuturo == null || s < inicioFuturo)) {
+        inicioFuturo = s;
       }
     }
     if (mejor) {
-      out.push({ code: eje.code, nombre: eje.nombre, impactos: eje.impactos, accion: mejor, progreso: mejorProg });
+      enCurso.push({ code: eje.code, nombre: eje.nombre, impactos: eje.impactos, accion: mejor, progreso: mejorProg });
+    } else if (inicioFuturo != null) {
+      proximos.push({ code: eje.code, nombre: eje.nombre, inicioMs: inicioFuturo });
     }
   }
-  return out;
+  proximos.sort((a, b) => a.inicioMs - b.inicioMs);
+  return { enCurso, proximos };
 }
