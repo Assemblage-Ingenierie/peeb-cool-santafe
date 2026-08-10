@@ -9,8 +9,10 @@ import {
   HITO_CNO_PREFIX,
   GP_BARRA,
   UI,
+  DURACION_UNIDADES,
   esModeloEnvolvente,
   type ComponenteCode,
+  type HitoRol,
 } from "@/lib/constants";
 import {
   FASES_ORD,
@@ -59,7 +61,7 @@ type DatosCronograma = Snapshot & Roadmap;
 import { useComponentFilters } from "@/components/filter-context";
 import { isAdmin } from "@/lib/auth";
 import { useAuthUser } from "@/components/auth-context";
-import { roadmapSetRealizada } from "@/app/hojas-de-ruta/actions";
+import { roadmapSetRealizada, roadmapSetPlan } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
 // Cronograma (Gantt) — branché sur le MOTEUR de planning (lib/schedule) : les
@@ -151,7 +153,7 @@ function isoWeek(ms: number): number {
 
 // --- Modèle du Gantt (positions en ms absolus) ------------------------------
 
-interface Barra {
+export interface Barra {
   startMs: number;
   solidMs: number; // fin de la barre pleine (début + durée)
   endMs: number; // fin réelle (hachures de solidMs → endMs si > solidMs)
@@ -174,10 +176,19 @@ interface Barra {
   // Complément gris écrit après l'étiquette extérieure (durée, phase d'application).
   etiquetaMeta?: string;
 }
-interface Fila {
+export interface Fila {
   label: string;
   bold?: boolean;
-  // Ligne de jalon : un petit triangle violet précède le nom dans la colonne.
+  // Clé de la ligne de roadmap (tarea/repère) que cette rangée représente —
+  // point d'accroche du mode édition (ficha). Absente pour les lignes non
+  // éditables (ex. barre de fase seule).
+  key?: string;
+  // Rôle du repère (inicio/entrega/cno) si c'en est un — l'édition en tient
+  // compte (une remise n'a pas de composante, etc.).
+  rol?: HitoRol;
+  // Fila non planifiée (`sinAncla`) : barres vides, mais éditable pour lui
+  // (re)donner une ancre.
+  sinAncla?: boolean;
   hito?: boolean;
   // Repère de phase (modèle enveloppe) : losange de la couleur du rôle devant
   // le nom, et nom en gras — ces lignes structurent la phase.
@@ -191,7 +202,7 @@ interface Fila {
   // Escuelas) : une bande gris clair est ménagée au-dessus.
   separaGrupo?: boolean;
 }
-interface Seccion {
+export interface Seccion {
   titulo: string;
   barras: Barra[]; // barre de la fase — rendue sur la LIGNE DU TITRE (bande grise)
   filas: Fila[]; // tareas (masquées quand la section est repliée)
@@ -210,6 +221,25 @@ function barraDe(
   const so = isoMs(sr.solidEnd) ?? s;
   const e = isoMs(sr.end) ?? so;
   return { startMs: s, solidMs: so, endMs: e, color, etiqueta, dentro, etiquetaColor };
+}
+
+// --- Mode édition : copie de travail d'UNE feuille -------------------------
+// Le borrador ne contient QUE les lignes de la feuille éditée (deep clone) —
+// `armar` filtre déjà par feuille. `overlayFeuille` réinjecte le borrador
+// par-dessus le roadmap chargé pour l'aperçu live.
+function feuilleRoadmap(rm: Roadmap, feuille: string): Roadmap {
+  return {
+    generatedAt: rm.generatedAt,
+    roadmapEstado: rm.roadmapEstado.filter((r) => r.feuille === feuille).map((r) => ({ ...r })),
+    roadmapEnlace: rm.roadmapEnlace.filter((e) => e.feuille === feuille).map((e) => ({ ...e })),
+  };
+}
+function overlayFeuille(base: Roadmap, feuille: string, ov: Roadmap): Roadmap {
+  return {
+    generatedAt: base.generatedAt,
+    roadmapEstado: [...base.roadmapEstado.filter((r) => r.feuille !== feuille), ...ov.roadmapEstado],
+    roadmapEnlace: [...base.roadmapEnlace.filter((e) => e.feuille !== feuille), ...ov.roadmapEnlace],
+  };
 }
 
 // Assemble le planning d'un sous-projet (mêmes entrées que la feuille de route).
@@ -391,7 +421,7 @@ function barrasFases(sched: Map<string, ScheduleResult>): Barra[] {
 // Sections d'un sous-projet : UNE section (bande noire) PAR FASE. Dans chaque
 // fase : 1re ligne = la barre de la fase elle-même (sa ligne de temps), puis les
 // tareas regroupées par composante (GP → EE → AyS → G), les unes sous les autres.
-function seccionesSub(
+export function seccionesSub(
   uid: string,
   tipologia: string,
   d: DatosCronograma,
@@ -419,6 +449,8 @@ function seccionesSub(
     // contrato » (GP) s'affichait avant les jalons AFD dont elle découle.
     const pendientes: {
       label: string;
+      key?: string;
+      rol?: HitoRol;
       barras: Barra[];
       marca?: string;
       check?: Fila["check"];
@@ -434,6 +466,8 @@ function seccionesSub(
       if (b) {
         pendientes.push({
           label: h.nombre,
+          key: h.key,
+          rol: h.rol,
           marca: HITO_COLOR[h.rol],
           // Seule la REMISE porte la case : c'est elle qui dit « phase livrée ».
           check:
@@ -463,6 +497,7 @@ function seccionesSub(
         const b = barraDe(sched.get(c.key), color, c.nombre, false, txtColor);
         pendientes.push({
           label: c.nombre,
+          key: c.key,
           barras: b ? [b] : [],
           _s: b ? b.startMs : Infinity,
           _o: 0,
@@ -470,8 +505,10 @@ function seccionesSub(
       }
     }
     pendientes.sort((a, b) => a._s - b._s || a._o - b._o);
-    const filas: Fila[] = pendientes.map(({ label, barras, marca, check }) => ({
+    const filas: Fila[] = pendientes.map(({ label, key, rol, barras, marca, check }) => ({
       label,
+      key,
+      rol,
       barras,
       marca,
       check,
@@ -491,7 +528,7 @@ function seccionesSub(
       if (!filtros.has(comp)) continue;
       for (const c of cards) {
         if (c.nota || !sched.get(c.key)?.sinAncla) continue;
-        sueltas.push({ label: c.nombre, barras: [] });
+        sueltas.push({ label: c.nombre, barras: [], key: c.key, sinAncla: true });
       }
     }
     if (sueltas.length > 0) {
@@ -807,7 +844,10 @@ function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Secc
 
 export function CronogramaClient() {
   const snap = useSnapshot();
-  const rm = useRoadmap();
+  // Clé de rafraîchissement du roadmap : incrémentée après un « Guardar » du mode
+  // édition pour recharger les données réellement écrites en base.
+  const [rmKey, setRmKey] = useState(0);
+  const rm = useRoadmap(rmKey);
   const filtros = useComponentFilters();
   const esAdmin = isAdmin(useAuthUser());
   const [gran, setGran] = useState<Gran>("mes");
@@ -830,6 +870,124 @@ export function CronogramaClient() {
       return next;
     });
 
+  // ============================================================
+  // Mode ÉDITION (admins, vue sous-projet) — T0 : copie de travail locale, rien
+  // n'est écrit en base avant « Guardar ». Deshacer/Restablecer = pur état client.
+  // ============================================================
+  const [editando, setEditando] = useState(false);
+  const [borrador, setBorrador] = useState<Roadmap | null>(null);
+  const [historia, setHistoria] = useState<Roadmap[]>([]); // instantanés pour Deshacer
+  const [guardando, setGuardando] = useState(false);
+  const [original, setOriginal] = useState<Roadmap | null>(null); // état chargé au début de l'édition
+  const [feuilleEd, setFeuilleEd] = useState<string | null>(null); // feuille en cours d'édition
+  // Ficha ouverte (édition d'une ligne) : clé + position d'ancrage à l'écran.
+  const [ficha, setFicha] = useState<{ key: string; x: number; y: number } | null>(null);
+
+  const esSubActual = seleccion !== "global" && seleccion !== FEUILLE_PAG;
+  const puedeEditar = esAdmin && esSubActual && rm.status === "ready";
+  const hayCambios =
+    borrador != null &&
+    original != null &&
+    JSON.stringify(borrador) !== JSON.stringify(original);
+
+  const entrarEdicion = () => {
+    if (!puedeEditar || rm.status !== "ready") return;
+    setOriginal(feuilleRoadmap(rm.data, seleccion)); // référence figée
+    setFeuilleEd(seleccion);
+    setBorrador(feuilleRoadmap(rm.data, seleccion));
+    setHistoria([]);
+    setFicha(null);
+    setEditando(true);
+  };
+
+  const salirEdicion = (forzar = false) => {
+    if (!forzar && hayCambios && !window.confirm("Hay cambios sin guardar. ¿Salir y descartarlos?")) return;
+    setEditando(false);
+    setBorrador(null);
+    setHistoria([]);
+    setFicha(null);
+    setOriginal(null);
+    setFeuilleEd(null);
+  };
+
+  // Mutation du borrador : empile l'état courant (Deshacer), pose le nouveau.
+  const mutar = (fn: (rm: Roadmap) => Roadmap) => {
+    if (!borrador) return;
+    setHistoria((h) => [...h.slice(-49), borrador]);
+    setBorrador(fn(borrador));
+  };
+  const deshacer = () => {
+    if (historia.length === 0) return;
+    setBorrador(historia[historia.length - 1]);
+    setHistoria(historia.slice(0, -1));
+  };
+  const restablecer = () => {
+    if (!original || !borrador) return;
+    setHistoria((h) => [...h.slice(-49), borrador]);
+    setBorrador(feuilleRoadmap(original, feuilleEd ?? ""));
+  };
+
+  // Changer de feuille pendant l'édition : géré dans le onChange du sélecteur
+  // (cambiarSeleccion) — pas d'effet, pour éviter un setState en cascade.
+  const cambiarSeleccion = (uid: string) => {
+    if (uid === seleccion) return;
+    if (editando) {
+      if (hayCambios && !window.confirm("Hay cambios sin guardar. ¿Cambiar de cronograma y descartarlos?")) return;
+      salirEdicion(true);
+    }
+    setSeleccion(uid);
+  };
+
+  // Édition d'une ligne (ficha) — T0 : durée estimée.
+  const durDeLinea = (key: string): { v: number | null; u: string } => {
+    const r = borrador?.roadmapEstado.find((x) => x.tareaKey === key);
+    return { v: r?.durValor ?? null, u: r?.durUnidad ?? "dia" };
+  };
+  const setDurLinea = (key: string, v: number | null, u: string) => {
+    mutar((rm) => ({
+      ...rm,
+      roadmapEstado: rm.roadmapEstado.map((x) =>
+        x.tareaKey === key ? { ...x, durValor: v, durUnidad: u } : x,
+      ),
+    }));
+  };
+
+  // Guardar : diff borrador ↔ original → actions existantes, puis recharge la base.
+  const guardar = async () => {
+    if (!borrador || !original || !feuilleEd) return;
+    const feuille = feuilleEd;
+    const orig = new Map(original.roadmapEstado.map((r) => [r.tareaKey, r]));
+    const ops: Promise<unknown>[] = [];
+    for (const r of borrador.roadmapEstado) {
+      const o = orig.get(r.tareaKey);
+      if (!o) continue; // insertion de ligne : tranche ultérieure (T2)
+      if (
+        r.durValor !== o.durValor ||
+        r.durUnidad !== o.durUnidad ||
+        r.fechaInicio !== o.fechaInicio ||
+        r.fechaFin !== o.fechaFin
+      ) {
+        ops.push(
+          roadmapSetPlan(feuille, r.tareaKey, {
+            durValor: r.durValor,
+            durUnidad: r.durUnidad,
+            fechaInicio: r.fechaInicio,
+            fechaFin: r.fechaFin,
+          }),
+        );
+      }
+    }
+    if (ops.length === 0) return salirEdicion(true);
+    setGuardando(true);
+    try {
+      await Promise.all(ops);
+      setRmKey((k) => k + 1); // recharge le roadmap depuis la base
+      salirEdicion(true);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   // Mémoïsé : le repli `[]` créerait sinon un tableau neuf à chaque rendu, ce qui
   // invaliderait en permanence les useMemo qui en dépendent.
   const subproyectos = useMemo(
@@ -850,7 +1008,13 @@ export function CronogramaClient() {
   // Nécessite les DEUX sources prêtes (snapshot de base + roadmap).
   const secciones: Seccion[] = useMemo(() => {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
-    const datos: DatosCronograma = { ...snap.data, ...rm.data };
+    // Aperçu LIVE : en édition, on superpose le borrador de la feuille éditée
+    // au roadmap chargé — même moteur, donc les barres bougent en direct.
+    const rmEff =
+      editando && borrador && feuilleEd === seleccion
+        ? overlayFeuille(rm.data, seleccion, borrador)
+        : rm.data;
+    const datos: DatosCronograma = { ...snap.data, ...rmEff };
     if (seleccion === "global") {
       const { global, genero } = seccionGlobalRoadmap(datos, filtros);
       return [global, seccionPagGlobal(datos, genero), seccionGlobal(datos.subproyectos, datos)];
@@ -858,7 +1022,7 @@ export function CronogramaClient() {
     if (seleccion === FEUILLE_PAG) return seccionesPag(datos);
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros, hoyMs ?? 0, marcadas);
-  }, [snap, rm, seleccion, filtros, hoyMs, marcadas]);
+  }, [snap, rm, seleccion, filtros, hoyMs, marcadas, editando, borrador, feuilleEd]);
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;
@@ -1030,21 +1194,67 @@ export function CronogramaClient() {
         etiqueta="Elegir cronograma"
         subproyectos={opcionesSel}
         valor={seleccion}
-        onChange={(uid) => setSeleccion(uid)}
+        onChange={cambiarSeleccion}
       />
 
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-[var(--text)]">{activa}</h2>
-        {esSub && secciones.length > 0 && (
-          <button
-            type="button"
-            onClick={alternarTodas}
-            aria-pressed={todasColapsadas}
-            className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
-          >
-            {todasColapsadas ? "Vista detallada" : "Vista compacta"}
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {editando && (
+            <>
+              <button
+                type="button"
+                onClick={deshacer}
+                disabled={historia.length === 0}
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Deshacer
+              </button>
+              <button
+                type="button"
+                onClick={restablecer}
+                disabled={!hayCambios}
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Restablecer
+              </button>
+              <button
+                type="button"
+                onClick={guardar}
+                disabled={!hayCambios || guardando}
+                className="rounded-md border border-[var(--text)] bg-[var(--text)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {guardando ? "Guardando…" : "Guardar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => salirEdicion()}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+              >
+                Salir
+              </button>
+            </>
+          )}
+          {esSub && secciones.length > 0 && (
+            <button
+              type="button"
+              onClick={alternarTodas}
+              aria-pressed={todasColapsadas}
+              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+            >
+              {todasColapsadas ? "Vista detallada" : "Vista compacta"}
+            </button>
+          )}
+          {puedeEditar && !editando && (
+            <button
+              type="button"
+              onClick={entrarEdicion}
+              className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--app-bg)]"
+            >
+              Editar
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Légende AU-DESSUS du cronograma : remplissages par responsable sur la
@@ -1201,9 +1411,18 @@ export function CronogramaClient() {
                       )}
                     >
                       <div
-                        className="sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]"
+                        className={cn(
+                          "sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]",
+                          editando && fila.key && "cursor-pointer hover:bg-[var(--app-bg)]",
+                        )}
                         style={{ width: LW, height: ROW_H }}
-                        title={fila.label}
+                        title={editando && fila.key ? "Editar la duración" : fila.label}
+                        onPointerDown={editando && fila.key ? (e) => e.stopPropagation() : undefined}
+                        onClick={
+                          editando && fila.key
+                            ? (e) => setFicha({ key: fila.key!, x: e.clientX, y: e.clientY })
+                            : undefined
+                        }
                       >
                         {fila.hito && (
                           <span
@@ -1261,7 +1480,106 @@ export function CronogramaClient() {
           })}
         </div>
       </div>
+
+      {editando && ficha && (
+        <FichaDuracion
+          x={ficha.x}
+          y={ficha.y}
+          label={secciones.flatMap((s) => s.filas).find((f) => f.key === ficha.key)?.label ?? ""}
+          inicial={durDeLinea(ficha.key)}
+          onListo={(v, u) => {
+            setDurLinea(ficha.key, v, u);
+            setFicha(null);
+          }}
+          onCancelar={() => setFicha(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// Ficha d'édition d'une ligne — T0 : durée estimée. Brouillon local : rien ne
+// bouge tant qu'on ne clique pas « Listo ». Ancrée près du clic (position fixe).
+function FichaDuracion({
+  x,
+  y,
+  label,
+  inicial,
+  onListo,
+  onCancelar,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  inicial: { v: number | null; u: string };
+  onListo: (v: number | null, u: string) => void;
+  onCancelar: () => void;
+}) {
+  const [v, setV] = useState<string>(inicial.v != null ? String(inicial.v) : "");
+  const [u, setU] = useState<string>(inicial.u || "dia");
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const left = Math.max(8, Math.min(x, vw - 296));
+  const top = Math.max(8, Math.min(y + 8, vh - 180));
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
+      <div
+        className="fixed z-50 w-[280px] rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3 shadow-xl"
+        style={{ left, top }}
+        role="dialog"
+        aria-label="Editar duración"
+      >
+        <p className="mb-2 truncate text-xs font-semibold text-[var(--text)]" title={label}>
+          {label}
+        </p>
+        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          Duración estimada
+        </label>
+        <div className="flex gap-1.5">
+          <input
+            type="number"
+            min={1}
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            className="w-16 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
+            aria-label="Cantidad"
+            autoFocus
+          />
+          <select
+            value={u}
+            onChange={(e) => setU(e.target.value)}
+            className="flex-1 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
+            aria-label="Unidad"
+          >
+            {DURACION_UNIDADES.map((du) => (
+              <option key={du.code} value={du.code}>
+                {du.plural}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="mt-3 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="rounded-md px-3 py-1 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const n = v.trim() === "" ? null : Math.trunc(Number(v));
+              onListo(n != null && n > 0 && !Number.isNaN(n) ? n : null, u);
+            }}
+            className="rounded-md bg-[var(--text)] px-3 py-1 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          >
+            Listo
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
