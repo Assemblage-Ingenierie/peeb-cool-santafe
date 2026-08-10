@@ -21,7 +21,10 @@ const BLUES = ["#cfe2f3", "#9fc5e8", "#6fa8dc", "#3d85c6", "#0b5394", "#073763"]
 
 // Couleurs spécifiques par fase (priment sur le dégradé de bleus).
 export const FASE_COLOR: Record<string, string> = {
-  estudios_preliminares: "#d9d9d9", // gris clair
+  // Jaune de la FAMILLE EE mais À PEINE plus soutenu que les tâches EE
+  // (#fff2cc) : les études préliminaires SONT des études d'EE (choix client,
+  // août 2026), tout en restant distinguables des barres EE dans la phase.
+  estudios_preliminares: "#ffecb3",
   redaccion_pliegos: "#ea9999", // même rouge clair que licitación
   licitacion: "#ea9999",
   obra: "#fce5cd", // orange clair de l'Excel (Obras)
