@@ -22,12 +22,12 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/",                label: "Inicio",            icon: "inicio",         adminOnly: false },
-  { href: "/mapa",            label: "Mapa",              icon: "mapa",           adminOnly: false },
-  { href: "/hojas-de-ruta",   label: "Hojas de ruta",     icon: "hojas",          adminOnly: false },
+  { href: "/biblioteca",      label: "Biblioteca",        icon: "biblioteca",     adminOnly: false },
   { href: "/cronograma",      label: "Cronograma",        icon: "cronograma",     adminOnly: false },
+  { href: "/hojas-de-ruta",   label: "Hojas de ruta",     icon: "hojas",          adminOnly: false },
+  { href: "/mapa",            label: "Mapa",              icon: "mapa",           adminOnly: false },
   { href: "/calendario",      label: "Calendario",        icon: "calendario",     adminOnly: false },
   { href: "/capacitaciones",  label: "Capacitaciones",    icon: "capacitaciones", adminOnly: false },
-  { href: "/biblioteca",      label: "Biblioteca",        icon: "biblioteca",     adminOnly: false },
   { href: "/admin",           label: "Admin",             icon: "admin",          adminOnly: true  },
   { href: "/roles",           label: "Gestión de roles",  icon: "roles",          adminOnly: true  },
   { href: "/notas",           label: "Notas",             icon: "notas",          adminOnly: true  },
