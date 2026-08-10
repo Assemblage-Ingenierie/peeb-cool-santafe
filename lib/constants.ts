@@ -44,12 +44,13 @@ export const COMPONENTES: Componente[] = [
 // et le bleu Escuelas #3c78d8 (qui empiétait sur le bleu des fases). Escuelas est
 // tiré vers le bleu-violet (índigo) pour s'écarter À LA FOIS du violet Género
 // (#674ea7) et du bleu des fases (plus clair et plus vert).
-// ⚠ A naranja #f26a1b est trop clair pour du texte blanc → texte FONCÉ sur son
-// badge (textoClaro:false) ; H et E gardent le blanc.
+// A = naranja quemado #bd5510 : le naranja pur du logo (#f26a1b) est trop clair
+// pour du texte blanc (contraste < 4.5) ; on le fonce juste assez pour garder le
+// blanc comme H et E (choix client : texte blanc sur les trois).
 export const TIPOLOGIAS: Tipologia[] = [
-  { code: "A", nombre: "Aeropuertos", color: "#f26a1b", textoClaro: false, onColor: TEXTO_OSCURO },
-  { code: "H", nombre: "Hospitales",  color: "#d81b7a", textoClaro: true,  onColor: TEXTO_CLARO },
-  { code: "E", nombre: "Escuelas",    color: "#4a45c4", textoClaro: true,  onColor: TEXTO_CLARO },
+  { code: "A", nombre: "Aeropuertos", color: "#bd5510", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "H", nombre: "Hospitales",  color: "#d81b7a", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "E", nombre: "Escuelas",    color: "#4a45c4", textoClaro: true, onColor: TEXTO_CLARO },
 ];
 
 export const getComponente = (code: string): Componente | undefined =>
@@ -63,7 +64,7 @@ export const getTipologia = (code: string): Tipologia | undefined =>
 // sobre/vibrante à distinguer. Table conservée comme point d'ancrage unique si la
 // carte devait un jour diverger (ex. saturer davantage les petits disques).
 export const TIPOLOGIA_COLOR_MAPA: Record<TipologiaCode, string> = {
-  A: "#f26a1b", // naranja
+  A: "#bd5510", // naranja quemado
   H: "#d81b7a", // fucsia
   E: "#4a45c4", // azul-violeta (índigo)
 };
@@ -296,7 +297,6 @@ export const ROADMAP_TAREAS: RoadmapTarea[] = [
   { fase: "obra", componente: "AyS", nombre: "Gestión de reclamos" },
 
   // --- Género (G) — responsable por defecto ACEFE, salvo indicación (AT). ---
-  { id: "genero-ep-formacion", fase: "estudios_preliminares", componente: "G", nombre: "Formación a los equipos de la UG / Ministerio de línea sobre la incorporación de la perspectiva de género", responsable: "AT", comentario: "Impacto 4" },
   { id: "genero-antep-revision", fase: "anteproyecto", componente: "G", nombre: "Revisión de proyecto con perspectiva de género", responsable: "AT" },
   { id: "genero-antep-validacion", fase: "anteproyecto", componente: "G", nombre: "Validación de las medidas con mujeres beneficiarias", comentario: "Impacto 1" },
   { id: "genero-antep-secretaria", fase: "anteproyecto", componente: "G", nombre: "Participación de Secretaría de Mujeres, Género y Diversidad", comentario: "Impacto 3" },
