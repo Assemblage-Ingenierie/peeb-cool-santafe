@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Snapshot } from "@/lib/snapshot";
-import { CARD_TONOS, GESTION_FASES, getTipologia } from "@/lib/constants";
+import { CARD_TONOS, GESTION_FASES, getTipologia, UI } from "@/lib/constants";
 import { FASE_SIGLA, LEYENDA_FASES, colorDeFase, textoSobre } from "@/lib/fases-cronograma";
 import { fasesEnCurso, pagEstado } from "@/lib/fases-actuales";
 import { useComponentFilters } from "@/components/filter-context";
@@ -18,7 +18,7 @@ import { useRoadmap } from "./use-roadmap";
 // Vista/Rol (composante Género) → visible en « Todo » et « G », masquée sinon.
 // ============================================================
 
-const DARK = CARD_TONOS.GP.head; // gris oscuro (charte GP), como la banda de agenda
+const HEADER_BG = UI.text; // mismo fondo que la línea de títulos de la tabla de datos (global-table HEAD_GROUP_BG)
 const G_HEAD = CARD_TONOS.G.head; // violeta claro de la charte (Género)
 const G_HEAD_TXT = CARD_TONOS.G.headText;
 
@@ -82,9 +82,9 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
       {/* En-tête : titre blanc sur gris oscuro */}
       <div
         className="flex flex-wrap items-center justify-between gap-2 px-4 py-2"
-        style={{ backgroundColor: DARK }}
+        style={{ backgroundColor: HEADER_BG }}
       >
-        <h2 className="text-sm font-bold text-white">Actividades en curso</h2>
+        <h2 className="text-base font-semibold text-white">Actividades en curso</h2>
         <span className="inline-flex items-center gap-1.5 text-[11px] tabular-nums" style={{ color: "#cfd2d8" }}>
           <span className="h-3 w-0.5 rounded-sm bg-[var(--accent)]" />
           hoy{hoyMs != null ? ` · ${fmtHoy(hoyMs)}` : ""}
@@ -110,8 +110,9 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
         })}
       </div>
 
-      {/* Subproyectos con una fase en curso */}
-      <div className="p-3">
+      {/* Subproyectos con una fase en curso — fondo gris muy claro para que
+          resalten las tarjetas blancas de seguimiento */}
+      <div className="bg-[var(--app-bg)] p-3">
         {error ? (
           <p className="py-2 text-center text-sm text-[var(--text-muted)]">No se pudieron cargar las fases.</p>
         ) : cargando ? (
@@ -126,7 +127,7 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
               const tp = getTipologia(s.tipologia);
               const color = colorDeFase(s.faseCode);
               return (
-                <div key={s.uid} className="flex flex-col gap-1.5 rounded-md border border-[var(--border)] p-2">
+                <div key={s.uid} className="flex flex-col gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] p-2">
                   <div className="flex items-center gap-2">
                     <span
                       className="inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-[3px] text-[9px] font-extrabold"
