@@ -42,6 +42,13 @@ const PATHS: Record<IconName, ReactNode> = {
       <path d="M21.5 9v4.5" />
     </>
   ),
+  biblioteca: (
+    <>
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H10a1.5 1.5 0 0 1 1.5 1.5v13" />
+      <path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H14a1.5 1.5 0 0 0-1.5 1.5v13" />
+      <path d="M4 5.5V20h6.5M20 5.5V20h-6.5" />
+    </>
+  ),
   admin: (
     <>
       <path d="M6 4v5.5M6 14.5V20M12 4v6.5M12 15.5V20M18 4v3.5M18 12.5V20" />

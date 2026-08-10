@@ -158,13 +158,18 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
   // module → mémoïsé par le React Compiler, sans useMemo manuel ni dépendance instable.
   const totales = computeTotales(scopeSubs, escenario, metBySub);
 
-  // --- Mode « Proyecto global » : 3 blocs (Datos técnicos / Documentos / —) -----
+  // --- Mode « Proyecto global » : 4 cartes de données (Documentos → Biblioteca) ---
   if (mode === "global") {
     if (!data) {
       return (
-        <section className="grid gap-4 lg:grid-cols-3">
-          {["Datos técnicos", "Documentos", ""].map((label, i) => (
-            <BlockCard key={i} title={label}>
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            "Datos de renovación energética",
+            "Impactos climáticos",
+            "Impactos financieros",
+            "Impactos sobre beneficiarios",
+          ].map((label) => (
+            <BlockCard key={label} title={label}>
               <Hint>Cargando…</Hint>
             </BlockCard>
           ))}

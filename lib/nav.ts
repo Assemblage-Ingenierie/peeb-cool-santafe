@@ -8,6 +8,7 @@ export type IconName =
   | "cronograma"
   | "calendario"
   | "capacitaciones"
+  | "biblioteca"
   | "admin"
   | "roles"
   | "notas";
@@ -26,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/cronograma",      label: "Cronograma",        icon: "cronograma",     adminOnly: false },
   { href: "/calendario",      label: "Calendario",        icon: "calendario",     adminOnly: false },
   { href: "/capacitaciones",  label: "Capacitaciones",    icon: "capacitaciones", adminOnly: false },
+  { href: "/biblioteca",      label: "Biblioteca",        icon: "biblioteca",     adminOnly: false },
   { href: "/admin",           label: "Admin",             icon: "admin",          adminOnly: true  },
   { href: "/roles",           label: "Gestión de roles",  icon: "roles",          adminOnly: true  },
   { href: "/notas",           label: "Notas",             icon: "notas",          adminOnly: true  },
