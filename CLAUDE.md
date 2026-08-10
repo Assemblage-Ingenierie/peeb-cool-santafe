@@ -150,7 +150,9 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     jamais une réplication : aucune barre ×27 n'est dessinée dans ces vues.
   - Les **16 restantes** sont répliquées bâtiment par bâtiment → elles relèvent de la
     feuille de chaque sous-projet (composante Género, `ROADMAP_TAREAS`). ⚠ Elles ne
-    coïncident encore qu'à moitié avec les 11 cartes Género existantes — à réconcilier.
+    coïncident encore qu'à moitié avec les 10 cartes Género existantes — à réconcilier.
+    (`genero-ep-formacion`, « Formación… perspectiva de género », a été retirée sur
+    demande du client — migration 040 pour le nettoyage DB des 27 sous-projets.)
 - **Responsable = remplissage de la barre** (`PAG_RELLENO`), échelle à trois degrés
   dans la seule famille `CARD_TONOS.G` : ACEFE aplat `#674ea7`, UG aplat `#d9d2e9`
   **sans contour**, AT **fond blanc à contour `#674ea7`**. Pas de hachures : elles
@@ -253,8 +255,12 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     `por_venir` — définis dans `constants.ts` (`EstadoFaseVista`,
     `colorEstadoFaseVista`, `FASES_PROGRESO`). Ces vues n'affichent plus que les
     **6 phases à remise** : « No objeción AFD » (jalon `__cno__` sans remise) en
-    est retirée, comme dans le cronograma. **Étapes restantes** : passer la
-    section Admin en lecture seule, puis la retirer.
+    est retirée, comme dans le cronograma. La sous-section **« Fases » de l'Admin
+    est passée en LECTURE SEULE** (`readOnly` sur `FasesEditor` : champs désactivés,
+    liste des tareas toujours dépliable pour consultation) avec un bandeau qui
+    renvoie au Cronograma ; c'est le **filet** (échelonnement d'origine conservé en
+    archive), à laisser une semaine ou deux. **Étape restante** : retirer la
+    sous-section (`fases-editor.tsx` + son usage dans `subproyectos-panel.tsx`).
     - Le **toggle de scénario** Factibilidad/Proyecto (`bottom-band`, `mapa-client`)
       ne lit **plus l'`estado`** non plus : « Proyecto ejecutivo démarré » se
       dérive du repère `__ini__PE` dépassé (`faseIniciada(estadoFasesDe(...))`).

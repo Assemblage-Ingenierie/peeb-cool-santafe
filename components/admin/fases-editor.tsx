@@ -36,6 +36,7 @@ export function FasesEditor({
   onFaseField,
   onFaseDuracion,
   onTaskPlan,
+  readOnly = false,
 }: {
   fases: AdminRow[];
   feuille: string;
@@ -44,6 +45,9 @@ export function FasesEditor({
   onFaseField: (uid: string, key: string, value: string) => void;
   onFaseDuracion: (uid: string, durValor: number | null, durUnidad: string | null) => void;
   onTaskPlan: (tareaKey: string, patch: Partial<TaskPlan>) => void;
+  // Lecture seule (le planning se pilote depuis le Cronograma) : les champs sont
+  // désactivés, mais la liste des tareas reste dépliable pour consultation.
+  readOnly?: boolean;
 }) {
   const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
   const toggle = (code: string) =>
@@ -125,14 +129,15 @@ export function FasesEditor({
                   <span className="text-[10px] text-[var(--text-muted)]">({tareas.length})</span>
                 )}
               </div>
-              <EstadoSelect value={String(fase.estado ?? "")} onChange={(v) => onFaseField(fase.uid, "estado", v)} />
-              <DateInput value={String(fase.fecha_inicio ?? "")} onChange={(v) => onFaseField(fase.uid, "fecha_inicio", v)} />
+              <EstadoSelect value={String(fase.estado ?? "")} onChange={(v) => onFaseField(fase.uid, "estado", v)} readOnly={readOnly} />
+              <DateInput value={String(fase.fecha_inicio ?? "")} onChange={(v) => onFaseField(fase.uid, "fecha_inicio", v)} readOnly={readOnly} />
               <DuracionInput
                 valor={(fase.dur_valor as number | null) ?? null}
                 unidad={(fase.dur_unidad as string | null) ?? null}
                 onChange={(valor, unidad) => onFaseDuracion(fase.uid, valor, unidad)}
+                readOnly={readOnly}
               />
-              <DateInput value={String(fase.fecha_fin ?? "")} onChange={(v) => onFaseField(fase.uid, "fecha_fin", v)} />
+              <DateInput value={String(fase.fecha_fin ?? "")} onChange={(v) => onFaseField(fase.uid, "fecha_fin", v)} readOnly={readOnly} />
             </div>
 
             {/* Sous-lignes de tâches (repliables) */}
@@ -166,15 +171,18 @@ export function FasesEditor({
                         <DateInput
                           value={plan?.fechaInicio ?? ""}
                           onChange={(v) => onTaskPlan(t.key, { fechaInicio: v || null })}
+                          readOnly={readOnly}
                         />
                         <DuracionInput
                           valor={plan?.durValor ?? null}
                           unidad={plan?.durUnidad ?? null}
                           onChange={(valor, unidad) => onTaskPlan(t.key, { durValor: valor, durUnidad: unidad })}
+                          readOnly={readOnly}
                         />
                         <DateInput
                           value={plan?.fechaFin ?? ""}
                           onChange={(v) => onTaskPlan(t.key, { fechaFin: v || null })}
+                          readOnly={readOnly}
                         />
                       </div>
                     );
@@ -193,21 +201,24 @@ export function FasesEditor({
 
 const fieldCls =
   "w-full rounded border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-[13px] text-[var(--text)] outline-none focus:border-[var(--focus)]";
+// En lecture seule : champ grisé, non focusable, curseur « interdit ».
+const roCls = "disabled:cursor-not-allowed disabled:bg-[var(--app-bg)] disabled:text-[var(--text-muted)]";
 
-function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function DateInput({ value, onChange, readOnly }: { value: string; onChange: (v: string) => void; readOnly?: boolean }) {
   return (
     <input
       type="date"
       value={value ? value.slice(0, 10) : ""}
       onChange={(e) => onChange(e.target.value)}
-      className={fieldCls}
+      disabled={readOnly}
+      className={cn(fieldCls, roCls)}
     />
   );
 }
 
-function EstadoSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function EstadoSelect({ value, onChange, readOnly }: { value: string; onChange: (v: string) => void; readOnly?: boolean }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={fieldCls}>
+    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={readOnly} className={cn(fieldCls, roCls)}>
       <option value="">—</option>
       {ESTADOS.map((e) => (
         <option key={e.code} value={e.code}>
@@ -222,10 +233,12 @@ function DuracionInput({
   valor,
   unidad,
   onChange,
+  readOnly,
 }: {
   valor: number | null;
   unidad: string | null;
   onChange: (valor: number | null, unidad: string | null) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="flex gap-1">
@@ -234,13 +247,15 @@ function DuracionInput({
         min={1}
         value={valor ?? ""}
         onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value), unidad)}
-        className="w-12 rounded border border-[var(--border)] bg-[var(--surface)] px-1 py-1 text-[13px] text-[var(--text)] outline-none focus:border-[var(--focus)]"
+        disabled={readOnly}
+        className={cn("w-12 rounded border border-[var(--border)] bg-[var(--surface)] px-1 py-1 text-[13px] text-[var(--text)] outline-none focus:border-[var(--focus)]", roCls)}
         aria-label="Cantidad"
       />
       <select
         value={unidad ?? ""}
         onChange={(e) => onChange(valor, e.target.value || null)}
-        className={cn(fieldCls, "flex-1")}
+        disabled={readOnly}
+        className={cn(fieldCls, roCls, "flex-1")}
         aria-label="Unidad"
       >
         <option value="">—</option>

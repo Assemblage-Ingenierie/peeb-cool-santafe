@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { COMPONENTES, TIPOLOGIAS, ESTADOS, getTipologia } from "@/lib/constants";
 import { TrashIcon } from "@/components/icons";
 import { SubproyectoSelect, type SubOpcion } from "@/components/subproyecto-select";
@@ -564,10 +565,16 @@ export function SubproyectosPanel({
 
             <div>
               <h4 className="mb-1 text-sm font-semibold text-[var(--text)]">Fases</h4>
-              <p className="mb-2 text-sm text-[var(--text-muted)]">
-                Estado, fechas y duración estimada por fase. Desplegá una fase para ver y planificar
-                sus tareas (sincronizadas con Hojas de ruta).
-              </p>
+              <div className="mb-2 rounded-md border border-[var(--border)] border-l-2 border-l-[var(--accent)] bg-[var(--app-bg)] px-3 py-2 text-sm text-[var(--text-muted)]">
+                Solo lectura. El planning (estado, fechas y duración) ahora se edita desde el{" "}
+                <Link
+                  href="/cronograma"
+                  className="font-medium text-[var(--focus)] underline-offset-2 hover:underline"
+                >
+                  Cronograma
+                </Link>
+                . Esta vista conserva el escalonamiento de origen como archivo.
+              </div>
               <FasesEditor
                 fases={gestionFases}
                 feuille={selected.uid}
@@ -576,6 +583,7 @@ export function SubproyectosPanel({
                 onFaseField={gestionHandlers.onCellCommit}
                 onFaseDuracion={onFaseDuracion}
                 onTaskPlan={onTaskPlan}
+                readOnly
               />
             </div>
           </section>
