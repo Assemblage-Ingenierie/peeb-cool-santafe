@@ -302,12 +302,33 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   digital`, accrochée un temps au début de l'anteproyecto alors qu'elle
   appartient au proyecto ejecutivo (corrigé en 038). Sur SUB-AIR, chaque
   enveloppe va désormais exactement de son `Inicio` à son terme.
-- **Pas encore fait** : le mode édition interactif du cronograma (bouton
-  « Editar », fiche durée/ancrage au clic sur une barre, insertion et
-  suppression de ligne au survol, réordonnancement au glisser, mode « Ver
-  dependencias », annulation). Maquette de référence validée, à porter.
+- **Mode édition interactif du cronograma** (implémenté, derrière le toggle
+  **Editar** — admins, vue sous-projet ; aucun impact sur la vue normale) :
+  - **Copie de travail** locale (`borrador`) des lignes de la feuille ; rien
+    n'est écrit en base avant **Guardar** (diff → actions `roadmap*` existantes,
+    puis rechargement). **Deshacer** (pile d'instantanés) / **Restablecer** =
+    pur état client. Confirm si on quitte / change de feuille sans garder.
+  - **Ficha** (clic sur une ligne) = brouillon avec **aperçu live** (le brouillon
+    est superposé au borrador → les barres bougent en direct) : durée · *Cuándo
+    empieza* (Fecha fija | Dependencia à **références multiples**, la plus tardive
+    gagne) · *Cuándo termina* (durée estimée | forcer une fecha → excédent hachuré
+    si plus tard, durée réécrite si plus tôt) · frase. Appliqué à « Listo ».
+  - **`+`** (en-tête de phase) insère une ligne (nom + composante), ancrée par
+    défaut au repère *Inicio* de la phase ; **`×`** (survol d'une tâche) supprime
+    avec **recouture** (les dépendants se raccrochent aux références de la
+    supprimée ; avertissement si elle a une date fixe). Au Guardar, les créations
+    passent d'abord (clé serveur) puis les liaisons sont **remappées**.
+  - **Ver dependencias** : au survol, surligne sources (bleu) / dépendants
+    (jaune) dans la colonne de gauche seulement.
+  - Le **glisser-réordonner** de la maquette a été volontairement écarté :
+    l'ordre des lignes est **chronologique** (dérivé des dates), donc il se
+    pilote par l'ancrage, pas par la position.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 039**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 040**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 040 : retrait de la tarea Género `genero-ep-formacion` (« Formación… perspectiva
+  de género ») de tous les sous-projets — nettoyage des lignes DB (28 estado, 27
+  liaisons entrantes, 0 sortante). Sauvegardes dans `peebcoolsf_private`. La carte
+  elle-même a été retirée de `ROADMAP_TAREAS`.
 - 039 : modèle enveloppe étendu aux **26 sous-projets restants**. Conversion
   mécanique (ils n'ont que deux formes : 48 liaisons avec Patrimonio, 46 sans).
   ⚠ L'**échelonnement du programme** (attente entre fin des EP et début de
