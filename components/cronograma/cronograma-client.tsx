@@ -1027,6 +1027,10 @@ export function CronogramaClient() {
   const [draft, setDraft] = useState<DraftLinea | null>(null);
   // Confirmation de suppression d'une ligne (T2).
   const [borrar, setBorrar] = useState<{ key: string; label: string; x: number; y: number } | null>(null);
+  // « Ver dependencias » (T4) : au survol d'une ligne, surligne ses sources /
+  // dépendants dans la colonne de gauche. Lecture seule — dispo hors édition.
+  const [verDeps, setVerDeps] = useState(false);
+  const [resaltado, setResaltado] = useState<{ fuentes: Set<string>; hijos: Set<string> } | null>(null);
 
   const esSubActual = seleccion !== "global" && seleccion !== FEUILLE_PAG;
   const puedeEditar = esAdmin && esSubActual && rm.status === "ready";
@@ -1334,6 +1338,21 @@ export function CronogramaClient() {
   })();
   const labelDe = (k: string) => filasVisibles.find((f) => f.key === k)?.label ?? k;
 
+  // « Ver dependencias » (T4) : liaisons effectives de la feuille + surlignage au survol.
+  const enlacesEff = useMemo(() => {
+    if (!esSubActual || rm.status !== "ready") return [] as SnapshotRoadmapEnlace[];
+    return editando && borrador && feuilleEd === seleccion
+      ? borrador.roadmapEnlace
+      : rm.data.roadmapEnlace.filter((e) => e.feuille === seleccion);
+  }, [rm, editando, borrador, feuilleEd, seleccion, esSubActual]);
+  const onHoverFila = (key: string | undefined) => {
+    if (!verDeps || !key) return setResaltado(null);
+    setResaltado({
+      fuentes: new Set(enlacesEff.filter((e) => e.hacia === key).map((e) => e.desde)),
+      hijos: new Set(enlacesEff.filter((e) => e.desde === key).map((e) => e.hacia)),
+    });
+  };
+
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;
   const x = (ms: number) => ((ms - START) / SPAN) * totalW;
@@ -1548,6 +1567,24 @@ export function CronogramaClient() {
           {esSub && secciones.length > 0 && (
             <button
               type="button"
+              onClick={() => {
+                setVerDeps((v) => !v);
+                setResaltado(null);
+              }}
+              aria-pressed={verDeps}
+              className={cn(
+                "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+                verDeps
+                  ? "border-[var(--text)] bg-[var(--text)] text-white"
+                  : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text)]",
+              )}
+            >
+              Ver dependencias
+            </button>
+          )}
+          {esSub && secciones.length > 0 && (
+            <button
+              type="button"
               onClick={alternarTodas}
               aria-pressed={todasColapsadas}
               className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
@@ -1725,9 +1762,22 @@ export function CronogramaClient() {
                   </div>
                 </div>
                 {!colapsada &&
-                  sec.filas.map((fila, fi) => (
+                  sec.filas.map((fila, fi) => {
+                    // « Ver dependencias » : fond de l'étiquette si la ligne est
+                    // source (bleu) ou dépendante (jaune) de la ligne survolée.
+                    const hl =
+                      resaltado && fila.key
+                        ? resaltado.fuentes.has(fila.key)
+                          ? "#e8eff8"
+                          : resaltado.hijos.has(fila.key)
+                            ? "#fbf4dd"
+                            : undefined
+                        : undefined;
+                    return (
                     <div
                       key={fi}
+                      onMouseEnter={verDeps ? () => onHoverFila(fila.key) : undefined}
+                      onMouseLeave={verDeps ? () => setResaltado(null) : undefined}
                       className={cn(
                         "group flex border-b border-[var(--border)] last:border-b-0",
                         // Rupture de typologie : bande gris très clair (le gris de
@@ -1740,7 +1790,7 @@ export function CronogramaClient() {
                           "sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]",
                           editando && fila.key && "cursor-pointer hover:bg-[var(--app-bg)]",
                         )}
-                        style={{ width: LW, height: ROW_H }}
+                        style={{ width: LW, height: ROW_H, ...(hl ? { backgroundColor: hl } : {}) }}
                         title={editando && fila.key ? "Editar la línea" : fila.label}
                         onPointerDown={editando && fila.key ? (e) => e.stopPropagation() : undefined}
                         onClick={
@@ -1816,7 +1866,8 @@ export function CronogramaClient() {
                         <CapaBarras barras={fila.barras} x={x} />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
               </div>
             );
           })}
