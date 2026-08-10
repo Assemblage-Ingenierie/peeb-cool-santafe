@@ -44,11 +44,13 @@ export const COMPONENTES: Componente[] = [
 // et le bleu Escuelas #3c78d8 (qui empiétait sur le bleu des fases). Escuelas est
 // tiré vers le bleu-violet (índigo) pour s'écarter À LA FOIS du violet Género
 // (#674ea7) et du bleu des fases (plus clair et plus vert).
-// A = naranja quemado #bd5510 : le naranja pur du logo (#f26a1b) est trop clair
-// pour du texte blanc (contraste < 4.5) ; on le fonce juste assez pour garder le
-// blanc comme H et E (choix client : texte blanc sur les trois).
+// PALETTE GÉNÉRALE (texte blanc PAR-DESSUS : badges-lettre, pastilles de select,
+// tableau). A = naranja medio #e35d10 : le naranja pur du logo (#f26a1b) est trop
+// vif pour poser du texte blanc dessus, on le pose donc un cran plus foncé ici.
+// ⚠ Principe : partout où il N'Y A PAS de texte par-dessus (marqueurs de carte),
+// c'est la variante VIVE qui prime → voir TIPOLOGIA_COLOR_MAPA.
 export const TIPOLOGIAS: Tipologia[] = [
-  { code: "A", nombre: "Aeropuertos", color: "#bd5510", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "A", nombre: "Aeropuertos", color: "#e35d10", textoClaro: true, onColor: TEXTO_CLARO },
   { code: "H", nombre: "Hospitales",  color: "#d81b7a", textoClaro: true, onColor: TEXTO_CLARO },
   { code: "E", nombre: "Escuelas",    color: "#4a45c4", textoClaro: true, onColor: TEXTO_CLARO },
 ];
@@ -59,12 +61,14 @@ export const getComponente = (code: string): Componente | undefined =>
 export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
-// Couleur des marqueurs de carte géographique. Depuis la charte « logo Santa Fe »
-// (déjà vibrante), elle REFLÈTE la palette générale TIPOLOGIAS — plus de variante
-// sobre/vibrante à distinguer. Table conservée comme point d'ancrage unique si la
-// carte devait un jour diverger (ex. saturer davantage les petits disques).
+// Variante VIVE de la charte, utilisée partout où il N'Y A PAS de texte par-dessus
+// (aujourd'hui : les marqueurs de carte géographique). Sans texte, aucune
+// contrainte de contraste → on prend le naranja pur du logo Santa Fe (#f26a1b),
+// plus proche de l'identité provinciale et plus lisible en petit disque sur le
+// fond clair des tuiles OSM. H et E sont déjà à leur teinte vive (identiques à
+// TIPOLOGIAS). Seul A diffère de la palette générale (medio #e35d10).
 export const TIPOLOGIA_COLOR_MAPA: Record<TipologiaCode, string> = {
-  A: "#bd5510", // naranja quemado
+  A: "#f26a1b", // naranja vivo del logo
   H: "#d81b7a", // fucsia
   E: "#4a45c4", // azul-violeta (índigo)
 };
