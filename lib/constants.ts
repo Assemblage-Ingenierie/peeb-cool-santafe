@@ -127,10 +127,10 @@ export interface Medida {
 // Couleurs de trait des pictogrammes (lisibles sur fond blanc).
 const MED_EE = "#E3A008"; // 4 mesures EE — ámbar doré (plus franc que l'ancien #BF9000 olive)
 // Renouvelable (photovoltaïque + solaire thermique) : fuchsia du logo Santa Fe,
-// pour rapprocher les mesures de l'identité provinciale. ⚠ Même teinte que la
-// TYPOLOGIE Hospitales (#d81b7a) — incompatibilité assumée : rôles distincts
-// (trait fin « Medidas » vs badge plein « Tipo »), ils ne se croisent pas.
-const MED_SOLAR = "#d81b7a";
+// adouci depuis #d81b7a (trop criard en trait fin sur l'appli). ⚠ Reste PROCHE de
+// la TYPOLOGIE Hospitales (#d81b7a) — parenté assumée : rôles distincts (trait fin
+// « Medidas » vs badge plein « Tipo »), ils ne se croisent pas.
+const MED_SOLAR = "#cf4d89";
 const MED_G = "#6A5FCF"; // género — violet (éclairci depuis #534AB7 pour rester lisible sur l'en-tête noir de « Medidas », tout en tenant sur fond blanc)
 const MED_OTRAS = "#5F5E5A"; // otras medidas — gris
 
