@@ -1,17 +1,26 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   Snapshot,
   SnapshotDocumento,
-  SnapshotFase,
   SnapshotMedida,
   SnapshotMetrica,
   SnapshotSubproyecto,
   Escenario,
 } from "@/lib/snapshot";
-import { COMPONENTES, FASES, ESTADOS, getTipologia, UI } from "@/lib/constants";
+import {
+  COMPONENTES,
+  FASES_PROGRESO,
+  ESTADO_FASE_VISTA_LABEL,
+  colorEstadoFaseVista,
+  getTipologia,
+  UI,
+  type EstadoFaseVista,
+} from "@/lib/constants";
+import { estadoFasesDe, faseIniciada } from "@/lib/fases-actuales";
 import { useComponentFilters, pasaFiltro } from "@/components/filter-context";
+import { useRoadmap } from "./use-roadmap";
 import { DatosCard } from "./datos-card";
 import { useEscenarioToggle } from "./use-escenario";
 import { GlobalBlocks } from "./global-blocks";
@@ -64,7 +73,7 @@ function computeTotales(
  * - Mode « Proyecto global » : emplacements réservés (à concevoir plus tard).
  * - Mode « Subproyectos » :
  *   - un bâtiment sélectionné → Datos (sa fiche + toggle), Documentos (liens groupés
- *     par composante), Progreso (fases en vertical, colorées par estado) ;
+ *     par composante), Progreso (fases en vertical, colorées par l'état dérivé) ;
  *   - un groupe (Todos / typologie) → Datos = totaux du groupe ; Documentos et
  *     Progreso désactivés (titre seul).
  */
@@ -81,15 +90,26 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
     return m;
   }, [data]);
 
-  const fasesBySub = useMemo(() => {
-    const m = new Map<string, SnapshotFase[]>();
-    for (const f of data?.fases ?? []) {
-      const arr = m.get(f.subproyecto_uid) ?? [];
-      arr.push(f);
-      m.set(f.subproyecto_uid, arr);
+  // Progresión + « proyecto ejecutivo iniciado » : DÉRIVÉS du modèle enveloppe
+  // (plus d'`estado` stocké). Nécessite le roadmap (planning) et « hoy », posé
+  // côté client uniquement (anti-décalage d'hydratation).
+  const rm = useRoadmap();
+  const [hoyMs, setHoyMs] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×)
+  useEffect(() => setHoyMs(Date.now()), []);
+
+  // Sous-projets dont la fase « Proyecto ejecutivo » a démarré (repère `__ini__PE`
+  // dépassé) → active le toggle Factibilidad/Proyecto. Vide tant que le roadmap
+  // n'est pas chargé (toggle désactivé pendant le chargement).
+  const peIniciado = useMemo(() => {
+    const set = new Set<string>();
+    if (rm.status !== "ready" || hoyMs == null) return set;
+    for (const s of subs) {
+      const est = estadoFasesDe(rm.data, s.uid, s.tipologia, hoyMs).get("proyecto_ejecutivo");
+      if (faseIniciada(est)) set.add(s.uid);
     }
-    return m;
-  }, [data]);
+    return set;
+  }, [rm, hoyMs, subs]);
 
   const docsBySub = useMemo(() => {
     const m = new Map<string, SnapshotDocumento[]>();
@@ -127,11 +147,7 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
   const groupSubs = tipo === "todos" ? subs : subs.filter((s) => s.tipologia === tipo);
   const scopeSubs = single ? [single] : groupSubs;
 
-  const proyectoIniciado = (uid: string) => {
-    const f = (fasesBySub.get(uid) ?? []).find((x) => x.fase === "proyecto_ejecutivo");
-    return f?.estado === "en_proceso" || f?.estado === "terminado";
-  };
-  const canToggle = scopeSubs.length > 0 && scopeSubs.every((s) => proyectoIniciado(s.uid));
+  const canToggle = scopeSubs.length > 0 && scopeSubs.every((s) => peIniciado.has(s.uid));
   const proyectoHasData = scopeSubs.some(
     (s) => metBySub.get(s.uid)?.proyecto?.demanda_kwh != null,
   );
@@ -210,11 +226,16 @@ export function BottomBand({ mode, data, tipo, selected }: BottomBandProps) {
         </BlockCard>
 
         <BlockCard title="Progreso">
-          {single ? (
-            <ProgresoBlock fases={fasesBySub.get(single.uid) ?? []} />
-          ) : (
-            <Hint>Seleccioná un subproyecto.</Hint>
-          )}
+          <ProgresoBlock
+            hasSub={!!single}
+            error={rm.status === "error"}
+            loading={rm.status !== "ready" || hoyMs == null}
+            estados={
+              single && rm.status === "ready" && hoyMs != null
+                ? estadoFasesDe(rm.data, single.uid, single.tipologia, hoyMs)
+                : null
+            }
+          />
         </BlockCard>
       </section>
 
@@ -297,30 +318,39 @@ function DocumentosBlock({ docs }: { docs: SnapshotDocumento[] }) {
   );
 }
 
-/** Couleur d'une fase selon l'estado (terminado / en_proceso / pas démarrée = foncé). */
-function colorFase(estado: string | null): { bg: string; fg: string } {
-  const e = ESTADOS.find((x) => x.code === estado);
-  if (e?.color) return { bg: e.color, fg: e.onColor ?? UI.text };
-  return { bg: UI.surface, fg: UI.text }; // non démarrée = blanc (visible grâce à la bordure)
-}
-
-/** Fases dans l'ordre chronologique (FASES), empilées verticalement. */
-function ProgresoBlock({ fases }: { fases: SnapshotFase[] }) {
-  const ordered = FASES.filter((f) => f.code !== "general").map((f) => ({
-    code: f.code,
-    nombre: f.nombre,
-    estado: fases.find((x) => x.fase === f.code)?.estado ?? null,
-  }));
+/**
+ * Fases (les 6 à remise) empilées verticalement, colorées par l'état DÉRIVÉ du
+ * modèle enveloppe — jamais l'`estado` stocké. Présentationnel : reçoit les états
+ * déjà calculés (le roadmap et « hoy » sont gérés par le parent).
+ * Une phase non programmée (pas de ligne datée) est traitée comme « por_venir ».
+ */
+function ProgresoBlock({
+  hasSub,
+  error,
+  loading,
+  estados,
+}: {
+  hasSub: boolean;
+  error: boolean;
+  loading: boolean;
+  estados: Map<string, EstadoFaseVista> | null;
+}) {
+  if (!hasSub) return <Hint>Seleccioná un subproyecto.</Hint>;
+  if (error) return <Hint>No se pudo cargar el progreso.</Hint>;
+  if (loading || !estados) return <Hint>Cargando…</Hint>;
 
   return (
     <ol className="flex flex-col gap-1.5">
-      {ordered.map((f) => {
-        const c = colorFase(f.estado);
+      {FASES_PROGRESO.map((f) => {
+        // Absente de la map = phase non programmée → « por_venir » (blanc).
+        const estado = estados.get(f.code) ?? "por_venir";
+        const bg = colorEstadoFaseVista(estado, UI.surface);
         return (
           <li
             key={f.code}
             className="rounded border border-[var(--border)] px-3 py-1.5 text-xs font-medium"
-            style={{ backgroundColor: c.bg, color: c.fg }}
+            style={{ backgroundColor: bg, color: UI.text }}
+            title={ESTADO_FASE_VISTA_LABEL[estado]}
           >
             {f.nombre}
           </li>

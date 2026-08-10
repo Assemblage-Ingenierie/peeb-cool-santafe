@@ -1,13 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, type ReactNode } from "react";
-import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase } from "@/lib/snapshot";
+import { useEffect, useState, type ReactNode } from "react";
+import type { SnapshotSubproyecto, SnapshotMetrica } from "@/lib/snapshot";
 import { TIPOLOGIAS } from "@/lib/constants";
 import { economiaPct } from "@/lib/calc";
 import { fmtNumero, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
+import { useRoadmap } from "@/components/dashboard/use-roadmap";
+import { estadoFasesDe, faseIniciada } from "@/lib/fases-actuales";
 import { DatosCard } from "@/components/dashboard/datos-card";
 import { useEscenarioToggle } from "@/components/dashboard/use-escenario";
 
@@ -31,14 +33,27 @@ const TIPO_OPCIONES: { key: string; label: string }[] = [
 /** Page Mapa (CDC §4.2) : carte plein écran, filtre par typologie, % optionnel, card au clic. */
 export function MapaClient() {
   const snap = useSnapshot();
+  const rm = useRoadmap();
   const [selected, setSelected] = useState<string | null>(null);
   const [tipo, setTipo] = useState<string>("todos");
   const [showPct, setShowPct] = useState(false);
+  // « hoy » posé côté client uniquement (anti-décalage d'hydratation).
+  const [hoyMs, setHoyMs] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×)
+  useEffect(() => setHoyMs(Date.now()), []);
 
   if (snap.status === "loading") return <Estado>Cargando mapa…</Estado>;
   if (snap.status === "error") return <Estado>No se pudo cargar el mapa.</Estado>;
 
-  const { subproyectos, metricas, fases } = snap.data;
+  const { subproyectos, metricas } = snap.data;
+
+  // « Proyecto ejecutivo iniciado » (repère `__ini__PE` dépassé) → active le toggle
+  // Factibilidad/Proyecto. DÉRIVÉ du modèle enveloppe, plus d'`estado` stocké.
+  // Faux tant que le roadmap n'est pas chargé (toggle désactivé).
+  const peIniciado = (sub: SnapshotSubproyecto): boolean =>
+    rm.status === "ready" &&
+    hoyMs != null &&
+    faseIniciada(estadoFasesDe(rm.data, sub.uid, sub.tipologia, hoyMs).get("proyecto_ejecutivo"));
   const lista = tipo === "todos" ? subproyectos : subproyectos.filter((s) => s.tipologia === tipo);
 
   // % de réduction (escenario factibilidad) pour l'étiquette permanente.
@@ -97,7 +112,7 @@ export function MapaClient() {
             ? { text: fmtPct(pctFor(sub)), permanent: true }
             : { text: sub.nombre, permanent: false }
         }
-        renderPopup={(sub) => <MarkerCard sub={sub} metricas={metricas} fases={fases} />}
+        renderPopup={(sub) => <MarkerCard sub={sub} metricas={metricas} peIniciado={peIniciado(sub)} />}
       />
     </div>
   );
@@ -112,23 +127,20 @@ function Estado({ children }: { children: ReactNode }) {
 }
 
 // Fiche au clic : consommations avant/après + réduction (DatosCard) + toggle
-// Factibilidad/Proyecto (désactivé tant que la fase « Proyecto ejecutivo » n'est
-// pas démarrée pour ce sous-projet).
+// Factibilidad/Proyecto (désactivé tant que la fase « Proyecto ejecutivo » n'a pas
+// démarré pour ce sous-projet — `peIniciado`, dérivé du modèle enveloppe).
 function MarkerCard({
   sub,
   metricas,
-  fases,
+  peIniciado,
 }: {
   sub: SnapshotSubproyecto;
   metricas: SnapshotMetrica[];
-  fases: SnapshotFase[];
+  peIniciado: boolean; // fase « Proyecto ejecutivo » démarrée (dérivé de l'enveloppe)
 }) {
   const fai = metricas.find((m) => m.subproyecto_uid === sub.uid && m.escenario === "faisabilidad");
   const pro = metricas.find((m) => m.subproyecto_uid === sub.uid && m.escenario === "proyecto");
-  const proyEjec = fases.find(
-    (f) => f.subproyecto_uid === sub.uid && f.fase === "proyecto_ejecutivo",
-  );
-  const canToggle = proyEjec?.estado === "en_proceso" || proyEjec?.estado === "terminado";
+  const canToggle = peIniciado;
   const proyectoHasData = pro?.demanda_kwh != null;
   const { escenario, select } = useEscenarioToggle(canToggle, proyectoHasData, sub.uid);
   const m = escenario === "proyecto" ? pro : fai;

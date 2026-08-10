@@ -5,7 +5,8 @@ import type { Escenario } from "@/lib/snapshot";
 
 /**
  * État du toggle Factibilidad ⇄ Proyecto (réutilisé : bande basse + page Mapa).
- * - `canToggle` : la fase « Proyecto ejecutivo » est démarrée (en_proceso OU terminado).
+ * - `canToggle` : la fase « Proyecto ejecutivo » a démarré (repère `__ini__PE` dépassé,
+ *   dérivé de l'enveloppe du cronograma — cf. `faseIniciada` / `estadoFasesDe`).
  * - défaut = `proyecto` si activable ET données projet présentes, sinon `faisabilidad`.
  * - `resetKey` : change quand la sélection change → revient au défaut.
  */

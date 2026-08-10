@@ -461,6 +461,55 @@ export const GESTION_FASES: { code: string; nombre: string }[] = FASES.flatMap((
   ...HITOS_FASE.filter((h) => h.trasFase === f.code).map((h) => ({ code: h.code, nombre: h.nombre })),
 ]);
 
+// Phases affichées dans les vues « Progresión » RÉSUMÉES (bloc Progreso d'un
+// sous-projet, tableau Resumen du mode Proyecto global, export Excel) : les 6
+// phases qui portent une REMISE (repère `__ent__`). « No objeción AFD » en est
+// exclue — dans le modèle enveloppe ce n'est plus une phase mais des jalons sans
+// remise (le cronograma détaillé les montre séparément) —, et « general » n'est
+// pas une étape chronologique. Ordre = ordre chronologique de FASES.
+export const FASES_PROGRESO: EnumOption[] = FASES.filter(
+  (f) => f.code !== "general" && f.code !== "no_objecion_afd",
+);
+
+// État dérivé d'une phase pour ces vues résumées — recalculé, jamais stocké
+// (cf. lib/fases-actuales). Quatre lectures sans rien saisir de plus que la case
+// de remise du cronograma :
+//   • entregada — la case de la remise (`__ent__`) est cochée ;
+//   • atrasada  — la remise est échue et la case est vide (le planning ne colle
+//                 plus au réel) ;
+//   • en_curso  — « hoy » est dans l'enveloppe et la remise n'est pas encore due ;
+//   • por_venir — l'enveloppe est entièrement dans le futur.
+export type EstadoFaseVista = "entregada" | "en_curso" | "atrasada" | "por_venir";
+
+// Rouge CLAIR d'une remise en retard (« atrasada »). Même famille pastel que le
+// vert `terminado` (#b6d7a8) et le jaune `en_proceso` (#ffd966) des estados —
+// volontairement peu agressif. Distinct du rouge de marque (ROJO_AFD #cc0000).
+export const ROJO_ATRASADA = "#ea9999";
+
+// Couleur de fond d'un segment de « Progresión » selon l'état dérivé. `track` =
+// teinte des phases pas encore commencées, propre à chaque vue (rail gris du
+// tableau, blanc du bloc Progreso, aucun remplissage dans l'Excel).
+export function colorEstadoFaseVista(estado: EstadoFaseVista | null, track: string): string {
+  switch (estado) {
+    case "entregada":
+      return ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
+    case "en_curso":
+      return ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
+    case "atrasada":
+      return ROJO_ATRASADA;
+    default:
+      return track; // por_venir (ou état inconnu / phase non programmée)
+  }
+}
+
+// Libellé espagnol de l'état dérivé (tooltips des vues résumées).
+export const ESTADO_FASE_VISTA_LABEL: Record<EstadoFaseVista, string> = {
+  entregada: "Entregada",
+  en_curso: "En curso",
+  atrasada: "Atrasada",
+  por_venir: "Por iniciar",
+};
+
 // ============================================================
 // Tokens de surface (UI neutre). NE SONT PAS des couleurs de marque :
 // implémentation du « fond gris clair » et de la sidebar #30323e (CDC §2.1).

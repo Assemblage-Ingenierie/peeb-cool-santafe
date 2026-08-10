@@ -11,9 +11,16 @@
 // client.
 // ============================================================
 
-import { GESTION_FASES, esModeloEnvolvente, type ComponenteCode } from "@/lib/constants";
+import {
+  GESTION_FASES,
+  FASES_PROGRESO,
+  esModeloEnvolvente,
+  hitoEntregaKey,
+  type ComponenteCode,
+  type EstadoFaseVista,
+} from "@/lib/constants";
 import { construirCartasPorFila, lineasHito, type RoadmapOverride } from "@/lib/roadmap";
-import { computeSchedule, faseNodeKey, type Unidad } from "@/lib/schedule";
+import { computeSchedule, faseNodeKey, type ScheduleResult, type Unidad } from "@/lib/schedule";
 import { FASES_ORD } from "@/lib/fases-cronograma";
 import { FEUILLE_PAG, PAG_ACCIONES, PAG_EJES, pagTareaKey, type PagEje } from "@/lib/pag";
 import type { Roadmap, Snapshot } from "@/lib/snapshot";
@@ -43,18 +50,24 @@ export interface FaseActualSub {
   progreso: number; // 0..1 dans la fase courante
 }
 
-/**
- * Fase que la barra « hoy » atraviesa para un sub-proyecto (o null si aún no
- * empezó / ya terminó / no está programado). Reproduce el `armar` del cronograma.
- */
-function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: number): FaseActualSub | null {
+// Planning d'UN sous-projet : le même `armar` que le cronograma, réduit à ce qui
+// sert au tracker et aux vues résumées (l'horaire calculé + les remises cochées).
+// N'a besoin QUE du roadmap (état + liaisons) : découplé du snapshot pour être
+// appelable côté client (GlobalTable) comme côté serveur (export Excel).
+interface PlanSub {
+  sched: Map<string, ScheduleResult>;
+  realizadas: Set<string>; // clés dont la case est cochée (remises livrées)
+}
+
+function armarSub(rm: Roadmap, uid: string, tipologia: string): PlanSub {
   const envolvente = esModeloEnvolvente(uid);
   const estado = new Map<string, RoadmapOverride>();
   const planes = new Map<
     string,
     { durValor: number | null; durUnidad: string | null; fechaInicio: string | null; fechaFin: string | null }
   >();
-  for (const r of datos.roadmapEstado) {
+  const realizadas = new Set<string>();
+  for (const r of rm.roadmapEstado) {
     if (r.feuille !== uid) continue;
     estado.set(r.tareaKey, {
       oculta: r.oculta,
@@ -71,6 +84,7 @@ function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: numb
       fechaInicio: r.fechaInicio,
       fechaFin: r.fechaFin,
     });
+    if (r.realizada) realizadas.add(r.tareaKey);
   }
 
   const columnas = construirCartasPorFila({ esGlobal: false, tipologia, uid, estado });
@@ -127,7 +141,7 @@ function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: numb
     });
   }
 
-  const links = datos.roadmapEnlace
+  const links = rm.roadmapEnlace
     .filter((e) => e.feuille === uid)
     .map((e) => ({
       desde: e.desde,
@@ -146,17 +160,32 @@ function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: numb
     fasesEnvolventes: envolvente,
   });
 
+  return { sched, realizadas };
+}
+
+// Enveloppe d'une phase (bornes en ms locaux), ou null si elle n'a pas d'ancre
+// (phase sans ligne datée → `sinAncla`, ex. les jalons « No objeción AFD »).
+function envolventeFase(sched: Map<string, ScheduleResult>, code: string): { startMs: number; endMs: number } | null {
+  const sr = sched.get(faseNodeKey(code));
+  if (!sr || sr.sinAncla) return null;
+  const startMs = isoMs(sr.start);
+  const endMs = isoMs(sr.end);
+  if (startMs == null || endMs == null) return null;
+  return { startMs, endMs };
+}
+
+/**
+ * Fase que la barra « hoy » atraviesa para un sub-proyecto (o null si aún no
+ * empezó / ya terminó / no está programado). Reproduce el `armar` del cronograma.
+ */
+function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: number): FaseActualSub | null {
+  const { sched } = armarSub(datos, uid, tipologia);
+
   // Enveloppes de phase, dans l'ordre chronologique canonique.
   const enveloppes: { code: string; startMs: number; endMs: number }[] = [];
   for (const f of FASES_ORD) {
-    const sr = sched.get(faseNodeKey(f.code));
-    // `sinAncla` suffit désormais : une phase sans ligne datée n'a pas
-    // d'enveloppe, et le moteur le dit au lieu de la poser au début du projet.
-    if (!sr || sr.sinAncla) continue;
-    const s = isoMs(sr.start);
-    const e = isoMs(sr.end);
-    if (s == null || e == null) continue;
-    enveloppes.push({ code: f.code, startMs: s, endMs: e });
+    const env = envolventeFase(sched, f.code);
+    if (env) enveloppes.push({ code: f.code, ...env });
   }
   enveloppes.sort((a, b) => a.startMs - b.startMs);
 
@@ -173,6 +202,59 @@ function faseEnCursoDe(datos: Datos, uid: string, tipologia: string, hoyMs: numb
     faseNombre: NOMBRE_FASE.get(actual.code) ?? actual.code,
     progreso,
   };
+}
+
+/**
+ * État dérivé de CHAQUE phase à remise (FASES_PROGRESO) d'un sous-projet, pour
+ * les vues résumées « Progresión ». Une seule source de vérité, partagée par le
+ * bloc Progreso, le tableau Resumen et l'export Excel → ces vues ne peuvent pas
+ * diverger entre elles ni du cronograma.
+ *
+ * L'état ne se déduit que de deux choses : la case de la remise (`__ent__`) et la
+ * position de « hoy » dans l'enveloppe calculée — jamais d'un `estado` stocké.
+ * La règle « atrasada » (remise échue non cochée) est celle du cronograma : on
+ * compare `hoy` à la FIN du repère de remise.
+ *
+ * Renvoie une map `code de phase → état`. Une phase sans enveloppe (pas de ligne
+ * datée) est absente de la map ; les vues la traitent alors comme « por_venir ».
+ */
+export function estadoFasesDe(
+  rm: Roadmap,
+  uid: string,
+  tipologia: string,
+  hoyMs: number,
+): Map<string, EstadoFaseVista> {
+  const { sched, realizadas } = armarSub(rm, uid, tipologia);
+  const out = new Map<string, EstadoFaseVista>();
+  for (const f of FASES_PROGRESO) {
+    const env = envolventeFase(sched, f.code);
+    if (!env) continue; // phase non programmée → absente (les vues → « por_venir »)
+
+    const entKey = hitoEntregaKey(f.code);
+    const entrega = sched.get(entKey);
+    // Fin du repère de remise = la date que « hoy » doit dépasser pour être en
+    // retard (même repère que la case du cronograma). Repli sur la fin de
+    // l'enveloppe si le repère manque (feuilles pré-036, sans repères).
+    const entMs = entrega && !entrega.sinAncla ? isoMs(entrega.end) : null;
+    const remiseMs = entMs ?? env.endMs;
+
+    let estado: EstadoFaseVista;
+    if (realizadas.has(entKey)) estado = "entregada";
+    else if (hoyMs > 0 && remiseMs <= hoyMs) estado = "atrasada";
+    else if (env.startMs <= hoyMs) estado = "en_curso";
+    else estado = "por_venir";
+    out.set(f.code, estado);
+  }
+  return out;
+}
+
+/**
+ * Une phase est « iniciada » dès que « hoy » a dépassé son repère `__ini__` :
+ * tout état sauf « por_venir » (et sauf absente = phase non programmée).
+ * Sert au toggle Factibilidad/Proyecto (démarrage du proyecto ejecutivo).
+ */
+export function faseIniciada(estado: EstadoFaseVista | undefined): boolean {
+  return estado != null && estado !== "por_venir";
 }
 
 /** Sous-projets dont une fase est EN COURS aujourd'hui (barre « hoy » la traverse). */

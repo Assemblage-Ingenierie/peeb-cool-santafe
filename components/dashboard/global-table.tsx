@@ -1,8 +1,18 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotFase, SnapshotMedida } from "@/lib/snapshot";
-import { FASES, ESTADOS, MEDIDAS, getTipologia, UI } from "@/lib/constants";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { SnapshotSubproyecto, SnapshotMetrica, SnapshotMedida } from "@/lib/snapshot";
+import {
+  FASES_PROGRESO,
+  ESTADO_FASE_VISTA_LABEL,
+  colorEstadoFaseVista,
+  MEDIDAS,
+  getTipologia,
+  UI,
+  type EstadoFaseVista,
+} from "@/lib/constants";
+import { estadoFasesDe } from "@/lib/fases-actuales";
+import { useRoadmap } from "./use-roadmap";
 import { MedidaIcon } from "@/components/medida-icons";
 import { economiaKwh, economiaPct, porM2, suma } from "@/lib/calc";
 import { fmtNumero, fmtPct } from "@/lib/format";
@@ -21,14 +31,15 @@ const HEAD_COL_BG = UI.sidebarBg;
 const HEAD_TXT = UI.sidebarText;
 const HEAD_TXT_MUTED = UI.sidebarTextMuted;
 const HEAD_BORDER = UI.sidebarBorder;
-const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
-const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
-const COL_TRACK = "#e6e8ec"; // fase sin iniciar : rail gris clair de la barre de progression
+const COL_TRACK = "#e6e8ec"; // fase sin iniciar (« por_venir ») : rail gris clair
 const MED_OFF = "#e9ebef"; // mesure inactive : logo gris très clair (quasi invisible)
 
 const PROG_W = 26; // colonnes Progresión (initiales horizontales)
 const MED_W = 30; // colonnes Medidas (logos)
-const PROG_FASES = FASES.filter((f) => f.code !== "general");
+// Les 6 phases à remise (« No objeción AFD » exclue : jalon, pas une phase dans
+// le modèle enveloppe — cf. FASES_PROGRESO). L'état de chaque segment est DÉRIVÉ.
+const PROG_FASES = FASES_PROGRESO;
+const EMPTY_ESTADOS = new Map<string, EstadoFaseVista>();
 
 // Initiales des fases (en-tête compact + légende sous le tableau).
 const FASE_INIT: Record<string, string> = {
@@ -41,13 +52,10 @@ const FASE_INIT: Record<string, string> = {
   obra: "OB",
 };
 
-const estadoLabel = (e: string | null) =>
-  e === "terminado" ? "Terminado" : e === "en_proceso" ? "En proceso" : "Sin iniciar";
-
 interface Fila {
   sub: SnapshotSubproyecto;
   met: SnapshotMetrica | undefined; // escenario faisabilidad (le seul rempli)
-  estados: Record<string, string | null>; // fase code → estado
+  estados: Map<string, EstadoFaseVista>; // fase code → état DÉRIVÉ (vide = pas encore chargé)
   medidas: Set<string>; // codes des mesures actives
 }
 
@@ -196,25 +204,25 @@ function TipoBadge({ code }: { code: string }) {
 interface GlobalTableProps {
   subproyectos: SnapshotSubproyecto[];
   metricas: SnapshotMetrica[];
-  fases: SnapshotFase[];
   medidas: SnapshotMedida[];
 }
 
 type Sort = { key: string; dir: "asc" | "desc" } | null;
 
-export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTableProps) {
+export function GlobalTable({ subproyectos, metricas, medidas }: GlobalTableProps) {
   const [visible, setVisible] = useState<Set<string>>(() => new Set(TOGGLEABLE.map((g) => g.key)));
   const [sort, setSort] = useState<Sort>(null);
+
+  // Progresión DÉRIVÉE du modèle enveloppe (plus d'`estado` stocké) : nécessite le
+  // roadmap (planning) et « hoy ». « hoy » posé côté client (anti-hydratation).
+  const rm = useRoadmap();
+  const [hoyMs, setHoyMs] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- init client-only (1×)
+  useEffect(() => setHoyMs(Date.now()), []);
 
   const filas = useMemo<Fila[]>(() => {
     const metMap = new Map<string, SnapshotMetrica>();
     for (const m of metricas) if (m.escenario === "faisabilidad") metMap.set(m.subproyecto_uid, m);
-    const faseMap = new Map<string, Record<string, string | null>>();
-    for (const f of fases) {
-      const r = faseMap.get(f.subproyecto_uid) ?? {};
-      r[f.fase] = f.estado;
-      faseMap.set(f.subproyecto_uid, r);
-    }
     const medMap = new Map<string, Set<string>>();
     for (const m of medidas) {
       if (!m.activa) continue;
@@ -222,13 +230,17 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
       s.add(m.medida);
       medMap.set(m.subproyecto_uid, s);
     }
+    const rmData = rm.status === "ready" && hoyMs != null ? rm.data : null;
     return subproyectos.map((sub) => ({
       sub,
       met: metMap.get(sub.uid),
-      estados: faseMap.get(sub.uid) ?? {},
+      // Tant que le roadmap n'est pas chargé : map vide → tous les segments en
+      // « por_venir » (rail gris), remplacés dès l'arrivée des données.
+      estados:
+        rmData && hoyMs != null ? estadoFasesDe(rmData, sub.uid, sub.tipologia, hoyMs) : EMPTY_ESTADOS,
       medidas: medMap.get(sub.uid) ?? new Set<string>(),
     }));
-  }, [subproyectos, metricas, fases, medidas]);
+  }, [subproyectos, metricas, medidas, rm, hoyMs]);
 
   const sortedFilas = useMemo(() => {
     if (!sort) return filas;
@@ -310,14 +322,13 @@ export function GlobalTable({ subproyectos, metricas, fases, medidas }: GlobalTa
               style={{ gap: 2, backgroundColor: "var(--surface)" }}
             >
               {PROG_FASES.map((fa) => {
-                const est = f.estados[fa.code] ?? null;
-                const bg =
-                  est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : COL_TRACK;
+                // Absente de la map = phase non programmée → « por_venir » (rail gris).
+                const est = f.estados.get(fa.code) ?? "por_venir";
                 return (
                   <span
                     key={fa.code}
-                    title={`${fa.nombre}: ${estadoLabel(est)}`}
-                    style={{ flex: 1, height: 10, backgroundColor: bg }}
+                    title={`${fa.nombre}: ${ESTADO_FASE_VISTA_LABEL[est]}`}
+                    style={{ flex: 1, height: 10, backgroundColor: colorEstadoFaseVista(est, COL_TRACK) }}
                   />
                 );
               })}

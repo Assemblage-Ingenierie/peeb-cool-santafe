@@ -243,10 +243,24 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   le relais. Avant 036 ses dates écrasaient les liaisons entre phases : celles-ci
   existaient mais **ne servaient à rien** (la date manuelle gagne, priorité 1).
   - Objectif : **tout se pilote depuis le cronograma**, et la section
-    « Gestión de subproyectos » de l'Admin sera supprimée. Étapes restantes :
-    migrer les 3 lecteurs « métier » (`bottom-band`, `GlobalTable`,
-    `export-resumen`, qui lisent encore `estado`), passer la section en lecture
-    seule, puis la retirer.
+    « Gestión de subproyectos » de l'Admin sera supprimée. Les 3 lecteurs
+    « métier » de la progresión (`bottom-band` bloc Progreso, `GlobalTable`,
+    `export-resumen`) ne lisent **plus l'`estado` stocké** : ils dérivent l'état
+    de chaque phase du modèle enveloppe via `estadoFasesDe` (`lib/fases-actuales`,
+    source unique partagée avec le tracker de l'Inicio). Quatre états —
+    `entregada` (case de remise cochée) / `en_curso` (hoy dans l'enveloppe) /
+    `atrasada` (remise échue non cochée, **rouge clair `ROJO_ATRASADA`**) /
+    `por_venir` — définis dans `constants.ts` (`EstadoFaseVista`,
+    `colorEstadoFaseVista`, `FASES_PROGRESO`). Ces vues n'affichent plus que les
+    **6 phases à remise** : « No objeción AFD » (jalon `__cno__` sans remise) en
+    est retirée, comme dans le cronograma. **Étapes restantes** : passer la
+    section Admin en lecture seule, puis la retirer.
+    - Le **toggle de scénario** Factibilidad/Proyecto (`bottom-band`, `mapa-client`)
+      ne lit **plus l'`estado`** non plus : « Proyecto ejecutivo démarré » se
+      dérive du repère `__ini__PE` dépassé (`faseIniciada(estadoFasesDe(...))`).
+      Sémantique = **prévision du planning** (le toggle s'active à la date prévue),
+      plus « un admin l'a coché ». `use-escenario` inchangé (reçoit `canToggle`).
+      Plus aucun lecteur d'`estado` hors la section Admin elle-même.
   - **L'avancement se saisit dans le cronograma** : une case sur la ligne
     `__ent__<fase>` (le repère de remise), réservée aux admins, qui écrit
     `realizada` via `roadmapSetRealizada`. C'est la SEULE saisie d'avancement du

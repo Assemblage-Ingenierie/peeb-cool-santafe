@@ -1,6 +1,14 @@
 import ExcelJS from "exceljs";
-import { getSnapshot, type SnapshotMetrica, type SnapshotSubproyecto } from "@/lib/snapshot";
-import { FASES, ESTADOS, MEDIDAS, getTipologia } from "@/lib/constants";
+import { getSnapshot, getRoadmap, type SnapshotMetrica, type SnapshotSubproyecto } from "@/lib/snapshot";
+import {
+  FASES_PROGRESO,
+  ESTADO_FASE_VISTA_LABEL,
+  colorEstadoFaseVista,
+  MEDIDAS,
+  getTipologia,
+  type EstadoFaseVista,
+} from "@/lib/constants";
+import { estadoFasesDe } from "@/lib/fases-actuales";
 import { economiaKwh, economiaPct, porM2, suma } from "@/lib/calc";
 
 // ============================================================
@@ -12,24 +20,23 @@ import { economiaKwh, economiaPct, porM2, suma } from "@/lib/calc";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PROG_FASES = FASES.filter((f) => f.code !== "general");
+// 6 phases à remise (« No objeción AFD » exclue : jalon, pas une phase dans le
+// modèle enveloppe — cf. FASES_PROGRESO). État de chaque cellule = DÉRIVÉ.
+const PROG_FASES = FASES_PROGRESO;
 const FASE_INIT: Record<string, string> = {
   estudios_preliminares: "EP",
   anteproyecto: "AP",
   proyecto_ejecutivo: "PE",
   redaccion_pliegos: "PL",
-  no_objecion_afd: "NO",
   licitacion: "LI",
   obra: "OB",
 };
-const COL_TERM = ESTADOS.find((e) => e.code === "terminado")?.color ?? "#b6d7a8";
-const COL_PROC = ESTADOS.find((e) => e.code === "en_proceso")?.color ?? "#ffd966";
 const argb = (hex: string) => "FF" + hex.replace("#", "").toUpperCase();
 
 interface Fila {
   sub: SnapshotSubproyecto;
   met: SnapshotMetrica | undefined;
-  estados: Record<string, string | null>;
+  estados: Map<string, EstadoFaseVista>; // fase code → état dérivé
   medidas: Set<string>;
 }
 
@@ -55,15 +62,12 @@ export async function GET(req: Request) {
   const visibleGroups = colsParam == null ? null : new Set(colsParam.split(",").filter(Boolean));
   const sortParam = url.searchParams.get("sort");
 
-  const snap = await getSnapshot();
+  // Progresión DÉRIVÉE du modèle enveloppe (plus d'`estado` stocké) → le roadmap
+  // (planning) est nécessaire en plus du snapshot. « hoy » = instant de l'export.
+  const [snap, roadmap] = await Promise.all([getSnapshot(), getRoadmap()]);
+  const hoyMs = Date.now();
   const metMap = new Map<string, SnapshotMetrica>();
   for (const m of snap.metricas) if (m.escenario === "faisabilidad") metMap.set(m.subproyecto_uid, m);
-  const faseMap = new Map<string, Record<string, string | null>>();
-  for (const f of snap.fases) {
-    const r = faseMap.get(f.subproyecto_uid) ?? {};
-    r[f.fase] = f.estado;
-    faseMap.set(f.subproyecto_uid, r);
-  }
   const medMap = new Map<string, Set<string>>();
   for (const m of snap.medidas) {
     if (!m.activa) continue;
@@ -74,7 +78,7 @@ export async function GET(req: Request) {
   const filas: Fila[] = snap.subproyectos.map((sub) => ({
     sub,
     met: metMap.get(sub.uid),
-    estados: faseMap.get(sub.uid) ?? {},
+    estados: estadoFasesDe(roadmap, sub.uid, sub.tipologia, hoyMs),
     medidas: medMap.get(sub.uid) ?? new Set<string>(),
   }));
 
@@ -200,9 +204,15 @@ export async function GET(req: Request) {
         cell.value = f.sub.nombre;
         cell.alignment = { horizontal: "left", vertical: "middle" };
       } else if (col.kind === "prog") {
-        const est = f.estados[col.fase as string] ?? null;
-        const fill = est === "terminado" ? COL_TERM : est === "en_proceso" ? COL_PROC : null;
-        if (fill) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(fill) } };
+        const est = f.estados.get(col.fase as string);
+        // por_venir / non programmée = pas de remplissage (cellule vide).
+        if (est && est !== "por_venir") {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: argb(colorEstadoFaseVista(est, "")) },
+          };
+        }
       } else if (col.kind === "med") {
         const on = f.medidas.has(col.code as string);
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: on ? argb(col.color as string) : "FFECEEF1" } };
@@ -217,13 +227,32 @@ export async function GET(req: Request) {
     });
   });
 
-  // Légende Progresión (sous le tableau) si la colonne est exportée.
+  // Légende Progresión (sous le tableau) si la colonne est exportée : initiales
+  // des phases, puis une ligne de couleurs d'état (le rouge « atrasada » est nouveau).
   if (cols.some((c) => c.gkey === "progresion")) {
     const legRow = 3 + filas.length + 1;
     ws.mergeCells(legRow, 1, legRow, Math.min(cols.length, 12));
     const leg = ws.getCell(legRow, 1);
     leg.value = "Progresión:  " + PROG_FASES.map((fa) => `${FASE_INIT[fa.code]} = ${fa.nombre}`).join("   ·   ");
     leg.font = { italic: true, size: 9, color: { argb: "FF646B78" } };
+
+    const grisItalico = { italic: true, size: 9, color: { argb: "FF646B78" } } as const;
+    const swatch = (estado: EstadoFaseVista, label: string) => [
+      { text: "■ ", font: { size: 9, color: { argb: argb(colorEstadoFaseVista(estado, "")) } } },
+      { text: `${label}    `, font: grisItalico },
+    ];
+    const colRow = legRow + 1;
+    ws.mergeCells(colRow, 1, colRow, Math.min(cols.length, 12));
+    const colLeg = ws.getCell(colRow, 1);
+    colLeg.value = {
+      richText: [
+        { text: "Estado:  ", font: grisItalico },
+        ...swatch("entregada", ESTADO_FASE_VISTA_LABEL.entregada),
+        ...swatch("en_curso", ESTADO_FASE_VISTA_LABEL.en_curso),
+        ...swatch("atrasada", `${ESTADO_FASE_VISTA_LABEL.atrasada} (entrega vencida)`),
+        { text: `▫ ${ESTADO_FASE_VISTA_LABEL.por_venir}`, font: grisItalico },
+      ],
+    };
   }
 
   const buf = await wb.xlsx.writeBuffer();
