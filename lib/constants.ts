@@ -38,16 +38,18 @@ export const COMPONENTES: Componente[] = [
 ];
 
 // --- Typologies de bâtiment (CDC §2.4) ---
-// Charte revue avec le client : ámbar / burdeos / sarcelle (texte blanc pour les
-// trois). Remplace les deux rouges d'origine (A #990000 / H #cc0000, quasi
-// indiscernables et en conflit avec le rouge de marque) et le bleu Escuelas
-// #3c78d8 (qui empiétait sur le dégradé de bleus des fases, cf. cronograma-client).
-// Teintes choisies hors des familles déjà prises : GP gris, EE doré/orange,
-// AyS vert, Género violet, marque/AFD rouge, fases bleu.
+// Charte alignée sur l'identité de la Provincia de Santa Fe (dégradé du logo :
+// orange → fuchsia → bleu-violet). Remplace les deux rouges d'origine
+// (A #990000 / H #cc0000, indiscernables et en conflit avec le rouge de marque)
+// et le bleu Escuelas #3c78d8 (qui empiétait sur le bleu des fases). Escuelas est
+// tiré vers le bleu-violet (índigo) pour s'écarter À LA FOIS du violet Género
+// (#674ea7) et du bleu des fases (plus clair et plus vert).
+// ⚠ A naranja #f26a1b est trop clair pour du texte blanc → texte FONCÉ sur son
+// badge (textoClaro:false) ; H et E gardent le blanc.
 export const TIPOLOGIAS: Tipologia[] = [
-  { code: "A", nombre: "Aeropuertos", color: "#b45f10", textoClaro: true, onColor: TEXTO_CLARO },
-  { code: "H", nombre: "Hospitales",  color: "#8c3a52", textoClaro: true, onColor: TEXTO_CLARO },
-  { code: "E", nombre: "Escuelas",    color: "#0b7d71", textoClaro: true, onColor: TEXTO_CLARO },
+  { code: "A", nombre: "Aeropuertos", color: "#f26a1b", textoClaro: false, onColor: TEXTO_OSCURO },
+  { code: "H", nombre: "Hospitales",  color: "#d81b7a", textoClaro: true,  onColor: TEXTO_CLARO },
+  { code: "E", nombre: "Escuelas",    color: "#4a45c4", textoClaro: true,  onColor: TEXTO_CLARO },
 ];
 
 export const getComponente = (code: string): Componente | undefined =>
@@ -56,16 +58,14 @@ export const getComponente = (code: string): Componente | undefined =>
 export const getTipologia = (code: string): Tipologia | undefined =>
   TIPOLOGIAS.find((t) => t.code === code);
 
-// Variante VIBRANTE réservée aux marqueurs de carte géographique. Les points
-// n'ont pas de texte dessus → on peut saturer sans contrainte de contraste, ce
-// qui aide les disques (volontairement petits) à ressortir sur le fond clair des
-// tuiles OSM. Mêmes teintes que TIPOLOGIAS, en plus vif.
-// ⚠ NE PAS utiliser ailleurs : badges-lettre, pastilles de select et tableau
-// gardent la palette sobre de TIPOLOGIAS (texte blanc dessus).
+// Couleur des marqueurs de carte géographique. Depuis la charte « logo Santa Fe »
+// (déjà vibrante), elle REFLÈTE la palette générale TIPOLOGIAS — plus de variante
+// sobre/vibrante à distinguer. Table conservée comme point d'ancrage unique si la
+// carte devait un jour diverger (ex. saturer davantage les petits disques).
 export const TIPOLOGIA_COLOR_MAPA: Record<TipologiaCode, string> = {
-  A: "#ee8a12", // ámbar vif
-  H: "#bd3c63", // burdeos vif
-  E: "#10a596", // sarcelle vif
+  A: "#f26a1b", // naranja
+  H: "#d81b7a", // fucsia
+  E: "#4a45c4", // azul-violeta (índigo)
 };
 
 export const getTipologiaColorMapa = (code: string): string | undefined =>
