@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Snapshot } from "@/lib/snapshot";
-import { CARD_TONOS, GESTION_FASES, getTipologia, UI } from "@/lib/constants";
-import { FASE_SIGLA, LEYENDA_FASES, colorDeFase, textoSobre } from "@/lib/fases-cronograma";
+import { CARD_TONOS, getTipologia, UI } from "@/lib/constants";
+import { FASE_SIGLA, colorDeFase, textoSobre } from "@/lib/fases-cronograma";
 import { fasesEnCurso, pagEstado } from "@/lib/fases-actuales";
 import { useComponentFilters } from "@/components/filter-context";
 import { useRoadmap } from "./use-roadmap";
@@ -89,25 +89,6 @@ export function FasesTracker({ snapshot }: FasesTrackerProps) {
           <span className="h-3 w-0.5 rounded-sm bg-[var(--accent)]" />
           hoy{hoyMs != null ? ` · ${fmtHoy(hoyMs)}` : ""}
         </span>
-      </div>
-
-      {/* Leyenda de fases (colores del cronograma) */}
-      <div className="flex flex-wrap gap-x-3 gap-y-1 border-b border-[var(--border)] px-3.5 py-1.5 text-[11px] text-[var(--text-muted)]">
-        {LEYENDA_FASES.map((code) => {
-          const color = colorDeFase(code);
-          const nombre = GESTION_FASES.find((f) => f.code === code)?.nombre ?? code;
-          return (
-            <span key={code} className="inline-flex items-center gap-1.5">
-              <span
-                className="inline-flex h-3.5 min-w-[20px] items-center justify-center rounded-[3px] px-1 text-[8.5px] font-extrabold"
-                style={{ backgroundColor: color, color: textoSobre(color) }}
-              >
-                {FASE_SIGLA[code] ?? ""}
-              </span>
-              {nombre}
-            </span>
-          );
-        })}
       </div>
 
       {/* Subproyectos con una fase en curso — fondo gris muy claro para que
