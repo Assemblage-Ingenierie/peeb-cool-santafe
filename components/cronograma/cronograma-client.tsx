@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
   CARD_TONOS,
@@ -53,7 +53,7 @@ import {
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
-import type { Roadmap, Snapshot, SnapshotRoadmapEstado } from "@/lib/snapshot";
+import type { Roadmap, Snapshot, SnapshotRoadmapEstado, SnapshotRoadmapEnlace } from "@/lib/snapshot";
 
 // Données combinées consommées par le Gantt : snapshot de base + roadmap
 // (chargés par deux endpoints séparés, fusionnés côté client).
@@ -61,7 +61,12 @@ type DatosCronograma = Snapshot & Roadmap;
 import { useComponentFilters } from "@/components/filter-context";
 import { isAdmin } from "@/lib/auth";
 import { useAuthUser } from "@/components/auth-context";
-import { roadmapSetRealizada, roadmapSetPlan } from "@/app/hojas-de-ruta/actions";
+import {
+  roadmapSetRealizada,
+  roadmapSetPlan,
+  roadmapAddEnlace,
+  roadmapRemoveEnlace,
+} from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
 // Cronograma (Gantt) — branché sur le MOTEUR de planning (lib/schedule) : les
@@ -240,6 +245,89 @@ function overlayFeuille(base: Roadmap, feuille: string, ov: Roadmap): Roadmap {
     roadmapEstado: [...base.roadmapEstado.filter((r) => r.feuille !== feuille), ...ov.roadmapEstado],
     roadmapEnlace: [...base.roadmapEnlace.filter((e) => e.feuille !== feuille), ...ov.roadmapEnlace],
   };
+}
+
+// --- Ficha : brouillon d'UNE ligne (T1) -----------------------------------
+// L'ancrage d'une ligne, tel qu'édité dans la ficha. « fecha » = date fixe
+// (fechaInicio, prime sur les liaisons) ; « dep » = démarre/finit par rapport à
+// une ou plusieurs RÉFÉRENCES (la plus tardive gagne), avec décalage signé.
+type Ancla =
+  | { t: "fecha"; fecha: string }
+  | {
+      t: "dep";
+      extremo: "inicio" | "fin"; // extrémité de CETTE ligne qui se cale (inicio = elle démarre là)
+      valor: number;
+      unidad: Unidad;
+      sentido: "antes" | "despues"; // signe du décalage
+      punto: "inicio" | "fin"; // point d'accroche sur la/les référence(s)
+      refs: string[]; // clés des lignes/phases dont elle dépend
+    };
+interface DraftLinea {
+  key: string;
+  dur: { v: number | null; u: string };
+  ancla: Ancla;
+  fin: { fecha: string } | null; // fin FORCÉE (excédent hachuré) ; null = durée estimée
+}
+
+// Construit le brouillon d'une ligne depuis le roadmap de travail.
+function construirDraft(rm: Roadmap, feuille: string, key: string): DraftLinea {
+  const est = rm.roadmapEstado.find((r) => r.feuille === feuille && r.tareaKey === key);
+  const entrantes = rm.roadmapEnlace.filter((e) => e.feuille === feuille && e.hacia === key);
+  const dur = { v: est?.durValor ?? null, u: est?.durUnidad ?? "dia" };
+  const fin = est?.fechaFin ? { fecha: est.fechaFin } : null;
+  let ancla: Ancla;
+  if (est?.fechaInicio) {
+    ancla = { t: "fecha", fecha: est.fechaInicio };
+  } else if (entrantes.length > 0) {
+    // Cadena partagée par toutes les refs (params du 1er lien — simplification
+    // assumée : la ficha édite un décalage commun, cf. maquette).
+    const e0 = entrantes[0];
+    ancla = {
+      t: "dep",
+      extremo: e0.extremo === "fin" ? "fin" : "inicio",
+      valor: Math.abs(e0.desfaseValor),
+      unidad: e0.desfaseUnidad,
+      sentido: e0.desfaseValor < 0 ? "antes" : "despues",
+      punto: e0.punto === "inicio" ? "inicio" : "fin",
+      refs: entrantes.map((e) => e.desde),
+    };
+  } else {
+    ancla = { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "fin", refs: [] };
+  }
+  return { key, dur, ancla, fin };
+}
+
+// Applique un brouillon de ligne à un roadmap (aperçu live ET commit sur Listo).
+function aplicarDraft(rm: Roadmap, feuille: string, draft: DraftLinea): Roadmap {
+  const durValor = draft.dur.v != null && draft.dur.v > 0 ? Math.trunc(draft.dur.v) : null;
+  const durUnidad = durValor != null ? draft.dur.u : null;
+  const fechaInicio = draft.ancla.t === "fecha" ? draft.ancla.fecha || null : null;
+  const fechaFin = draft.fin?.fecha || null;
+  const roadmapEstado = rm.roadmapEstado.map((r) =>
+    r.feuille === feuille && r.tareaKey === draft.key
+      ? { ...r, durValor, durUnidad, fechaInicio, fechaFin }
+      : r,
+  );
+  // Liaisons : on remplace TOUTES les liaisons entrantes de la ligne.
+  const otras = rm.roadmapEnlace.filter((e) => !(e.feuille === feuille && e.hacia === draft.key));
+  const nuevas: SnapshotRoadmapEnlace[] = [];
+  if (draft.ancla.t === "dep") {
+    const a = draft.ancla;
+    const desfaseValor = a.sentido === "antes" ? -Math.abs(a.valor) : Math.abs(a.valor);
+    for (const desde of a.refs) {
+      if (desde === draft.key) continue;
+      nuevas.push({
+        feuille,
+        desde,
+        hacia: draft.key,
+        punto: a.punto,
+        desfaseValor,
+        desfaseUnidad: a.unidad,
+        extremo: a.extremo,
+      });
+    }
+  }
+  return { generatedAt: rm.generatedAt, roadmapEstado, roadmapEnlace: [...otras, ...nuevas] };
 }
 
 // Assemble le planning d'un sous-projet (mêmes entrées que la feuille de route).
@@ -880,8 +968,10 @@ export function CronogramaClient() {
   const [guardando, setGuardando] = useState(false);
   const [original, setOriginal] = useState<Roadmap | null>(null); // état chargé au début de l'édition
   const [feuilleEd, setFeuilleEd] = useState<string | null>(null); // feuille en cours d'édition
-  // Ficha ouverte (édition d'une ligne) : clé + position d'ancrage à l'écran.
-  const [ficha, setFicha] = useState<{ key: string; x: number; y: number } | null>(null);
+  // Ficha ouverte (édition d'une ligne) : position d'ancrage + label ; le
+  // brouillon de la ligne vit dans `draft` (aperçu live via superposition).
+  const [ficha, setFicha] = useState<{ key: string; label: string; x: number; y: number } | null>(null);
+  const [draft, setDraft] = useState<DraftLinea | null>(null);
 
   const esSubActual = seleccion !== "global" && seleccion !== FEUILLE_PAG;
   const puedeEditar = esAdmin && esSubActual && rm.status === "ready";
@@ -938,18 +1028,21 @@ export function CronogramaClient() {
     setSeleccion(uid);
   };
 
-  // Édition d'une ligne (ficha) — T0 : durée estimée.
-  const durDeLinea = (key: string): { v: number | null; u: string } => {
-    const r = borrador?.roadmapEstado.find((x) => x.tareaKey === key);
-    return { v: r?.durValor ?? null, u: r?.durUnidad ?? "dia" };
+  // Édition d'une ligne (ficha) — T1 : durée + ancrage + « cuándo termina ».
+  // Le brouillon `draft` se prévisualise en direct (superposé au borrador) ; il
+  // n'est fondu dans le borrador qu'à « Listo » (aplicarFicha).
+  const abrirFicha = (key: string, label: string, x: number, y: number) => {
+    if (!borrador || !feuilleEd) return;
+    setDraft(construirDraft(borrador, feuilleEd, key));
+    setFicha({ key, label, x, y });
   };
-  const setDurLinea = (key: string, v: number | null, u: string) => {
-    mutar((rm) => ({
-      ...rm,
-      roadmapEstado: rm.roadmapEstado.map((x) =>
-        x.tareaKey === key ? { ...x, durValor: v, durUnidad: u } : x,
-      ),
-    }));
+  const cerrarFicha = () => {
+    setFicha(null);
+    setDraft(null);
+  };
+  const aplicarFicha = () => {
+    if (draft && feuilleEd) mutar((rm) => aplicarDraft(rm, feuilleEd, draft));
+    cerrarFicha();
   };
 
   // Guardar : diff borrador ↔ original → actions existantes, puis recharge la base.
@@ -976,6 +1069,33 @@ export function CronogramaClient() {
           }),
         );
       }
+    }
+    // Diff des liaisons (identité = desde→hacia). Upsert des nouvelles/modifiées,
+    // suppression de celles disparues du borrador.
+    const cle = (e: SnapshotRoadmapEnlace) => `${e.desde}»${e.hacia}`;
+    const origEn = new Map(original.roadmapEnlace.map((e) => [cle(e), e]));
+    const borrEn = new Map(borrador.roadmapEnlace.map((e) => [cle(e), e]));
+    for (const [k, e] of borrEn) {
+      const o = origEn.get(k);
+      if (
+        !o ||
+        o.punto !== e.punto ||
+        o.extremo !== e.extremo ||
+        o.desfaseValor !== e.desfaseValor ||
+        o.desfaseUnidad !== e.desfaseUnidad
+      ) {
+        ops.push(
+          roadmapAddEnlace(feuille, e.desde, e.hacia, {
+            punto: e.punto,
+            extremo: e.extremo,
+            desfaseValor: e.desfaseValor,
+            desfaseUnidad: e.desfaseUnidad,
+          }),
+        );
+      }
+    }
+    for (const [k, e] of origEn) {
+      if (!borrEn.has(k)) ops.push(roadmapRemoveEnlace(feuille, e.desde, e.hacia));
     }
     if (ops.length === 0) return salirEdicion(true);
     setGuardando(true);
@@ -1010,9 +1130,12 @@ export function CronogramaClient() {
     if (snap.status !== "ready" || rm.status !== "ready") return [];
     // Aperçu LIVE : en édition, on superpose le borrador de la feuille éditée
     // au roadmap chargé — même moteur, donc les barres bougent en direct.
+    // Brouillon de ligne (ficha) superposé au borrador → aperçu live pendant l'édition.
+    const borradorEff =
+      borrador && draft && feuilleEd === seleccion ? aplicarDraft(borrador, seleccion, draft) : borrador;
     const rmEff =
-      editando && borrador && feuilleEd === seleccion
-        ? overlayFeuille(rm.data, seleccion, borrador)
+      editando && borradorEff && feuilleEd === seleccion
+        ? overlayFeuille(rm.data, seleccion, borradorEff)
         : rm.data;
     const datos: DatosCronograma = { ...snap.data, ...rmEff };
     if (seleccion === "global") {
@@ -1022,7 +1145,25 @@ export function CronogramaClient() {
     if (seleccion === FEUILLE_PAG) return seccionesPag(datos);
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
     return seccionesSub(seleccion, sub?.tipologia ?? "", datos, filtros, hoyMs ?? 0, marcadas);
-  }, [snap, rm, seleccion, filtros, hoyMs, marcadas, editando, borrador, feuilleEd]);
+  }, [snap, rm, seleccion, filtros, hoyMs, marcadas, editando, borrador, feuilleEd, draft]);
+
+  // Références possibles pour l'ancrage (toutes les lignes VISIBLES sauf celle
+  // éditée) et dates calculées de la ligne éditée (frase + « cuándo termina »),
+  // lues sur l'aperçu déjà calculé dans `secciones`.
+  const filasVisibles = useMemo(
+    () => secciones.flatMap((s) => s.filas).filter((f) => f.key),
+    [secciones],
+  );
+  const refOpciones = ficha
+    ? filasVisibles
+        .filter((f) => f.key !== ficha.key)
+        .map((f) => ({ value: f.key as string, label: f.label }))
+    : [];
+  const previewLinea = (() => {
+    if (!ficha) return null;
+    const b = filasVisibles.find((f) => f.key === ficha.key)?.barras[0];
+    return b ? { ini: b.startMs, finSolida: b.solidMs, fin: b.endMs } : null;
+  })();
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;
@@ -1420,7 +1561,7 @@ export function CronogramaClient() {
                         onPointerDown={editando && fila.key ? (e) => e.stopPropagation() : undefined}
                         onClick={
                           editando && fila.key
-                            ? (e) => setFicha({ key: fila.key!, x: e.clientX, y: e.clientY })
+                            ? (e) => abrirFicha(fila.key!, fila.label, e.clientX, e.clientY)
                             : undefined
                         }
                       >
@@ -1481,85 +1622,320 @@ export function CronogramaClient() {
         </div>
       </div>
 
-      {editando && ficha && (
-        <FichaDuracion
+      {editando && ficha && draft && (
+        <FichaLinea
           x={ficha.x}
           y={ficha.y}
-          label={secciones.flatMap((s) => s.filas).find((f) => f.key === ficha.key)?.label ?? ""}
-          inicial={durDeLinea(ficha.key)}
-          onListo={(v, u) => {
-            setDurLinea(ficha.key, v, u);
-            setFicha(null);
-          }}
-          onCancelar={() => setFicha(null)}
+          label={ficha.label}
+          draft={draft}
+          setDraft={setDraft}
+          refOpciones={refOpciones}
+          preview={previewLinea}
+          onListo={aplicarFicha}
+          onCancelar={cerrarFicha}
         />
       )}
     </div>
   );
 }
 
-// Ficha d'édition d'une ligne — T0 : durée estimée. Brouillon local : rien ne
-// bouge tant qu'on ne clique pas « Listo ». Ancrée près du clic (position fixe).
-function FichaDuracion({
+// ms locaux → ISO (yyyy-mm-dd), symétrique d'isoMs.
+function isoDeMs(ms: number): string {
+  const d = new Date(ms);
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const da = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mo}-${da}`;
+}
+const DIA_MS = 86_400_000;
+const fieldFicha =
+  "rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px] text-[var(--text)] outline-none focus:border-[var(--focus)]";
+
+// Petit select contrôlé (paires "valeur|libellé").
+function SelFicha({
+  valor,
+  opciones,
+  onChange,
+  className,
+}: {
+  valor: string;
+  opciones: [string, string][];
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  return (
+    <select value={valor} onChange={(e) => onChange(e.target.value)} className={cn(fieldFicha, className)}>
+      {opciones.map(([v, l]) => (
+        <option key={v} value={v}>
+          {l}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// Ficha d'édition d'une ligne — T1 : durée + « cuándo empieza » (fecha fija ou
+// dependencia à plusieurs refs) + « cuándo termina » (durée estimée ou fecha
+// forcée). Brouillon CONTRÔLÉ par le parent (`draft`) → aperçu live ; rien n'est
+// fondu dans le borrador avant « Listo ».
+function FichaLinea({
   x,
   y,
   label,
-  inicial,
+  draft,
+  setDraft,
+  refOpciones,
+  preview,
   onListo,
   onCancelar,
 }: {
   x: number;
   y: number;
   label: string;
-  inicial: { v: number | null; u: string };
-  onListo: (v: number | null, u: string) => void;
+  draft: DraftLinea;
+  setDraft: (d: DraftLinea) => void;
+  refOpciones: { value: string; label: string }[];
+  preview: { ini: number; finSolida: number; fin: number } | null;
+  onListo: () => void;
   onCancelar: () => void;
 }) {
-  const [v, setV] = useState<string>(inicial.v != null ? String(inicial.v) : "");
-  const [u, setU] = useState<string>(inicial.u || "dia");
   const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const left = Math.max(8, Math.min(x, vw - 296));
-  const top = Math.max(8, Math.min(y + 8, vh - 180));
+  const left = Math.max(8, Math.min(x, vw - 396));
+  const top = Math.max(8, Math.min(y + 8, vh - 440));
+
+  const esDep = draft.ancla.t === "dep";
+  const forzando = draft.fin != null;
+  const nombreRef = (k: string) => refOpciones.find((o) => o.value === k)?.label ?? k;
+
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
       <div
-        className="fixed z-50 w-[280px] rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3 shadow-xl"
+        className="fixed z-50 flex w-[380px] max-w-[calc(100vw-16px)] flex-col gap-3 rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
         style={{ left, top }}
         role="dialog"
-        aria-label="Editar duración"
+        aria-label="Editar línea"
       >
-        <p className="mb-2 truncate text-xs font-semibold text-[var(--text)]" title={label}>
+        <p className="truncate text-sm font-semibold text-[var(--text)]" title={label}>
           {label}
         </p>
-        <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-          Duración estimada
-        </label>
-        <div className="flex gap-1.5">
-          <input
-            type="number"
-            min={1}
-            value={v}
-            onChange={(e) => setV(e.target.value)}
-            className="w-16 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
-            aria-label="Cantidad"
-            autoFocus
-          />
-          <select
-            value={u}
-            onChange={(e) => setU(e.target.value)}
-            className="flex-1 rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-sm text-[var(--text)] outline-none focus:border-[var(--focus)]"
-            aria-label="Unidad"
-          >
-            {DURACION_UNIDADES.map((du) => (
-              <option key={du.code} value={du.code}>
-                {du.plural}
-              </option>
-            ))}
-          </select>
+
+        {/* Duración estimada */}
+        <div className="flex flex-col gap-1">
+          <Rotulo>Duración estimada</Rotulo>
+          <div className="flex gap-1.5">
+            <input
+              type="number"
+              min={0}
+              value={draft.dur.v ?? ""}
+              onChange={(e) =>
+                setDraft({
+                  ...draft,
+                  dur: { v: e.target.value === "" ? null : Math.max(0, Math.trunc(Number(e.target.value))), u: draft.dur.u },
+                })
+              }
+              className={cn(fieldFicha, "w-16")}
+              aria-label="Cantidad"
+            />
+            <SelFicha
+              valor={draft.dur.u}
+              opciones={DURACION_UNIDADES.map((du) => [du.code, du.plural] as [string, string])}
+              onChange={(u) => setDraft({ ...draft, dur: { v: draft.dur.v, u } })}
+              className="flex-1"
+            />
+          </div>
         </div>
-        <div className="mt-3 flex justify-end gap-2">
+
+        {/* Cuándo empieza : fecha fija ou dependencia */}
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Cuándo empieza</Rotulo>
+          <Pestanas
+            opciones={[
+              ["fecha", "Fecha fija"],
+              ["dep", "Dependencia"],
+            ]}
+            valor={esDep ? "dep" : "fecha"}
+            onChange={(v) => {
+              if (v === "fecha") {
+                setDraft({
+                  ...draft,
+                  ancla: { t: "fecha", fecha: preview ? isoDeMs(preview.ini) : isoDeMs(Date.now()) },
+                });
+              } else {
+                setDraft({
+                  ...draft,
+                  ancla: { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "fin", refs: [] },
+                });
+              }
+            }}
+          />
+          {draft.ancla.t === "fecha" ? (
+            <input
+              type="date"
+              value={draft.ancla.fecha ? draft.ancla.fecha.slice(0, 10) : ""}
+              onChange={(e) => setDraft({ ...draft, ancla: { t: "fecha", fecha: e.target.value } })}
+              className={fieldFicha}
+            />
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <div className="grid grid-cols-2 gap-1.5">
+                <SelFicha
+                  valor={draft.ancla.extremo}
+                  opciones={[["inicio", "Empieza"], ["fin", "Termina"]]}
+                  onChange={(v) =>
+                    setDraft({ ...draft, ancla: { ...(draft.ancla as Extract<Ancla, { t: "dep" }>), extremo: v as "inicio" | "fin" } })
+                  }
+                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="number"
+                    min={0}
+                    value={draft.ancla.valor}
+                    onChange={(e) =>
+                      setDraft({
+                        ...draft,
+                        ancla: { ...(draft.ancla as Extract<Ancla, { t: "dep" }>), valor: Math.max(0, Math.trunc(Number(e.target.value) || 0)) },
+                      })
+                    }
+                    className={cn(fieldFicha, "w-12")}
+                    aria-label="Cantidad de decalaje"
+                  />
+                  <SelFicha
+                    valor={draft.ancla.unidad}
+                    opciones={DURACION_UNIDADES.map((du) => [du.code, du.plural] as [string, string])}
+                    onChange={(u) =>
+                      setDraft({ ...draft, ancla: { ...(draft.ancla as Extract<Ancla, { t: "dep" }>), unidad: u as Unidad } })
+                    }
+                    className="flex-1"
+                  />
+                </div>
+                <SelFicha
+                  valor={draft.ancla.sentido}
+                  opciones={[["antes", "antes del"], ["despues", "después del"]]}
+                  onChange={(v) =>
+                    setDraft({ ...draft, ancla: { ...(draft.ancla as Extract<Ancla, { t: "dep" }>), sentido: v as "antes" | "despues" } })
+                  }
+                />
+                <SelFicha
+                  valor={draft.ancla.punto}
+                  opciones={[["inicio", "inicio"], ["fin", "fin"]]}
+                  onChange={(v) =>
+                    setDraft({ ...draft, ancla: { ...(draft.ancla as Extract<Ancla, { t: "dep" }>), punto: v as "inicio" | "fin" } })
+                  }
+                />
+              </div>
+              {/* Ajout de références (la plus tardive gagne) */}
+              <select
+                value=""
+                onChange={(e) => {
+                  if (!e.target.value) return;
+                  const a = draft.ancla as Extract<Ancla, { t: "dep" }>;
+                  setDraft({ ...draft, ancla: { ...a, refs: [...a.refs, e.target.value] } });
+                }}
+                className={fieldFicha}
+              >
+                <option value="">
+                  {draft.ancla.refs.length ? "Añadir otra referencia…" : "Elegir referencia…"}
+                </option>
+                {refOpciones
+                  .filter((o) => !(draft.ancla as Extract<Ancla, { t: "dep" }>).refs.includes(o.value))
+                  .map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+              </select>
+              {draft.ancla.refs.length > 0 && (
+                <div className="flex flex-col gap-1">
+                  {draft.ancla.refs.map((ref, i) => (
+                    <div
+                      key={ref}
+                      className="flex items-center gap-1.5 rounded bg-[var(--app-bg)] px-1.5 py-1 text-[12px]"
+                    >
+                      <span className="min-w-0 flex-1 truncate" title={nombreRef(ref)}>
+                        {nombreRef(ref)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const a = draft.ancla as Extract<Ancla, { t: "dep" }>;
+                          setDraft({ ...draft, ancla: { ...a, refs: a.refs.filter((_, j) => j !== i) } });
+                        }}
+                        className="shrink-0 px-1 text-[var(--text-muted)] hover:text-[var(--accent)]"
+                        title="Quitar esta referencia"
+                        aria-label="Quitar referencia"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Cuándo termina : durée estimée ou fecha forcée */}
+        <div className="flex flex-col gap-1.5">
+          <Rotulo>Cuándo termina</Rotulo>
+          <Pestanas
+            opciones={[
+              ["estimada", "Duración estimada"],
+              ["forzar", "Forzar fecha"],
+            ]}
+            valor={forzando ? "forzar" : "estimada"}
+            onChange={(v) => {
+              if (v === "estimada") setDraft({ ...draft, fin: null });
+              else setDraft({ ...draft, fin: { fecha: preview ? isoDeMs(preview.fin) : isoDeMs(Date.now()) } });
+            }}
+          />
+          {!forzando ? (
+            <p className="text-[12px] text-[var(--text-muted)]">
+              {preview ? `Termina el ${fmtFecha(preview.fin)}` : "Sin fecha todavía"}
+            </p>
+          ) : (
+            <>
+              <input
+                type="date"
+                value={draft.fin?.fecha ? draft.fin.fecha.slice(0, 10) : ""}
+                onChange={(e) => {
+                  const nueva = isoMs(e.target.value);
+                  if (!preview || nueva == null) {
+                    setDraft({ ...draft, fin: { fecha: e.target.value } });
+                    return;
+                  }
+                  if (nueva > preview.finSolida) {
+                    // Plus tard que l'estimé → excédent hachuré, durée intacte.
+                    setDraft({ ...draft, fin: { fecha: e.target.value } });
+                  } else {
+                    // Plus tôt → on RÉÉCRIT la durée (semaines si ça tombe juste) et on efface le forçage.
+                    const dias = Math.max(0, Math.round((nueva - preview.ini) / DIA_MS));
+                    const dur = dias > 0 && dias % 7 === 0 ? { v: dias / 7, u: "semana" } : { v: dias, u: "dia" };
+                    setDraft({ ...draft, fin: null, dur });
+                  }
+                }}
+                className={fieldFicha}
+              />
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Más tarde que lo estimado → el excedente sale rayado. Más pronto → se acorta la duración.
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Frase récapitulative */}
+        <p
+          className={cn(
+            "rounded-r border-l-2 bg-[var(--app-bg)] px-2.5 py-1.5 text-[12px]",
+            preview ? "border-l-[#c9ced7] text-[var(--text-muted)]" : "border-l-[var(--accent)] text-[var(--accent)]",
+          )}
+        >
+          {preview
+            ? `Empieza el ${fmtFecha(preview.ini)} · termina el ${fmtFecha(preview.fin)}`
+            : "Sin fecha todavía — falta una referencia/fecha, o la dependencia forma un ciclo."}
+        </p>
+
+        <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancelar}
@@ -1569,10 +1945,7 @@ function FichaDuracion({
           </button>
           <button
             type="button"
-            onClick={() => {
-              const n = v.trim() === "" ? null : Math.trunc(Number(v));
-              onListo(n != null && n > 0 && !Number.isNaN(n) ? n : null, u);
-            }}
+            onClick={onListo}
             className="rounded-md bg-[var(--text)] px-3 py-1 text-sm font-medium text-white transition-opacity hover:opacity-90"
           >
             Listo
@@ -1580,6 +1953,41 @@ function FichaDuracion({
         </div>
       </div>
     </>
+  );
+}
+
+// Rótulo (petit label majuscule) et pestañas (onglets segmentés) de la ficha.
+function Rotulo({ children }: { children: ReactNode }) {
+  return (
+    <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">{children}</span>
+  );
+}
+function Pestanas({
+  opciones,
+  valor,
+  onChange,
+}: {
+  opciones: [string, string][];
+  valor: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-md border border-[var(--border)] bg-[var(--app-bg)] p-0.5">
+      {opciones.map(([v, l]) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={valor === v}
+          onClick={() => onChange(v)}
+          className={cn(
+            "rounded px-2.5 py-1 text-[12px] transition-colors",
+            valor === v ? "bg-[var(--surface)] text-[var(--text)] shadow-sm" : "text-[var(--text-muted)] hover:text-[var(--text)]",
+          )}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
   );
 }
 
