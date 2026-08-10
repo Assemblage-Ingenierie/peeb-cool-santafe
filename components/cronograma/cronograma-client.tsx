@@ -11,6 +11,7 @@ import {
   UI,
   DURACION_UNIDADES,
   esModeloEnvolvente,
+  hitoInicioKey,
   type ComponenteCode,
   type HitoRol,
 } from "@/lib/constants";
@@ -67,6 +68,7 @@ import {
   roadmapAddEnlace,
   roadmapRemoveEnlace,
   roadmapEliminarCarta,
+  roadmapCrearCarta,
 } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
@@ -210,6 +212,7 @@ export interface Fila {
 }
 export interface Seccion {
   titulo: string;
+  faseCode?: string; // code de la phase (mode édition : cible du « + » d'insertion)
   barras: Barra[]; // barre de la fase — rendue sur la LIGNE DU TITRE (bande grise)
   filas: Fila[]; // tareas (masquées quand la section est repliée)
 }
@@ -268,6 +271,12 @@ interface DraftLinea {
   dur: { v: number | null; u: string };
   ancla: Ancla;
   fin: { fecha: string } | null; // fin FORCÉE (excédent hachuré) ; null = durée estimée
+  // Ligne NOUVELLE (insertion « + ») : n'existe pas encore dans le borrador ; elle
+  // n'y est ajoutée qu'à « Listo » (Cancelar la jette). Porte alors nom/comp/fila.
+  nueva?: boolean;
+  nombre?: string;
+  comp?: ComponenteCode;
+  fila?: string;
 }
 
 // Construit le brouillon d'une ligne depuis le roadmap de travail.
@@ -298,17 +307,60 @@ function construirDraft(rm: Roadmap, feuille: string, key: string): DraftLinea {
   return { key, dur, ancla, fin };
 }
 
+// Brouillon d'une ligne NOUVELLE (insertion), pas encore dans le borrador.
+// Ancrée par défaut au repère « Inicio » de sa phase → elle apparaît dans la
+// phase tout de suite (l'utilisateur ajuste ensuite).
+function construirDraftNueva(fase: string, comp: ComponenteCode): DraftLinea {
+  const key = `carta-${crypto.randomUUID()}`;
+  return {
+    key,
+    dur: { v: 2, u: "semana" },
+    ancla: { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "inicio", refs: [hitoInicioKey(fase)] },
+    fin: null,
+    nueva: true,
+    nombre: "Nueva tarea",
+    comp,
+    fila: fase,
+  };
+}
+
 // Applique un brouillon de ligne à un roadmap (aperçu live ET commit sur Listo).
+// Si la ligne est NOUVELLE (absente du borrador), on l' AJOUTE (upsert).
 function aplicarDraft(rm: Roadmap, feuille: string, draft: DraftLinea): Roadmap {
   const durValor = draft.dur.v != null && draft.dur.v > 0 ? Math.trunc(draft.dur.v) : null;
   const durUnidad = durValor != null ? draft.dur.u : null;
   const fechaInicio = draft.ancla.t === "fecha" ? draft.ancla.fecha || null : null;
   const fechaFin = draft.fin?.fecha || null;
-  const roadmapEstado = rm.roadmapEstado.map((r) =>
-    r.feuille === feuille && r.tareaKey === draft.key
-      ? { ...r, durValor, durUnidad, fechaInicio, fechaFin }
-      : r,
-  );
+  const existe = rm.roadmapEstado.some((r) => r.feuille === feuille && r.tareaKey === draft.key);
+  const roadmapEstadoBase = existe
+    ? rm.roadmapEstado.map((r) =>
+        r.feuille === feuille && r.tareaKey === draft.key
+          ? { ...r, durValor, durUnidad, fechaInicio, fechaFin }
+          : r,
+      )
+    : [
+        ...rm.roadmapEstado,
+        {
+          feuille,
+          tareaKey: draft.key,
+          realizada: false,
+          comentario: null,
+          nombre: draft.nombre ?? "Nueva tarea",
+          descripcion: null,
+          responsable: null,
+          oculta: false,
+          fila: draft.fila ?? null,
+          orden: 500,
+          banda: 0,
+          componente: draft.comp ?? "GP",
+          creada: true,
+          fechaInicio,
+          fechaFin,
+          durValor,
+          durUnidad,
+        },
+      ];
+  const roadmapEstado = roadmapEstadoBase;
   // Liaisons : on remplace TOUTES les liaisons entrantes de la ligne.
   const otras = rm.roadmapEnlace.filter((e) => !(e.feuille === feuille && e.hacia === draft.key));
   const nuevas: SnapshotRoadmapEnlace[] = [];
@@ -605,7 +657,7 @@ export function seccionesSub(
 
     // On masque une fase entièrement vide (pas de barre + aucune tarea visible).
     if (!bFase && filas.length === 0) return;
-    out.push({ titulo: f.nombre, barras: bFase ? [bFase] : [], filas });
+    out.push({ titulo: f.nombre, faseCode: f.code, barras: bFase ? [bFase] : [], filas });
   });
 
   // En mode enveloppe, une tâche sans ancre n'est plus rattrapée par sa phase :
@@ -1043,6 +1095,14 @@ export function CronogramaClient() {
     setFicha(null);
     setDraft(null);
   };
+  // Insertion d'une NOUVELLE ligne dans une phase (« + ») : on ouvre la ficha sur
+  // un brouillon neuf ; il n'entre dans le borrador qu'à « Listo » (Cancelar le jette).
+  const insertarLinea = (fase: string, x: number, y: number) => {
+    if (!borrador || !feuilleEd) return;
+    const d = construirDraftNueva(fase, "GP");
+    setDraft(d);
+    setFicha({ key: d.key, label: d.nombre ?? "Nueva tarea", x, y });
+  };
   const aplicarFicha = () => {
     if (draft && feuilleEd) mutar((rm) => aplicarDraft(rm, feuilleEd, draft));
     cerrarFicha();
@@ -1119,68 +1179,95 @@ export function CronogramaClient() {
   const guardar = async () => {
     if (!borrador || !original || !feuilleEd) return;
     const feuille = feuilleEd;
+    const feuilleFixe = feuille;
     const orig = new Map(original.roadmapEstado.map((r) => [r.tareaKey, r]));
-    const ops: Promise<unknown>[] = [];
-    for (const r of borrador.roadmapEstado) {
-      const o = orig.get(r.tareaKey);
-      if (!o) continue; // insertion de ligne : tranche ultérieure (T2)
-      if (
-        r.durValor !== o.durValor ||
-        r.durUnidad !== o.durUnidad ||
-        r.fechaInicio !== o.fechaInicio ||
-        r.fechaFin !== o.fechaFin
-      ) {
-        ops.push(
-          roadmapSetPlan(feuille, r.tareaKey, {
-            durValor: r.durValor,
-            durUnidad: r.durUnidad,
-            fechaInicio: r.fechaInicio,
-            fechaFin: r.fechaFin,
-          }),
-        );
-      }
-    }
-    // Diff des liaisons (identité = desde→hacia). Upsert des nouvelles/modifiées,
-    // suppression de celles disparues du borrador.
-    const cle = (e: SnapshotRoadmapEnlace) => `${e.desde}»${e.hacia}`;
-    const origEn = new Map(original.roadmapEnlace.map((e) => [cle(e), e]));
-    const borrEn = new Map(borrador.roadmapEnlace.map((e) => [cle(e), e]));
-    for (const [k, e] of borrEn) {
-      const o = origEn.get(k);
-      if (
-        !o ||
-        o.punto !== e.punto ||
-        o.extremo !== e.extremo ||
-        o.desfaseValor !== e.desfaseValor ||
-        o.desfaseUnidad !== e.desfaseUnidad
-      ) {
-        ops.push(
-          roadmapAddEnlace(feuille, e.desde, e.hacia, {
-            punto: e.punto,
-            extremo: e.extremo,
-            desfaseValor: e.desfaseValor,
-            desfaseUnidad: e.desfaseUnidad,
-          }),
-        );
-      }
-    }
-    for (const [k, e] of origEn) {
-      if (!borrEn.has(k)) ops.push(roadmapRemoveEnlace(feuille, e.desde, e.hacia));
-    }
-    // Suppressions (T2) : cartes CRÉÉES retirées du borrador → DELETE ; cartes
-    // par DÉFAUT nouvellement masquées → hide (oculta).
-    const borrKeys = new Set(borrador.roadmapEstado.map((r) => r.tareaKey));
-    for (const o of original.roadmapEstado) {
-      if (o.creada && !borrKeys.has(o.tareaKey)) ops.push(roadmapEliminarCarta(feuille, o.tareaKey, true));
-    }
-    for (const r of borrador.roadmapEstado) {
-      if (r.creada || !r.oculta) continue;
-      const o = orig.get(r.tareaKey);
-      if (!o || !o.oculta) ops.push(roadmapEliminarCarta(feuille, r.tareaKey, false));
-    }
-    if (ops.length === 0) return salirEdicion(true);
     setGuardando(true);
     try {
+      // 1) CRÉATIONS d'abord, en séquence : `roadmapCrearCarta` génère la clé
+      //    côté serveur → on la récupère et on remappe (les liaisons de la
+      //    nouvelle ligne référencent encore la clé cliente).
+      const remap = new Map<string, string>();
+      for (const r of borrador.roadmapEstado) {
+        if (r.creada && !orig.has(r.tareaKey)) {
+          const realKey = await roadmapCrearCarta(
+            feuilleFixe,
+            r.componente ?? "GP",
+            r.fila ?? "",
+            r.nombre ?? "",
+            r.orden ?? 500,
+            r.banda ?? 0,
+          );
+          remap.set(r.tareaKey, realKey);
+          if (r.durValor != null || r.fechaInicio || r.fechaFin) {
+            await roadmapSetPlan(feuilleFixe, realKey, {
+              durValor: r.durValor,
+              durUnidad: r.durUnidad,
+              fechaInicio: r.fechaInicio,
+              fechaFin: r.fechaFin,
+            });
+          }
+        }
+      }
+      const mapKey = (k: string) => remap.get(k) ?? k;
+
+      const ops: Promise<unknown>[] = [];
+      // 2) Plan des lignes EXISTANTES modifiées (les nouvelles sont déjà faites).
+      for (const r of borrador.roadmapEstado) {
+        const o = orig.get(r.tareaKey);
+        if (!o) continue;
+        if (
+          r.durValor !== o.durValor ||
+          r.durUnidad !== o.durUnidad ||
+          r.fechaInicio !== o.fechaInicio ||
+          r.fechaFin !== o.fechaFin
+        ) {
+          ops.push(
+            roadmapSetPlan(feuilleFixe, r.tareaKey, {
+              durValor: r.durValor,
+              durUnidad: r.durUnidad,
+              fechaInicio: r.fechaInicio,
+              fechaFin: r.fechaFin,
+            }),
+          );
+        }
+      }
+      // 3) Diff des liaisons (clés remappées pour les nouvelles cartes).
+      const cle = (e: SnapshotRoadmapEnlace) => `${e.desde}»${e.hacia}`;
+      const origEn = new Map(original.roadmapEnlace.map((e) => [cle(e), e]));
+      const borrEn = new Map(borrador.roadmapEnlace.map((e) => [cle(e), e]));
+      for (const [k, e] of borrEn) {
+        const o = origEn.get(k);
+        if (
+          !o ||
+          o.punto !== e.punto ||
+          o.extremo !== e.extremo ||
+          o.desfaseValor !== e.desfaseValor ||
+          o.desfaseUnidad !== e.desfaseUnidad
+        ) {
+          ops.push(
+            roadmapAddEnlace(feuilleFixe, mapKey(e.desde), mapKey(e.hacia), {
+              punto: e.punto,
+              extremo: e.extremo,
+              desfaseValor: e.desfaseValor,
+              desfaseUnidad: e.desfaseUnidad,
+            }),
+          );
+        }
+      }
+      for (const [k, e] of origEn) {
+        if (!borrEn.has(k)) ops.push(roadmapRemoveEnlace(feuilleFixe, e.desde, e.hacia));
+      }
+      // 4) Suppressions : cartes CRÉÉES retirées → DELETE ; par DÉFAUT masquées → hide.
+      const borrKeys = new Set(borrador.roadmapEstado.map((r) => r.tareaKey));
+      for (const o of original.roadmapEstado) {
+        if (o.creada && !borrKeys.has(o.tareaKey))
+          ops.push(roadmapEliminarCarta(feuilleFixe, o.tareaKey, true));
+      }
+      for (const r of borrador.roadmapEstado) {
+        if (r.creada || !r.oculta) continue;
+        const o = orig.get(r.tareaKey);
+        if (!o || !o.oculta) ops.push(roadmapEliminarCarta(feuilleFixe, r.tareaKey, false));
+      }
       await Promise.all(ops);
       setRmKey((k) => k + 1); // recharge le roadmap depuis la base
       salirEdicion(true);
@@ -1614,6 +1701,21 @@ export function CronogramaClient() {
                   >
                     {plegable && <Chevron abierto={!colapsada} />}
                     <span className="truncate">{sec.titulo}</span>
+                    {editando && sec.faseCode && (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          insertarLinea(sec.faseCode!, e.clientX, e.clientY);
+                        }}
+                        className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] transition-colors hover:border-[var(--focus)] hover:text-[var(--focus)]"
+                        title="Añadir una línea a esta fase"
+                        aria-label={`Añadir una línea a ${sec.titulo}`}
+                      >
+                        +
+                      </span>
+                    )}
                   </button>
                   <div
                     className="relative"
@@ -1901,9 +2003,40 @@ function FichaLinea({
         role="dialog"
         aria-label="Editar línea"
       >
-        <p className="truncate text-sm font-semibold text-[var(--text)]" title={label}>
-          {label}
-        </p>
+        {draft.nueva ? (
+          <div className="flex flex-col gap-1.5">
+            <input
+              type="text"
+              value={draft.nombre ?? ""}
+              onChange={(e) => setDraft({ ...draft, nombre: e.target.value })}
+              placeholder="Nombre de la tarea"
+              className={cn(fieldFicha, "w-full font-medium")}
+              autoFocus
+            />
+            <div className="flex gap-1">
+              {(["GP", "EE", "AyS", "G"] as ComponenteCode[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-pressed={draft.comp === c}
+                  onClick={() => setDraft({ ...draft, comp: c })}
+                  style={{
+                    backgroundColor: CARD_TONOS[c].head,
+                    color: CARD_TONOS[c].headText,
+                    borderColor: draft.comp === c ? "var(--text)" : "var(--border)",
+                  }}
+                  className="rounded border px-2.5 py-1 text-[11px] font-semibold"
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <p className="truncate text-sm font-semibold text-[var(--text)]" title={label}>
+            {label}
+          </p>
+        )}
 
         {/* Duración estimada */}
         <div className="flex flex-col gap-1">
