@@ -66,6 +66,7 @@ import {
   roadmapSetPlan,
   roadmapAddEnlace,
   roadmapRemoveEnlace,
+  roadmapEliminarCarta,
 } from "@/app/hojas-de-ruta/actions";
 
 // ============================================================
@@ -972,6 +973,8 @@ export function CronogramaClient() {
   // brouillon de la ligne vit dans `draft` (aperçu live via superposition).
   const [ficha, setFicha] = useState<{ key: string; label: string; x: number; y: number } | null>(null);
   const [draft, setDraft] = useState<DraftLinea | null>(null);
+  // Confirmation de suppression d'une ligne (T2).
+  const [borrar, setBorrar] = useState<{ key: string; label: string; x: number; y: number } | null>(null);
 
   const esSubActual = seleccion !== "global" && seleccion !== FEUILLE_PAG;
   const puedeEditar = esAdmin && esSubActual && rm.status === "ready";
@@ -1045,6 +1048,73 @@ export function CronogramaClient() {
     cerrarFicha();
   };
 
+  // --- Suppression d'une ligne (T2) : recoud la chaîne (les lignes qui pendaient
+  // d'elle se raccrochent à SES références) ; si elle a une date fixe, elles n'ont
+  // rien où se raccrocher → « sin programar » (averti avant). ---
+  const dependientesDe = (rm: Roadmap, key: string): string[] =>
+    Array.from(new Set(rm.roadmapEnlace.filter((e) => e.desde === key).map((e) => e.hacia)));
+  const refsDe = (rm: Roadmap, key: string): string[] =>
+    Array.from(new Set(rm.roadmapEnlace.filter((e) => e.hacia === key).map((e) => e.desde)));
+  const eliminarLinea = (key: string) => {
+    if (!feuilleEd) return;
+    const feuille = feuilleEd;
+    mutar((rm) => {
+      const dependientes = rm.roadmapEnlace.filter((e) => e.desde === key);
+      const reemplazo = refsDe(rm, key);
+      // On enlève toutes les liaisons qui touchent la ligne, puis on recoud.
+      const enlace = rm.roadmapEnlace.filter((e) => e.desde !== key && e.hacia !== key);
+      for (const dep of dependientes) {
+        for (const ref of reemplazo) {
+          if (ref === dep.hacia) continue;
+          if (enlace.some((e) => e.desde === ref && e.hacia === dep.hacia)) continue;
+          enlace.push({
+            feuille,
+            desde: ref,
+            hacia: dep.hacia,
+            punto: dep.punto,
+            desfaseValor: dep.desfaseValor,
+            desfaseUnidad: dep.desfaseUnidad,
+            extremo: dep.extremo,
+          });
+        }
+      }
+      const est = rm.roadmapEstado.find((r) => r.tareaKey === key);
+      let roadmapEstado: SnapshotRoadmapEstado[];
+      if (est?.creada) {
+        // Carte créée → on la retire du borrador (DELETE au Guardar).
+        roadmapEstado = rm.roadmapEstado.filter((r) => r.tareaKey !== key);
+      } else if (est) {
+        roadmapEstado = rm.roadmapEstado.map((r) => (r.tareaKey === key ? { ...r, oculta: true } : r));
+      } else {
+        // Carte par défaut sans ligne d'override : on en crée une, masquée.
+        roadmapEstado = [
+          ...rm.roadmapEstado,
+          {
+            feuille,
+            tareaKey: key,
+            realizada: false,
+            comentario: null,
+            nombre: null,
+            descripcion: null,
+            responsable: null,
+            oculta: true,
+            fila: null,
+            orden: null,
+            banda: null,
+            componente: null,
+            creada: false,
+            fechaInicio: null,
+            fechaFin: null,
+            durValor: null,
+            durUnidad: null,
+          },
+        ];
+      }
+      return { ...rm, roadmapEstado, roadmapEnlace: enlace };
+    });
+    setBorrar(null);
+  };
+
   // Guardar : diff borrador ↔ original → actions existantes, puis recharge la base.
   const guardar = async () => {
     if (!borrador || !original || !feuilleEd) return;
@@ -1096,6 +1166,17 @@ export function CronogramaClient() {
     }
     for (const [k, e] of origEn) {
       if (!borrEn.has(k)) ops.push(roadmapRemoveEnlace(feuille, e.desde, e.hacia));
+    }
+    // Suppressions (T2) : cartes CRÉÉES retirées du borrador → DELETE ; cartes
+    // par DÉFAUT nouvellement masquées → hide (oculta).
+    const borrKeys = new Set(borrador.roadmapEstado.map((r) => r.tareaKey));
+    for (const o of original.roadmapEstado) {
+      if (o.creada && !borrKeys.has(o.tareaKey)) ops.push(roadmapEliminarCarta(feuille, o.tareaKey, true));
+    }
+    for (const r of borrador.roadmapEstado) {
+      if (r.creada || !r.oculta) continue;
+      const o = orig.get(r.tareaKey);
+      if (!o || !o.oculta) ops.push(roadmapEliminarCarta(feuille, r.tareaKey, false));
     }
     if (ops.length === 0) return salirEdicion(true);
     setGuardando(true);
@@ -1164,6 +1245,7 @@ export function CronogramaClient() {
     const b = filasVisibles.find((f) => f.key === ficha.key)?.barras[0];
     return b ? { ini: b.startMs, finSolida: b.solidMs, fin: b.endMs } : null;
   })();
+  const labelDe = (k: string) => filasVisibles.find((f) => f.key === k)?.label ?? k;
 
   const unidades = construirUnidades(gran);
   const totalW = unidades.length * CELL_W;
@@ -1545,7 +1627,7 @@ export function CronogramaClient() {
                     <div
                       key={fi}
                       className={cn(
-                        "flex border-b border-[var(--border)] last:border-b-0",
+                        "group flex border-b border-[var(--border)] last:border-b-0",
                         // Rupture de typologie : bande gris très clair (le gris de
                         // fond de l'app), assez discrète pour ne pas faire titre.
                         fila.separaGrupo && "border-t-4 border-t-[var(--app-bg)]",
@@ -1557,7 +1639,7 @@ export function CronogramaClient() {
                           editando && fila.key && "cursor-pointer hover:bg-[var(--app-bg)]",
                         )}
                         style={{ width: LW, height: ROW_H }}
-                        title={editando && fila.key ? "Editar la duración" : fila.label}
+                        title={editando && fila.key ? "Editar la línea" : fila.label}
                         onPointerDown={editando && fila.key ? (e) => e.stopPropagation() : undefined}
                         onClick={
                           editando && fila.key
@@ -1610,6 +1692,23 @@ export function CronogramaClient() {
                             />
                           </span>
                         )}
+                        {/* Supprimer la ligne (T2) — tâches ordinaires seulement
+                            (les repères/jalons structurent la phase). Au survol. */}
+                        {editando && fila.key && !fila.rol && !fila.check && (
+                          <button
+                            type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setBorrar({ key: fila.key!, label: fila.label, x: e.clientX, y: e.clientY });
+                            }}
+                            className="ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] opacity-0 transition-opacity hover:border-[var(--accent)] hover:text-[var(--accent)] group-hover:opacity-100"
+                            title="Eliminar la línea"
+                            aria-label={`Eliminar — ${fila.label}`}
+                          >
+                            ×
+                          </button>
+                        )}
                       </div>
                       <div className="relative" style={{ width: totalW, height: ROW_H, ...gridStyle }}>
                         <CapaBarras barras={fila.barras} x={x} />
@@ -1635,7 +1734,93 @@ export function CronogramaClient() {
           onCancelar={cerrarFicha}
         />
       )}
+
+      {editando && borrar && borrador && (
+        <ConfirmarEliminar
+          x={borrar.x}
+          y={borrar.y}
+          label={borrar.label}
+          deps={dependientesDe(borrador, borrar.key).map(labelDe)}
+          reemplazo={refsDe(borrador, borrar.key).map(labelDe)}
+          onCancelar={() => setBorrar(null)}
+          onEliminar={() => eliminarLinea(borrar.key)}
+        />
+      )}
     </div>
+  );
+}
+
+// Confirmation de suppression d'une ligne (T2) : annonce la recouture de la
+// chaîne AVANT d'agir — les lignes qui pendaient d'elle se raccrochent à ses
+// références ; si elle n'en a pas (date fixe), elles resteront « sin programar ».
+function ConfirmarEliminar({
+  x,
+  y,
+  label,
+  deps,
+  reemplazo,
+  onCancelar,
+  onEliminar,
+}: {
+  x: number;
+  y: number;
+  label: string;
+  deps: string[];
+  reemplazo: string[];
+  onCancelar: () => void;
+  onEliminar: () => void;
+}) {
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const left = Math.max(8, Math.min(x, vw - 356));
+  const top = Math.max(8, Math.min(y + 8, vh - 260));
+  const sinRecoser = deps.length > 0 && reemplazo.length === 0;
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
+      <div
+        className="fixed z-50 flex w-[340px] max-w-[calc(100vw-16px)] flex-col gap-2.5 rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
+        style={{ left, top }}
+        role="dialog"
+        aria-label="Eliminar línea"
+      >
+        <p className="text-sm font-semibold text-[var(--text)]">Eliminar la línea</p>
+        <p className="truncate font-medium text-[var(--text)]" title={label}>
+          {label}
+        </p>
+        <p
+          className={cn(
+            "rounded-r border-l-2 bg-[var(--app-bg)] px-2.5 py-1.5 text-[12px]",
+            sinRecoser ? "border-l-[var(--accent)] text-[var(--accent)]" : "border-l-[#c9ced7] text-[var(--text-muted)]",
+          )}
+        >
+          {deps.length === 0
+            ? "Ninguna otra línea depende de ella."
+            : sinRecoser
+              ? `${deps.length === 1 ? "1 línea depende" : deps.length + " líneas dependen"} de ella y quedarán SIN PROGRAMAR: lleva fecha fija, no hay de qué recoser la cadena.`
+              : `${deps.length === 1 ? "1 línea pasará" : deps.length + " líneas pasarán"} a colgar de ${reemplazo.join(" y ")}. Sus fechas van a cambiar.`}
+        </p>
+        {deps.length > 0 && (
+          <p className="max-h-[76px] overflow-auto text-[11px] text-[var(--text-muted)]">{deps.join(" · ")}</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancelar}
+            className="rounded-md px-3 py-1 text-sm text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={onEliminar}
+            className="rounded-md border border-[var(--border)] px-3 py-1 text-sm font-medium text-[var(--accent)] transition-colors hover:bg-[#fdecec]"
+          >
+            Eliminar
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
