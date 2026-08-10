@@ -106,6 +106,20 @@ export function SubproyectosMap({
     [puntos],
   );
 
+  // Ordre de rendu = ordre de tracé SVG (le dernier passe AU-DESSUS). On veut les
+  // aéroports au premier plan et les écoles au fond, pour les rendre plus visibles
+  // dans le fouillis de points. Le sélectionné passe toujours tout en haut.
+  const ordenRender: Record<string, number> = { E: 0, H: 1, A: 2 };
+  const puntosOrdenados = useMemo(
+    () =>
+      [...puntos].sort((a, b) => {
+        if (a.uid === selected) return 1;
+        if (b.uid === selected) return -1;
+        return (ordenRender[a.tipologia] ?? 0) - (ordenRender[b.tipologia] ?? 0);
+      }),
+    [puntos, selected],
+  );
+
   // Centre/zoom initiaux : province si cadre fixe, sinon 1er point.
   const center: LatLngTuple = initialBounds ? [-31.3, -60.8] : coords[0] ?? [-31.6, -60.7];
 
@@ -122,7 +136,7 @@ export function SubproyectosMap({
       />
       <FitBounds points={coords} initialBounds={initialBounds} />
       {wheelZoom === "ctrl" && <CtrlWheelZoom />}
-      {puntos.map((s) => {
+      {puntosOrdenados.map((s) => {
         const sel = s.uid === selected;
         // Palette vibrante spécifique aux marqueurs (cf. TIPOLOGIA_COLOR_MAPA).
         const color = getTipologiaColorMapa(s.tipologia) ?? UI.textMuted;
