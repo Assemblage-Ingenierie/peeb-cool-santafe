@@ -2063,14 +2063,15 @@ function ConfirmarEliminar({
   const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
   const left = Math.max(8, Math.min(x, vw - 356));
-  const top = Math.max(8, Math.min(y + 8, vh - 260));
+  const top = Math.max(8, Math.min(y + 8, vh - 200));
+  const maxHeight = vh - top - 8;
   const sinRecoser = deps.length > 0 && reemplazo.length === 0;
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
       <div
-        className="fixed z-50 flex w-[340px] max-w-[calc(100vw-16px)] flex-col gap-2.5 rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
-        style={{ left, top }}
+        className="fixed z-50 flex w-[340px] max-w-[calc(100vw-16px)] flex-col gap-2.5 overflow-y-auto rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
+        style={{ left, top, maxHeight }}
         role="dialog"
         aria-label="Eliminar línea"
       >
@@ -2176,7 +2177,11 @@ function FichaLinea({
   const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
   const vh = typeof window !== "undefined" ? window.innerHeight : 800;
   const left = Math.max(8, Math.min(x, vw - 396));
-  const top = Math.max(8, Math.min(y + 8, vh - 440));
+  // La ficha peut être plus haute que le viewport → on la plafonne à l'écran et
+  // on la rend défilante à l'intérieur, sinon « Listo » (en bas) reste hors champ
+  // (position: fixed → le scroll de page ne la ramène pas).
+  const top = Math.max(8, Math.min(y + 8, vh - 200));
+  const maxHeight = vh - top - 8;
 
   const esDep = draft.ancla.t === "dep";
   const forzando = draft.fin != null;
@@ -2186,8 +2191,8 @@ function FichaLinea({
     <>
       <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
       <div
-        className="fixed z-50 flex w-[380px] max-w-[calc(100vw-16px)] flex-col gap-3 rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
-        style={{ left, top }}
+        className="fixed z-50 flex w-[380px] max-w-[calc(100vw-16px)] flex-col gap-3 overflow-y-auto rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
+        style={{ left, top, maxHeight }}
         role="dialog"
         aria-label="Editar línea"
       >
