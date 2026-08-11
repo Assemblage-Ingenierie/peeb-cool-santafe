@@ -324,7 +324,11 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     l'ordre des lignes est **chronologique** (dérivé des dates), donc il se
     pilote par l'ancrage, pas par la position.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 042**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 043**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 043 : lot Norte — « recolle » l'anteproyecto aux estudios preliminares. On
+  remet `fecha_inicio` de `__ini__anteproyecto` à NULL (les 5 écoles Norte) → la
+  liaison `__ent__EP → __ini__AP` (desfase 0) reprend, l'AP démarre 0 j après
+  l'entrega EP au lieu du 2028-11-01 fixé en 041. Sauvegarde `bak_norte_ap_043`.
 - 042 : correction du phasage écoles — EP lot Centro 2027-07-15 → **2027-05-15**,
   et **ordre chronologique** (plus tôt = plus haut) : Sur (10-15) → Centro
   (16-22) → Norte (23-27). L'ordre de 041 était inversé.
