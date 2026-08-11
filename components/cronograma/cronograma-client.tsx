@@ -12,6 +12,7 @@ import {
   DURACION_UNIDADES,
   esModeloEnvolvente,
   hitoInicioKey,
+  getTipologia,
   type ComponenteCode,
   type HitoRol,
 } from "@/lib/constants";
@@ -211,6 +212,9 @@ export interface Fila {
   // Première ligne d'un nouveau groupe de typologie (Aeropuertos / Hospitales /
   // Escuelas) : une bande gris clair est ménagée au-dessus.
   separaGrupo?: boolean;
+  // Liseré de couleur au bord GAUCHE de la ligne (vue globale : couleur de
+  // typologie du bâtiment). Absent = pas de liseré.
+  bordeIzq?: string;
 }
 export interface Seccion {
   titulo: string;
@@ -975,6 +979,8 @@ export function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma
       return {
         label: s.nombre,
         barras: barrasFases(sched),
+        // Liseré gauche = couleur de typologie du bâtiment (charte).
+        bordeIzq: getTipologia(s.tipologia)?.color,
         // Les sous-projets arrivent triés par `orden`, donc groupés par typologie :
         // il suffit de comparer avec la ligne précédente pour repérer la rupture.
         separaGrupo: i > 0 && subs[i - 1].tipologia !== s.tipologia,
@@ -1792,7 +1798,9 @@ export function CronogramaClient() {
         onPointerUp={finDrag}
         onPointerCancel={finDrag}
         className={cn(
-          "overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]",
+          // Scroll INTERNE (x et y) + hauteur plafonnée → l'en-tête mois/années
+          // reste collé en haut (sticky) quand on descend dans le cronograma.
+          "max-h-[calc(100vh-210px)] overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]",
           arrastrando ? "cursor-grabbing select-none" : "cursor-grab",
         )}
       >
@@ -1807,7 +1815,7 @@ export function CronogramaClient() {
               aria-hidden="true"
             />
           )}
-          <div className="flex border-b border-[var(--border)]">
+          <div className="sticky top-0 z-20 flex border-b border-[var(--border)] bg-[var(--surface)]">
             <div className="sticky left-0 z-10 shrink-0 bg-[var(--surface)]" style={{ width: LW }} />
             <div className="relative" style={{ width: totalW, height: headH }}>
               {anios.map((a) => (
@@ -1927,7 +1935,12 @@ export function CronogramaClient() {
                           "sticky left-0 z-10 flex shrink-0 items-center border-r border-[var(--border)] bg-[var(--surface)] pl-6 pr-3 text-xs font-semibold text-[var(--text)]",
                           editando && fila.key && "cursor-pointer hover:bg-[var(--app-bg)]",
                         )}
-                        style={{ width: LW, height: ROW_H, ...(hl ? { backgroundColor: hl } : {}) }}
+                        style={{
+                          width: LW,
+                          height: ROW_H,
+                          ...(hl ? { backgroundColor: hl } : {}),
+                          ...(fila.bordeIzq ? { borderLeft: `4px solid ${fila.bordeIzq}` } : {}),
+                        }}
                         title={editando && fila.key ? "Editar la línea" : fila.label}
                         onPointerDown={editando && fila.key ? (e) => e.stopPropagation() : undefined}
                         onClick={
