@@ -303,7 +303,27 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
   appartient au proyecto ejecutivo (corrigé en 038). Sur SUB-AIR, chaque
   enveloppe va désormais exactement de son `Inicio` à son terme.
 - **Mode édition interactif du cronograma** (implémenté, derrière le toggle
-  **Editar** — admins, vue sous-projet ; aucun impact sur la vue normale) :
+  **Editar** — admins ; aucun impact sur la vue normale). Ouvert aux **trois
+  familles de feuilles**, la ficha s'adaptant au modèle (`feuilleUsaLiaisons` +
+  prop `conDependencia` de `FichaLinea`) :
+  - **Sous-projets** (modèle enveloppe) : ficha complète, onglet *Dependencia*,
+    insertion `+` ancrée sur le repère `Inicio`, suppression `×` + recouture.
+  - **Vue globale** : la section « Proyecto global » est scindée en
+    **« Gestión de proyecto »** (informes GP/AyS **non éditables** — règle par
+    semestre figée — + lignes libres) et une section **« Capacitaciones »**
+    (les deux capacitaciones, cartes à clé fixe `capacitacion-ee` /
+    `capacitacion-genero`, planifiables). Ficha **sans onglet Dependencia**
+    (fecha fija seule ; `links: []`). Le `+` de « Gestión de proyecto » ajoute
+    une **ligne libre** (jalon hors PAG/hors sous-projets, fila-sentinelle
+    `libre`). Les lignes de composante **Género restent dans la vue globale**
+    (le renvoi « genero → PAG » et le bloc « Fichas Género de la hoja global »
+    ont été retirés — ils étaient vides en base).
+  - **PAG** : édition **dates/durées uniquement** (ficha sans Dependencia,
+    surcharge du plan `pag-<code>` par-dessus le catalogue `lib/pag.ts`). **Pas
+    de `+` ni de `×`** : la liste des acciones vient du catalogue (source unique).
+  - Le **bouton du sélecteur** « Implementación del PAG » est renommé **« PAG »**
+    (`components/subproyecto-select.tsx`) ; le titre de section reste complet.
+    `puedeEditar = esAdmin && rm.ready` (plus de restriction de feuille).
   - **Copie de travail** locale (`borrador`) des lignes de la feuille ; rien
     n'est écrit en base avant **Guardar** (diff → actions `roadmap*` existantes,
     puis rechargement). **Deshacer** (pile d'instantanés) / **Restablecer** =

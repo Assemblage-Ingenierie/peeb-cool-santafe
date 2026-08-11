@@ -16,8 +16,8 @@ const COLOR_SECCION: Record<string, string> = Object.fromEntries(
 // Sélecteurs de sous-projet — deux présentations, une même liste de recherche.
 //
 //   • HojaSelector      : Cronograma et Hojas de ruta. Trois boutons
-//     rectangulaires (Proyecto global / Implementación del PAG / Subproyectos) ;
-//     seul le troisième ouvre la liste déroulante.
+//     rectangulaires (Proyecto global / PAG / Subproyectos) ; seul le troisième
+//     ouvre la liste déroulante.
 //   • SubproyectoSelect : Admin. Un seul bouton qui ouvre la même liste.
 //
 // Motif commun : avec 27 sous-projets aux noms officiels longs, une barre de
@@ -274,7 +274,7 @@ export function HojaSelector({
         aria-pressed={valor === CLAVE_PAG}
         className={cn(base, valor === CLAVE_PAG ? activo : inactivo)}
       >
-        Implementación del PAG
+        PAG
       </button>
 
       <div ref={raiz} className="relative">

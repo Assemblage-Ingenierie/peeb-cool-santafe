@@ -115,6 +115,18 @@ const MES_ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep",
 // Composantes en sections (ordre d'affichage).
 const COMPS: ComponenteCode[] = ["GP", "EE", "AyS", "G"];
 
+// Une feuille pilote-t-elle ses dates par des LIAISONS (roadmap_enlace) ? Vrai
+// pour les sous-projets (modèle enveloppe) ; faux pour « Proyecto global » et
+// « Implementación del PAG » (positionnement par fecha fija, `links: []`). La
+// ficha masque alors l'onglet Dependencia et ancre par défaut en fecha fija.
+const feuilleUsaLiaisons = (feuille: string): boolean =>
+  feuille !== "global" && feuille !== FEUILLE_PAG;
+
+// Fila-sentinelle des lignes LIBRES ajoutées au « Proyecto global » (jalons hors
+// PAG et hors sous-projets). Ce n'est pas un semestre : ces lignes se calent par
+// fecha fija, `planGlobalEfectivo` retombe alors sur la date stockée.
+const FILA_LIBRE = "libre";
+
 const asUnidad = (u: string | null | undefined): Unidad | null =>
   u === "dia" || u === "semana" || u === "mes" ? u : null;
 
@@ -285,8 +297,9 @@ interface DraftLinea {
   fila?: string;
 }
 
-// Construit le brouillon d'une ligne depuis le roadmap de travail.
-function construirDraft(rm: Roadmap, feuille: string, key: string): DraftLinea {
+// Construit le brouillon d'une ligne depuis le roadmap de travail. `sinLiaisons`
+// (global / PAG) : on ignore les liaisons et on ancre toujours en fecha fija.
+function construirDraft(rm: Roadmap, feuille: string, key: string, sinLiaisons = false): DraftLinea {
   const est = rm.roadmapEstado.find((r) => r.feuille === feuille && r.tareaKey === key);
   const entrantes = rm.roadmapEnlace.filter((e) => e.feuille === feuille && e.hacia === key);
   const dur = { v: est?.durValor ?? null, u: est?.durUnidad ?? "dia" };
@@ -294,6 +307,10 @@ function construirDraft(rm: Roadmap, feuille: string, key: string): DraftLinea {
   let ancla: Ancla;
   if (est?.fechaInicio) {
     ancla = { t: "fecha", fecha: est.fechaInicio };
+  } else if (sinLiaisons) {
+    // Pas de liaisons sur cette feuille : la ligne se cale par une date fixe
+    // (vide tant que l'admin n'en a pas choisi une).
+    ancla = { t: "fecha", fecha: "" };
   } else if (entrantes.length > 0) {
     // Cadena partagée par toutes les refs (params du 1er lien — simplification
     // assumée : la ficha édite un décalage commun, cf. maquette).
@@ -313,15 +330,18 @@ function construirDraft(rm: Roadmap, feuille: string, key: string): DraftLinea {
   return { key, dur, ancla, fin };
 }
 
-// Brouillon d'une ligne NOUVELLE (insertion), pas encore dans le borrador.
-// Ancrée par défaut au repère « Inicio » de sa phase → elle apparaît dans la
-// phase tout de suite (l'utilisateur ajuste ensuite).
-function construirDraftNueva(fase: string, comp: ComponenteCode): DraftLinea {
+// Brouillon d'une ligne NOUVELLE (insertion), pas encore dans le borrador. En
+// modèle enveloppe (sous-projet), ancrée par défaut au repère « Inicio » de sa
+// phase → elle apparaît dans la phase tout de suite. Sur une feuille sans
+// liaisons (global), ancrée par une fecha fija (vide → l'admin la choisit).
+function construirDraftNueva(fase: string, comp: ComponenteCode, sinLiaisons = false): DraftLinea {
   const key = `carta-${crypto.randomUUID()}`;
   return {
     key,
     dur: { v: 2, u: "semana" },
-    ancla: { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "inicio", refs: [hitoInicioKey(fase)] },
+    ancla: sinLiaisons
+      ? { t: "fecha", fecha: "" }
+      : { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "inicio", refs: [hitoInicioKey(fase)] },
     fin: null,
     nueva: true,
     nombre: "Nueva tarea",
@@ -338,6 +358,11 @@ function aplicarDraft(rm: Roadmap, feuille: string, draft: DraftLinea): Roadmap 
   const fechaInicio = draft.ancla.t === "fecha" ? draft.ancla.fecha || null : null;
   const fechaFin = draft.fin?.fecha || null;
   const existe = rm.roadmapEstado.some((r) => r.feuille === feuille && r.tareaKey === draft.key);
+  // `nueva` = ligne insérée (« + ») → carte `creada` avec nom/composante/fila.
+  // Sinon (édition d'une carte PAR DÉFAUT sans override préalable, ex. une
+  // capacitación du global), on ne crée PAS une carte : juste une ligne de plan
+  // (`creada:false`), pour ne pas la dupliquer au Guardar.
+  const nueva = draft.nueva === true;
   const roadmapEstadoBase = existe
     ? rm.roadmapEstado.map((r) =>
         r.feuille === feuille && r.tareaKey === draft.key
@@ -351,15 +376,15 @@ function aplicarDraft(rm: Roadmap, feuille: string, draft: DraftLinea): Roadmap 
           tareaKey: draft.key,
           realizada: false,
           comentario: null,
-          nombre: draft.nombre ?? "Nueva tarea",
+          nombre: nueva ? draft.nombre ?? "Nueva tarea" : null,
           descripcion: null,
           responsable: null,
           oculta: false,
-          fila: draft.fila ?? null,
-          orden: 500,
+          fila: nueva ? draft.fila ?? null : null,
+          orden: nueva ? 500 : null,
           banda: 0,
-          componente: draft.comp ?? "GP",
-          creada: true,
+          componente: nueva ? draft.comp ?? "GP" : null,
+          creada: nueva,
           fechaInicio,
           fechaFin,
           durValor,
@@ -686,18 +711,28 @@ export function seccionesSub(
   return out;
 }
 
-// Section « Proyecto global » : les éléments de la feuille de route globale,
-// positionnés par les RÈGLES de temporalité par semestre (lib/semestres ·
-// planTareaGlobal → computeSchedule). MÊME source que les Hojas de ruta : les
-// deux vues ne peuvent pas diverger. Les informes semblables sont regroupés sur
-// UNE ligne commune (GP ; AyS) ; les autres tâches ont chacune leur ligne. Le
-// titre est écrit À CÔTÉ de la barre (comme pour les sous-projets).
-// Les cartes de composante GÉNERO sont mises à part : elles ne restent pas dans
-// le projet global, elles rejoignent la section « Implementación del PAG ».
+// Sections « Gestión de proyecto » + « Capacitaciones » : les éléments de la
+// feuille de route globale, positionnés par les RÈGLES de temporalité par
+// semestre (lib/semestres · planTareaGlobal → computeSchedule). MÊME source que
+// les Hojas de ruta : les deux vues ne peuvent pas diverger. Les informes
+// semblables sont regroupés sur UNE ligne commune (GP ; AyS, NON éditables — la
+// règle par semestre est figée) ; les lignes libres (toutes composantes, y
+// compris Género) ont chacune leur ligne éditable et restent ici. Le titre est
+// écrit À CÔTÉ de la barre (comme pour les sous-projets). Les deux
+// capacitaciones sortent dans leur propre section « Capacitaciones ».
+// Capacitaciones du programme : deux lignes NOMMÉES, planifiables (fecha fija +
+// durée), toujours affichées (barre seulement une fois un plan saisi). Ce ne
+// sont ni des informes (règle par semestre) ni des cartes créées : cartes à clé
+// fixe, éditables depuis le mode Editar de la vue globale.
+const CAPACITACIONES_GLOBAL: { key: string; comp: ComponenteCode; nombre: string }[] = [
+  { key: "capacitacion-ee", comp: "EE", nombre: "Capacitaciones Eficiencia Energética" },
+  { key: "capacitacion-genero", comp: "G", nombre: "Capacitaciones Género" },
+];
+
 function seccionGlobalRoadmap(
   d: DatosCronograma,
   filtros: Set<string>,
-): { global: Seccion; genero: Fila[] } {
+): { global: Seccion; capacitaciones: Seccion } {
   const estado = new Map<string, RoadmapOverride>();
   const stored = new Map<string, PlanStored>();
   for (const r of d.roadmapEstado) {
@@ -747,6 +782,21 @@ function seccionGlobalRoadmap(
       items.push({ key: c.key, comp: c.componente, nombre: c.nombre });
     }
   }
+  // Capacitaciones : entrent dans le planning seulement quand un plan est saisi
+  // (fecha fija ou durée). Sinon la ligne s'affiche sans barre (à planifier).
+  for (const cap of CAPACITACIONES_GLOBAL) {
+    const s = stored.get(cap.key);
+    if (s && (s.fechaInicio || s.durValor != null)) {
+      tasks.push({
+        key: cap.key,
+        fase: FILA_LIBRE,
+        durValor: s.durValor ?? null,
+        durUnidad: asUnidad(s.durUnidad),
+        fechaInicio: s.fechaInicio ?? null,
+        fechaFin: s.fechaFin ?? null,
+      });
+    }
+  }
   const sched = computeSchedule({ tasks, links: [], faseInicio: {}, projectStart: PROJECT_START });
 
   // Barre d'une carte : couleur de composante + titre écrit à côté (dentro=false).
@@ -760,10 +810,10 @@ function seccionGlobalRoadmap(
   // Informes regroupés (GP ; AyS) : une ligne commune, une barre par semestre.
   const infGP: Fila & { _s: number } = { label: "Informe semestral / anual", barras: [], _s: Infinity };
   const infAyS: Fila & { _s: number } = { label: "Informe Semestral AyS", barras: [], _s: Infinity };
+  // Lignes libres (jalons ajoutés à la main), TOUTES composantes confondues, y
+  // compris Género : elles restent dans « Gestión de proyecto » et ne partent
+  // plus vers le PAG. Elles gardent leur clé → éditables.
   const otras: (Fila & { _s: number })[] = [];
-  // Cartes Género créées à la main sur la feuille globale : elles partent dans
-  // la section « Implementación del PAG », pas dans le projet global.
-  const genero: (Fila & { _s: number })[] = [];
   for (const it of items) {
     const b = barraCard(it.key, it.comp, it.nombre);
     if (!b) continue;
@@ -773,33 +823,42 @@ function seccionGlobalRoadmap(
     } else if (it.key.startsWith("informe-ays-")) {
       infAyS.barras.push(b);
       infAyS._s = Math.min(infAyS._s, b.startMs);
-    } else if (it.comp === "G") {
-      genero.push({ label: it.nombre, barras: [b], _s: b.startMs });
     } else {
-      otras.push({ label: it.nombre, barras: [b], _s: b.startMs });
+      otras.push({ label: it.nombre, barras: [b], _s: b.startMs, key: it.key });
     }
   }
   otras.sort((a, b) => a._s - b._s);
-  genero.sort((a, b) => a._s - b._s);
+  // Informes : NON éditables (règle par semestre figée) → pas de clé. Les autres
+  // lignes gardent leur clé.
   const filas: (Fila & { _s: number })[] = [];
   if (infGP.barras.length > 0) filas.push(infGP);
   if (infAyS.barras.length > 0) filas.push(infAyS);
   filas.push(...otras);
 
-  const desnudar = (f: (Fila & { _s: number })[]) => f.map(({ label, barras }) => ({ label, barras }));
+  const desnudar = (f: (Fila & { _s: number })[]) =>
+    f.map(({ label, barras, key }) => ({ label, barras, key }));
+
+  // Capacitaciones : section À PART, toujours affichée, chaque ligne à clé fixe
+  // (éditable) ; barre seulement une fois planifiée. La capacitación Género
+  // reste donc ici, pas dans le PAG.
+  const capFilas: Fila[] = CAPACITACIONES_GLOBAL.map((cap) => {
+    const b = barraCard(cap.key, cap.comp, cap.nombre);
+    return { label: cap.nombre, key: cap.key, barras: b ? [b] : [] };
+  });
 
   return {
     global: {
-      titulo: "Proyecto global",
+      titulo: "Gestión de proyecto",
+      // Fila-sentinelle : le « + » du mode édition ajoute une ligne libre ici.
+      faseCode: FILA_LIBRE,
       barras: [],
-      // Lignes de capacitaciones : libellés en place, planning À DÉFINIR.
-      filas: [
-        ...desnudar(filas),
-        { label: "Capacitaciones Eficiencia Energética", barras: [] },
-        { label: "Capacitaciones Género", barras: [] },
-      ],
+      filas: desnudar(filas),
     },
-    genero: desnudar(genero),
+    capacitaciones: {
+      titulo: "Capacitaciones",
+      barras: [],
+      filas: capFilas,
+    },
   };
 }
 
@@ -908,8 +967,11 @@ export function seccionesPag(d: DatosCronograma): Seccion[] {
     const filas: Fila[] = [];
     for (const a of accionesDeEje(eje.code)) {
       const barra = barraPag(a, sched.get(a.code));
-      // Code + titre : tronqué dans la colonne, complet au survol.
-      filas.push({ label: `${a.code} · ${a.titulo}`, barras: barra ? [barra] : [] });
+      // Code + titre : tronqué dans la colonne, complet au survol. `key` = la
+      // ligne de plan persistée (`pag-<code>`) → éditable (dates/durée) en mode
+      // Editar. Le catalogue reste la source des acciones ; on ne surcharge que
+      // le plan, comme le seed de la migration 035.
+      filas.push({ label: `${a.code} · ${a.titulo}`, key: pagTareaKey(a.code), barras: barra ? [barra] : [] });
       // Le jalon livré par cette acción se range JUSTE EN DESSOUS d'elle.
       for (const h of PAG_HITOS) if (h.accion === a.code) filas.push(filaHito(h));
     }
@@ -920,7 +982,7 @@ export function seccionesPag(d: DatosCronograma): Seccion[] {
 // Section « Implementación del PAG » de la vue globale : une ligne par eje
 // (agrégat de plusieurs responsables → pas de texture, elle n'aurait rien de
 // vrai à dire), plus une frise de hitos.
-function seccionPagGlobal(d: DatosCronograma, generoFeuilleGlobal: Fila[]): Seccion {
+function seccionPagGlobal(d: DatosCronograma): Seccion {
   const sched = computeSchedule({
     tasks: tareasPag(d),
     links: [],
@@ -957,13 +1019,6 @@ function seccionPagGlobal(d: DatosCronograma, generoFeuilleGlobal: Fila[]): Secc
     for (const h of PAG_HITOS.filter((x) => x.eje === eje.code).sort((a, b) => (a.fecha < b.fecha ? -1 : 1))) {
       filas.push(filaHito(h));
     }
-  }
-  // Cartes Género saisies à la main sur la feuille globale, avant le catalogue
-  // PAG. Conservées ici (elles ne sont pas dans lib/pag) et signalées comme
-  // telles — elles font aujourd'hui doublon avec les acciones ci-dessus.
-  if (generoFeuilleGlobal.length > 0) {
-    filas.push({ label: "— Fichas Género de la hoja global —", barras: [] });
-    filas.push(...generoFeuilleGlobal);
   }
   return { titulo: "Implementación del PAG", barras: [], filas };
 }
@@ -1041,7 +1096,8 @@ export function CronogramaClient() {
   const [resaltado, setResaltado] = useState<{ fuentes: Set<string>; hijos: Set<string> } | null>(null);
 
   const esSubActual = seleccion !== "global" && seleccion !== FEUILLE_PAG;
-  const puedeEditar = esAdmin && esSubActual && rm.status === "ready";
+  // Éditable : sous-projets, « Gestión de proyecto » (global) ET le PAG.
+  const puedeEditar = esAdmin && rm.status === "ready";
   const hayCambios =
     borrador != null &&
     original != null &&
@@ -1100,7 +1156,7 @@ export function CronogramaClient() {
   // n'est fondu dans le borrador qu'à « Listo » (aplicarFicha).
   const abrirFicha = (key: string, label: string, x: number, y: number) => {
     if (!borrador || !feuilleEd) return;
-    setDraft(construirDraft(borrador, feuilleEd, key));
+    setDraft(construirDraft(borrador, feuilleEd, key, !feuilleUsaLiaisons(feuilleEd)));
     setFicha({ key, label, x, y });
   };
   const cerrarFicha = () => {
@@ -1111,7 +1167,7 @@ export function CronogramaClient() {
   // un brouillon neuf ; il n'entre dans le borrador qu'à « Listo » (Cancelar le jette).
   const insertarLinea = (fase: string, x: number, y: number) => {
     if (!borrador || !feuilleEd) return;
-    const d = construirDraftNueva(fase, "GP");
+    const d = construirDraftNueva(fase, "GP", !feuilleUsaLiaisons(feuilleEd));
     setDraft(d);
     setFicha({ key: d.key, label: d.nombre ?? "Nueva tarea", x, y });
   };
@@ -1226,7 +1282,22 @@ export function CronogramaClient() {
       // 2) Plan des lignes EXISTANTES modifiées (les nouvelles sont déjà faites).
       for (const r of borrador.roadmapEstado) {
         const o = orig.get(r.tareaKey);
-        if (!o) continue;
+        if (!o) {
+          // Ligne absente de l'original : les cartes CRÉÉES ont déjà été traitées
+          // en (1). Reste le cas d'une carte PAR DÉFAUT planifiée pour la 1re fois
+          // (ex. une capacitación du global) : upsert du plan (crée la ligne).
+          if (!r.creada && (r.durValor != null || r.fechaInicio || r.fechaFin)) {
+            ops.push(
+              roadmapSetPlan(feuilleFixe, r.tareaKey, {
+                durValor: r.durValor,
+                durUnidad: r.durUnidad,
+                fechaInicio: r.fechaInicio,
+                fechaFin: r.fechaFin,
+              }),
+            );
+          }
+          continue;
+        }
         if (
           r.durValor !== o.durValor ||
           r.durUnidad !== o.durUnidad ||
@@ -1319,8 +1390,8 @@ export function CronogramaClient() {
         : rm.data;
     const datos: DatosCronograma = { ...snap.data, ...rmEff };
     if (seleccion === "global") {
-      const { global, genero } = seccionGlobalRoadmap(datos, filtros);
-      return [global, seccionPagGlobal(datos, genero), seccionGlobal(datos.subproyectos, datos)];
+      const { global, capacitaciones } = seccionGlobalRoadmap(datos, filtros);
+      return [global, capacitaciones, seccionPagGlobal(datos), seccionGlobal(datos.subproyectos, datos)];
     }
     if (seleccion === FEUILLE_PAG) return seccionesPag(datos);
     const sub = datos.subproyectos.find((s) => s.uid === seleccion);
@@ -1995,8 +2066,10 @@ export function CronogramaClient() {
                           </span>
                         )}
                         {/* Supprimer la ligne (T2) — tâches ordinaires seulement
-                            (les repères/jalons structurent la phase). Au survol. */}
-                        {editando && fila.key && !fila.rol && !fila.check && (
+                            (les repères/jalons structurent la phase). Au survol.
+                            Jamais sur le PAG : ses acciones viennent du catalogue
+                            (lib/pag), on n'y édite que le plan, pas la liste. */}
+                        {editando && !esPag && fila.key && !fila.rol && !fila.check && (
                           <button
                             type="button"
                             onPointerDown={(e) => e.stopPropagation()}
@@ -2033,6 +2106,7 @@ export function CronogramaClient() {
           setDraft={setDraft}
           refOpciones={refOpciones}
           preview={previewLinea}
+          conDependencia={feuilleUsaLiaisons(feuilleEd ?? "")}
           onListo={aplicarFicha}
           onCancelar={cerrarFicha}
         />
@@ -2194,6 +2268,7 @@ function FichaLinea({
   setDraft,
   refOpciones,
   preview,
+  conDependencia,
   onListo,
   onCancelar,
 }: {
@@ -2204,6 +2279,9 @@ function FichaLinea({
   setDraft: (d: DraftLinea) => void;
   refOpciones: { value: string; label: string }[];
   preview: { ini: number; finSolida: number; fin: number } | null;
+  // Feuille avec liaisons (sous-projet) : montre l'onglet « Dependencia ».
+  // Global / PAG : uniquement « Fecha fija » (les liaisons y sont ignorées).
+  conDependencia: boolean;
   onListo: () => void;
   onCancelar: () => void;
 }) {
@@ -2284,29 +2362,32 @@ function FichaLinea({
           </div>
         </div>
 
-        {/* Cuándo empieza : fecha fija ou dependencia */}
+        {/* Cuándo empieza : fecha fija ou dependencia (onglets seulement si la
+            feuille utilise des liaisons — sinon fecha fija uniquement). */}
         <div className="flex flex-col gap-1.5">
           <Rotulo>Cuándo empieza</Rotulo>
-          <Pestanas
-            opciones={[
-              ["fecha", "Fecha fija"],
-              ["dep", "Dependencia"],
-            ]}
-            valor={esDep ? "dep" : "fecha"}
-            onChange={(v) => {
-              if (v === "fecha") {
-                setDraft({
-                  ...draft,
-                  ancla: { t: "fecha", fecha: preview ? isoDeMs(preview.ini) : isoDeMs(Date.now()) },
-                });
-              } else {
-                setDraft({
-                  ...draft,
-                  ancla: { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "fin", refs: [] },
-                });
-              }
-            }}
-          />
+          {conDependencia && (
+            <Pestanas
+              opciones={[
+                ["fecha", "Fecha fija"],
+                ["dep", "Dependencia"],
+              ]}
+              valor={esDep ? "dep" : "fecha"}
+              onChange={(v) => {
+                if (v === "fecha") {
+                  setDraft({
+                    ...draft,
+                    ancla: { t: "fecha", fecha: preview ? isoDeMs(preview.ini) : isoDeMs(Date.now()) },
+                  });
+                } else {
+                  setDraft({
+                    ...draft,
+                    ancla: { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "fin", refs: [] },
+                  });
+                }
+              }}
+            />
+          )}
           {draft.ancla.t === "fecha" ? (
             <input
               type="date"
