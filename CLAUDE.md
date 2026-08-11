@@ -324,7 +324,13 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     l'ordre des lignes est **chronologique** (dérivé des dates), donc il se
     pilote par l'ancrage, pas par la position.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 040**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 041**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 041 : phasage des **18 écoles du périmètre par lot** (Norte / Centro / Sur).
+  Fixe par lot les repères `__ini__estudios_preliminares` ET `__ini__anteproyecto`
+  (ce dernier était dérivé → désormais fixé, la liaison EP→AP devient inerte),
+  et réordonne les 18 écoles groupées par lot (Norte 10-14, Centro 15-21, Sur
+  22-27). Sauvegardes `bak_lotes_041_*`. Dates : Norte EP 2027-07-01/AP
+  2028-11-01 · Centro 2027-07-15/2028-07-01 · Sur 2027-04-01/2028-02-01.
 - 040 : retrait de la tarea Género `genero-ep-formacion` (« Formación… perspectiva
   de género ») de tous les sous-projets — nettoyage des lignes DB (28 estado, 27
   liaisons entrantes, 0 sortante). Sauvegardes dans `peebcoolsf_private`. La carte
