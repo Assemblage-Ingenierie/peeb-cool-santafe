@@ -324,7 +324,11 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     l'ordre des lignes est **chronologique** (dérivé des dates), donc il se
     pilote par l'ancrage, pas par la position.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 043**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 044**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 044 : corrige la cible de 043 — le « recollage » AP↔EP visait les **5 écoles
+  d'origine** (SUB-E67/E407/E574/E1109/E331), pas le lot Norte. Annule 043 (Norte
+  reprend son AP fixe 2028-11-01) et met le décalage EP→AP des 5 écoles d'origine
+  de 12 j à **0 j** (leur AP était déjà dérivé). Sauvegarde `bak_e_ap_link_044`.
 - 043 : lot Norte — « recolle » l'anteproyecto aux estudios preliminares. On
   remet `fecha_inicio` de `__ini__anteproyecto` à NULL (les 5 écoles Norte) → la
   liaison `__ent__EP → __ini__AP` (desfase 0) reprend, l'AP démarre 0 j après
