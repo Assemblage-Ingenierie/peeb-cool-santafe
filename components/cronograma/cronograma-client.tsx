@@ -51,6 +51,8 @@ import {
   type PagAccion,
   type PagHito,
 } from "@/lib/pag";
+import { renderCronogramaSVG, type LeyendaItem } from "@/lib/cronograma/cronograma-svg";
+import { descargarSVG, descargarPNG, descargarPDF } from "@/lib/cronograma/export-download";
 import { useSnapshot } from "@/components/dashboard/use-snapshot";
 import { useRoadmap } from "@/components/dashboard/use-roadmap";
 import { HojaSelector, type SubOpcion } from "@/components/subproyecto-select";
@@ -888,7 +890,7 @@ function filaHito(h: PagHito): Fila {
 }
 
 // Vue détaillée : une section par cadena de dépendances, plus les hitos.
-function seccionesPag(d: DatosCronograma): Seccion[] {
+export function seccionesPag(d: DatosCronograma): Seccion[] {
   const sched = computeSchedule({
     tasks: tareasPag(d),
     links: [],
@@ -964,7 +966,7 @@ function seccionPagGlobal(d: DatosCronograma, generoFeuilleGlobal: Fila[]): Secc
 
 // Vue globale : une ligne par sous-projet, montrant l'ENCHAÎNEMENT des fases
 // (chaque fase = un segment coloré avec sa date de démarrage et sa durée).
-function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Seccion {
+export function seccionGlobal(subs: Snapshot["subproyectos"], d: DatosCronograma): Seccion {
   return {
     titulo: "Subproyectos — enlace de fases",
     barras: [],
@@ -1484,6 +1486,62 @@ export function CronogramaClient() {
   const alternarTodas = () =>
     setColapsadas(todasColapsadas ? new Set() : new Set(secciones.map((s) => s.titulo)));
 
+  // --- Export (SVG / PNG / PDF) : rejoue le modèle `secciones` courant dans un
+  // dessin déroulé et recadré (lib/cronograma/cronograma-svg), dérivé côté client.
+  const [menuExport, setMenuExport] = useState(false);
+  // Plage de dates de l'export (mois + année), début → fin. Défaut : autour de
+  // « hoy » (−3 mois → +18 mois), ajustable. Format téléchargé : PDF par défaut.
+  const [expDesde, setExpDesde] = useState({ y: ANIO_INI, m: 0 });
+  const [expHasta, setExpHasta] = useState({ y: ANIO_INI, m: 0 });
+  const [expFmt, setExpFmt] = useState<"svg" | "png" | "pdf">("pdf");
+  function abrirExport() {
+    const d = new Date(hoyMs ?? Date.now());
+    const desde = new Date(d.getFullYear(), d.getMonth() - 3, 1);
+    const hasta = new Date(d.getFullYear(), d.getMonth() + 18, 1);
+    const clampY = (y: number) => Math.min(ANIO_FIN, Math.max(ANIO_INI, y));
+    setExpDesde({ y: clampY(desde.getFullYear()), m: desde.getMonth() });
+    setExpHasta({ y: clampY(hasta.getFullYear()), m: hasta.getMonth() });
+    setMenuExport(true);
+  }
+  const leyendaExport: LeyendaItem[] = esPag
+    ? PAG_RESPONSABLES.map((r) => ({
+        color: PAG_RELLENO[r].color,
+        borde: PAG_RELLENO[r].borde,
+        label: PAG_RESP_NOMBRE[r],
+      }))
+    : LEYENDA_FASES.map((code) => ({
+        color: colorDeFase(code),
+        label: GESTION_FASES.find((f) => f.code === code)?.nombre ?? code,
+      }));
+  function exportar() {
+    const fmt = expFmt;
+    setMenuExport(false);
+    // Proyecto global → « juste les sous-projets » : la section des sous-projets
+    // seule, avec une colonne de noms à gauche (le reste de la vue globale
+    // — roadmap global, PAG — n'est pas exporté).
+    const esGlobal = seleccion === "global";
+    const seccExport = esGlobal
+      ? secciones.filter((s) => s.titulo.startsWith("Subproyectos"))
+      : secciones;
+    const svg = renderCronogramaSVG({
+      secciones: seccExport,
+      titulo: activa,
+      subtitulo: "Cronograma",
+      leyenda: leyendaExport,
+      hoyMs,
+      compacta: esSub && todasColapsadas,
+      // Plage choisie (mois inclus des deux côtés).
+      cropStartMs: new Date(expDesde.y, expDesde.m, 1).getTime(),
+      cropEndMs: new Date(expHasta.y, expHasta.m + 1, 1).getTime(),
+      // Global : colonne de noms des sous-projets.
+      columnaIzq: esGlobal ? 240 : undefined,
+    });
+    const base = `Cronograma - ${activa}`;
+    if (fmt === "svg") descargarSVG(svg, `${base}.svg`);
+    else if (fmt === "png") descargarPNG(svg, `${base}.png`);
+    else descargarPDF(svg, `${base}.pdf`);
+  }
+
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -1600,6 +1658,85 @@ export function CronogramaClient() {
             >
               Editar
             </button>
+          )}
+          {!editando && secciones.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => (menuExport ? setMenuExport(false) : abrirExport())}
+                aria-expanded={menuExport}
+                aria-haspopup="dialog"
+                className="rounded-md border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm font-medium text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+              >
+                Exportar ▾
+              </button>
+              {menuExport && (
+                <>
+                  {/* Voile pour refermer au clic extérieur. */}
+                  <div className="fixed inset-0 z-20" onClick={() => setMenuExport(false)} aria-hidden="true" />
+                  <div
+                    role="dialog"
+                    aria-label="Exportar cronograma"
+                    className="absolute right-0 z-30 mt-1 w-64 rounded-md border border-[var(--border)] bg-[var(--surface)] p-3 shadow-lg"
+                  >
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      Rango de fechas
+                    </p>
+                    {(
+                      [
+                        ["Desde", expDesde, setExpDesde],
+                        ["Hasta", expHasta, setExpHasta],
+                      ] as const
+                    ).map(([label, val, set]) => (
+                      <div key={label} className="mb-2 flex items-center gap-2">
+                        <span className="w-12 text-xs text-[var(--text-muted)]">{label}</span>
+                        <select
+                          value={val.m}
+                          onChange={(e) => set({ ...val, m: Number(e.target.value) })}
+                          className="flex-1 rounded border border-[var(--border)] bg-[var(--app-bg)] px-1.5 py-1 text-sm text-[var(--text)]"
+                        >
+                          {MES_ABBR.map((mm, i) => (
+                            <option key={mm} value={i}>
+                              {mm}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={val.y}
+                          onChange={(e) => set({ ...val, y: Number(e.target.value) })}
+                          className="rounded border border-[var(--border)] bg-[var(--app-bg)] px-1.5 py-1 text-sm text-[var(--text)]"
+                        >
+                          {Array.from({ length: ANIO_FIN - ANIO_INI + 1 }, (_, i) => ANIO_INI + i).map((yy) => (
+                            <option key={yy} value={yy}>
+                              {yy}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                    <div className="mt-3 flex items-center gap-2">
+                      <select
+                        value={expFmt}
+                        onChange={(e) => setExpFmt(e.target.value as "svg" | "png" | "pdf")}
+                        aria-label="Formato"
+                        className="rounded border border-[var(--border)] bg-[var(--app-bg)] px-2 py-1.5 text-sm text-[var(--text)]"
+                      >
+                        <option value="pdf">PDF</option>
+                        <option value="png">PNG</option>
+                        <option value="svg">SVG</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => exportar()}
+                        className="flex-1 rounded-md border border-[var(--text)] bg-[var(--text)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+                      >
+                        Descargar
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
