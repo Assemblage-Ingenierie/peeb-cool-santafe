@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import {
   CARD_TONOS,
@@ -2060,16 +2060,13 @@ function ConfirmarEliminar({
   onCancelar: () => void;
   onEliminar: () => void;
 }) {
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const left = Math.max(8, Math.min(x, vw - 356));
-  const top = Math.max(8, Math.min(y + 8, vh - 200));
-  const maxHeight = vh - top - 8;
+  const { ref, left, top, maxHeight } = usePosicionPopover(x, y, 340);
   const sinRecoser = deps.length > 0 && reemplazo.length === 0;
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
       <div
+        ref={ref}
         className="fixed z-50 flex w-[340px] max-w-[calc(100vw-16px)] flex-col gap-2.5 overflow-y-auto rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
         style={{ left, top, maxHeight }}
         role="dialog"
@@ -2149,6 +2146,29 @@ function SelFicha({
   );
 }
 
+// Place un popover ancré près d'un clic (x, y) mais TOUJOURS entièrement dans le
+// viewport : après le rendu, on mesure sa hauteur réelle (`scrollHeight`) et on
+// remonte le popover si son bas déborderait l'écran ; s'il est plus haut que le
+// viewport, on le plafonne + rend défilant. Corrige le cas « fenêtre fixe hors
+// écran » (le scroll de page ne bouge pas un élément `position: fixed`).
+function usePosicionPopover(x: number, y: number, ancho: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
+  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+  const left = Math.max(8, Math.min(x, vw - ancho - 8));
+  const [top, setTop] = useState(() => Math.max(8, Math.min(y + 8, vh - 220)));
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const h = Math.min(el.scrollHeight, vh - 16);
+    let t = y + 8;
+    if (t + h > vh - 8) t = Math.max(8, vh - 8 - h);
+    setTop(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- placement une fois, au montage
+  }, []);
+  return { ref, left, top, maxHeight: vh - top - 8 };
+}
+
 // Ficha d'édition d'une ligne — T1 : durée + « cuándo empieza » (fecha fija ou
 // dependencia à plusieurs refs) + « cuándo termina » (durée estimée ou fecha
 // forcée). Brouillon CONTRÔLÉ par le parent (`draft`) → aperçu live ; rien n'est
@@ -2174,14 +2194,7 @@ function FichaLinea({
   onListo: () => void;
   onCancelar: () => void;
 }) {
-  const vw = typeof window !== "undefined" ? window.innerWidth : 1280;
-  const vh = typeof window !== "undefined" ? window.innerHeight : 800;
-  const left = Math.max(8, Math.min(x, vw - 396));
-  // La ficha peut être plus haute que le viewport → on la plafonne à l'écran et
-  // on la rend défilante à l'intérieur, sinon « Listo » (en bas) reste hors champ
-  // (position: fixed → le scroll de page ne la ramène pas).
-  const top = Math.max(8, Math.min(y + 8, vh - 200));
-  const maxHeight = vh - top - 8;
+  const { ref, left, top, maxHeight } = usePosicionPopover(x, y, 380);
 
   const esDep = draft.ancla.t === "dep";
   const forzando = draft.fin != null;
@@ -2191,6 +2204,7 @@ function FichaLinea({
     <>
       <div className="fixed inset-0 z-40" onClick={onCancelar} aria-hidden="true" />
       <div
+        ref={ref}
         className="fixed z-50 flex w-[380px] max-w-[calc(100vw-16px)] flex-col gap-3 overflow-y-auto rounded-lg border border-[#cfd3da] bg-[var(--surface)] p-3.5 text-[13px] shadow-xl"
         style={{ left, top, maxHeight }}
         role="dialog"
