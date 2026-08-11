@@ -66,7 +66,9 @@ export async function descargarPNG(svg: string, filename: string, escala = 2): P
 async function deflate(bytes: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate");
   const writer = cs.writable.getWriter();
-  writer.write(bytes);
+  // Cast : selon la version de lib.dom, `write` attend un BufferSource dont le
+  // buffer est un ArrayBuffer (pas ArrayBufferLike) — l'Uint8Array convient.
+  writer.write(bytes as unknown as BufferSource);
   writer.close();
   const buf = await new Response(cs.readable).arrayBuffer();
   return new Uint8Array(buf);
