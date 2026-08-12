@@ -2249,6 +2249,75 @@ const DIA_MS = 86_400_000;
 const fieldFicha =
   "rounded border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[13px] text-[var(--text)] outline-none focus:border-[var(--focus)]";
 
+// ISO (yyyy-mm-dd) → « jj/mm/aaaa » ; "" si vide/invalide.
+function isoADdmmaaaa(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+}
+// « jj/mm/aaaa » → ISO (yyyy-mm-dd) ; null tant que la date n'est pas complète
+// et valide (rejette 31/02 via un aller-retour Date).
+function ddmmaaaaAIso(txt: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(txt.trim());
+  if (!m) return null;
+  const d = Number(m[1]);
+  const mo = Number(m[2]);
+  const y = Number(m[3]);
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+// Champ date au format jj/mm/aaaa — le natif <input type="date"> s'affiche
+// selon la langue du navigateur (mm/dd/yyyy en en-US) et ne se force pas. On
+// saisit donc en texte masqué (les « / » s'insèrent tout seuls) et on convertit
+// en ISO en interne. `iso` = "yyyy-mm-dd" | "" ; `onChangeIso` reçoit l'ISO
+// (ou "" si vidé), seulement quand la date est complète et valide.
+function FechaInput({
+  iso,
+  onChangeIso,
+  className,
+}: {
+  iso: string;
+  onChangeIso: (iso: string) => void;
+  className?: string;
+}) {
+  const [txt, setTxt] = useState(() => isoADdmmaaaa(iso));
+  const ultimoIso = useRef(iso);
+  useEffect(() => {
+    if (iso !== ultimoIso.current) {
+      ultimoIso.current = iso;
+      setTxt(isoADdmmaaaa(iso));
+    }
+  }, [iso]);
+  const cambiar = (raw: string) => {
+    const num = raw.replace(/\D/g, "").slice(0, 8);
+    let v = num;
+    if (num.length > 4) v = `${num.slice(0, 2)}/${num.slice(2, 4)}/${num.slice(4)}`;
+    else if (num.length > 2) v = `${num.slice(0, 2)}/${num.slice(2)}`;
+    setTxt(v);
+    if (num.length === 0) {
+      ultimoIso.current = "";
+      onChangeIso("");
+      return;
+    }
+    const parsed = ddmmaaaaAIso(v);
+    if (parsed !== null) {
+      ultimoIso.current = parsed;
+      onChangeIso(parsed);
+    }
+  };
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="jj/mm/aaaa"
+      value={txt}
+      onChange={(e) => cambiar(e.target.value)}
+      className={className}
+    />
+  );
+}
+
 // Petit select contrôlé (paires "valeur|libellé").
 function SelFicha({
   valor,
@@ -2436,10 +2505,9 @@ function FichaLinea({
             />
           )}
           {draft.ancla.t === "fecha" ? (
-            <input
-              type="date"
-              value={draft.ancla.fecha ? draft.ancla.fecha.slice(0, 10) : ""}
-              onChange={(e) => setDraft({ ...draft, ancla: { t: "fecha", fecha: e.target.value } })}
+            <FechaInput
+              iso={draft.ancla.fecha ? draft.ancla.fecha.slice(0, 10) : ""}
+              onChangeIso={(iso) => setDraft({ ...draft, ancla: { t: "fecha", fecha: iso } })}
               className={fieldFicha}
             />
           ) : (
@@ -2561,18 +2629,21 @@ function FichaLinea({
             </p>
           ) : (
             <>
-              <input
-                type="date"
-                value={draft.fin?.fecha ? draft.fin.fecha.slice(0, 10) : ""}
-                onChange={(e) => {
-                  const nueva = isoMs(e.target.value);
+              <FechaInput
+                iso={draft.fin?.fecha ? draft.fin.fecha.slice(0, 10) : ""}
+                onChangeIso={(iso) => {
+                  if (!iso) {
+                    setDraft({ ...draft, fin: { fecha: "" } });
+                    return;
+                  }
+                  const nueva = isoMs(iso);
                   if (!preview || nueva == null) {
-                    setDraft({ ...draft, fin: { fecha: e.target.value } });
+                    setDraft({ ...draft, fin: { fecha: iso } });
                     return;
                   }
                   if (nueva > preview.finSolida) {
                     // Plus tard que l'estimé → excédent hachuré, durée intacte.
-                    setDraft({ ...draft, fin: { fecha: e.target.value } });
+                    setDraft({ ...draft, fin: { fecha: iso } });
                   } else {
                     // Plus tôt → on RÉÉCRIT la durée (semaines si ça tombe juste) et on efface le forçage.
                     const dias = Math.max(0, Math.round((nueva - preview.ini) / DIA_MS));
