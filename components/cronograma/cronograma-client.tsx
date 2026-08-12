@@ -251,6 +251,13 @@ function barraDe(
   return { startMs: s, solidMs: so, endMs: e, color, etiqueta, dentro, etiquetaColor };
 }
 
+// Une barre de longueur NULLE (aucune durée) est un HITO : elle se rend en
+// losange (point daté), jamais en barre de 2 px. Le mode édition bascule une
+// ligne en hito en effaçant sa durée (case « Hito » de la ficha).
+function esBarraHito(b: Barra): boolean {
+  return b.solidMs <= b.startMs && b.endMs <= b.startMs;
+}
+
 // --- Mode édition : copie de travail d'UNE feuille -------------------------
 // Le borrador ne contient QUE les lignes de la feuille éditée (deep clone) —
 // `armar` filtre déjà par feuille. `overlayFeuille` réinjecte le borrador
@@ -685,7 +692,9 @@ export function seccionesSub(
         // GP en gris moyen (GP_BARRA) plutôt que le noir des cartes.
         const color = comp === "GP" ? GP_BARRA : CARD_TONOS[comp].head;
         const txtColor = comp === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[comp].headText;
-        const b = barraDe(sched.get(c.key), color, c.nombre, false, txtColor);
+        let b = barraDe(sched.get(c.key), color, c.nombre, false, txtColor);
+        // Sans durée = hito → losange (point daté) au lieu d'une barre de 2 px.
+        if (b && esBarraHito(b)) b = { ...b, rombo: true };
         pendientes.push({
           label: c.nombre,
           key: c.key,
@@ -815,11 +824,16 @@ function seccionGlobalRoadmap(
   const sched = computeSchedule({ tasks, links: [], faseInicio: {}, projectStart: PROJECT_START });
 
   // Barre d'une carte : couleur de composante + titre écrit à côté (dentro=false).
+  // Ligne SANS durée = hito → losange (point daté), pas de barre.
   const barraCard = (key: string, comp: ComponenteCode, nombre: string): Barra | null => {
     const color = comp === "GP" ? GP_BARRA : CARD_TONOS[comp]?.head ?? "#888888";
     const txt = comp === "GP" ? textoSobre(GP_BARRA) : CARD_TONOS[comp]?.headText ?? "#ffffff";
     const b = barraDe(sched.get(key), color, nombre, false, txt);
-    return b ? { ...b, tooltip: `${nombre} · ${fmtFecha(b.startMs)} → ${fmtFecha(b.endMs)}` } : null;
+    if (!b) return null;
+    if (esBarraHito(b)) {
+      return { ...b, rombo: true, tooltip: `${nombre} · ${fmtFecha(b.startMs)}` };
+    }
+    return { ...b, tooltip: `${nombre} · ${fmtFecha(b.startMs)} → ${fmtFecha(b.endMs)}` };
   };
 
   // Informes regroupés (GP ; AyS) : une ligne commune, une barre par semestre.
@@ -856,10 +870,15 @@ function seccionGlobalRoadmap(
   // Capacitaciones : section À PART. Cartes créées de la fila 'cap' — nom
   // éditable, ajout (« + ») et suppression. Toujours affichées ; barre seulement
   // une fois planifiée. La capacitación Género reste ici, pas dans le PAG.
-  const capFilas: Fila[] = capCards.map((cap) => {
-    const b = barraCard(cap.key, cap.comp, cap.nombre);
-    return { label: cap.nombre, key: cap.key, barras: b ? [b] : [] };
-  });
+  // Ordre CHRONOLOGIQUE (comme le reste du cronograma) : les planifiées par date,
+  // les non planifiées à la fin.
+  const capFilas: Fila[] = capCards
+    .map((cap) => {
+      const b = barraCard(cap.key, cap.comp, cap.nombre);
+      return { fila: { label: cap.nombre, key: cap.key, barras: b ? [b] : [] }, _s: b ? b.startMs : Infinity };
+    })
+    .sort((a, b) => a._s - b._s)
+    .map((x) => x.fila);
 
   return {
     global: {
@@ -898,9 +917,13 @@ function tareasPag(d: DatosCronograma): ScheduleTask[] {
   }
   return PAG_ACCIONES.map((a) => {
     const st = stored.get(pagTareaKey(a.code));
-    const u = asUnidad(st?.durUnidad);
-    // Durée surchargée seulement si valeur ET unité sont présentes.
-    const dur = st?.durValor != null && u != null ? { v: st.durValor, u } : { v: a.durValor, u: a.durUnidad };
+    // Le plan stocké (seed migration 035 OU édition) prime sur le catalogue, y
+    // compris une durée EFFACÉE : quand la ligne existe, sa `durValor` fait foi —
+    // `null` = hito (point daté, sans durée). Le catalogue ne sert que de repli
+    // pour une acción sans ligne (cas théorique : le seed en crée pour les 33).
+    const dur = st
+      ? { v: st.durValor, u: asUnidad(st.durUnidad) ?? a.durUnidad }
+      : { v: a.durValor, u: a.durUnidad };
     return {
       key: a.code,
       fase: "",
@@ -923,6 +946,16 @@ function barraPag(a: PagAccion, sr: ScheduleResult | undefined): Barra | null {
   const rel = PAG_RELLENO[a.responsable];
   const b = barraDe(sr, rel.color, a.titulo, false);
   if (!b) return null;
+  // Hito (durée effacée) : losange daté, sans durée ni texture. Couleur = le
+  // contour pour AT (fond blanc → losange invisible sinon), sinon le remplissage.
+  if (esBarraHito(b)) {
+    return {
+      ...b,
+      color: rel.borde ?? rel.color,
+      rombo: true,
+      tooltip: `${a.code} · ${a.titulo} — ${PAG_RESP_NOMBRE[a.responsable]} · ${fmtFecha(b.startMs)}`,
+    };
+  }
   // Les acciones sans terme le disent en toutes lettres (« 4 sem, luego
   // continuo ») : les hachures seules ne se comprenaient pas.
   const dur = `${a.durValor} ${UNIDAD_CORTA[a.durUnidad] ?? a.durUnidad}${
@@ -2267,11 +2300,12 @@ function ddmmaaaaAIso(txt: string): string | null {
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 
-// Champ date au format jj/mm/aaaa — le natif <input type="date"> s'affiche
-// selon la langue du navigateur (mm/dd/yyyy en en-US) et ne se force pas. On
-// saisit donc en texte masqué (les « / » s'insèrent tout seuls) et on convertit
-// en ISO en interne. `iso` = "yyyy-mm-dd" | "" ; `onChangeIso` reçoit l'ISO
-// (ou "" si vidé), seulement quand la date est complète et valide.
+// Champ date au format jj/mm/aaaa AVEC calendrier. Le natif <input type="date">
+// s'affiche selon la langue du navigateur (mm/dd/yyyy en en-US) et ne se force
+// pas → on saisit en texte masqué (les « / » s'insèrent seuls) pour tenir le
+// format, ET on conserve le calendrier via un <input type="date"> caché déclenché
+// par une icône (`showPicker`). `iso` = "yyyy-mm-dd" | "" ; `onChangeIso` reçoit
+// l'ISO (ou "" si vidé), seulement quand la date est complète et valide.
 function FechaInput({
   iso,
   onChangeIso,
@@ -2283,12 +2317,17 @@ function FechaInput({
 }) {
   const [txt, setTxt] = useState(() => isoADdmmaaaa(iso));
   const ultimoIso = useRef(iso);
+  const nativo = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (iso !== ultimoIso.current) {
       ultimoIso.current = iso;
       setTxt(isoADdmmaaaa(iso));
     }
   }, [iso]);
+  const aplicar = (parsed: string) => {
+    ultimoIso.current = parsed;
+    onChangeIso(parsed);
+  };
   const cambiar = (raw: string) => {
     const num = raw.replace(/\D/g, "").slice(0, 8);
     let v = num;
@@ -2296,25 +2335,61 @@ function FechaInput({
     else if (num.length > 2) v = `${num.slice(0, 2)}/${num.slice(2)}`;
     setTxt(v);
     if (num.length === 0) {
-      ultimoIso.current = "";
-      onChangeIso("");
+      aplicar("");
       return;
     }
     const parsed = ddmmaaaaAIso(v);
-    if (parsed !== null) {
-      ultimoIso.current = parsed;
-      onChangeIso(parsed);
+    if (parsed !== null) aplicar(parsed);
+  };
+  const abrirCalendario = () => {
+    const el = nativo.current;
+    if (!el) return;
+    el.value = ultimoIso.current || "";
+    try {
+      el.showPicker();
+    } catch {
+      el.focus();
+      el.click();
     }
   };
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      placeholder="jj/mm/aaaa"
-      value={txt}
-      onChange={(e) => cambiar(e.target.value)}
-      className={className}
-    />
+    <div className="relative flex gap-1">
+      <input
+        type="text"
+        inputMode="numeric"
+        placeholder="jj/mm/aaaa"
+        value={txt}
+        onChange={(e) => cambiar(e.target.value)}
+        className={cn(className, "flex-1")}
+      />
+      <button
+        type="button"
+        onClick={abrirCalendario}
+        aria-label="Abrir calendario"
+        title="Abrir calendario"
+        className="rounded border border-[var(--border)] bg-[var(--surface)] px-2 text-[var(--text-muted)] transition-colors hover:text-[var(--text)]"
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="2" y="3" width="12" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M2 6h12M5 1.5v2M11 1.5v2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+        </svg>
+      </button>
+      {/* Natif caché : porte le calendrier, déclenché par l'icône. */}
+      <input
+        ref={nativo}
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        className="pointer-events-none absolute right-0 top-0 h-full w-9 opacity-0"
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v) {
+            setTxt(isoADdmmaaaa(v));
+            aplicar(v);
+          }
+        }}
+      />
+    </div>
   );
 }
 
@@ -2402,6 +2477,10 @@ function FichaLinea({
 
   const esDep = draft.ancla.t === "dep";
   const forzando = draft.fin != null;
+  // Hito = ligne SANS durée (juste une date). La case bascule : cochée → on
+  // efface la durée (et une éventuelle fin forcée) ; décochée → on repose une
+  // durée par défaut pour retrouver une plage temporelle.
+  const esHito = draft.dur.v == null;
   const nombreRef = (k: string) => refOpciones.find((o) => o.value === k)?.label ?? k;
 
   return (
@@ -2452,36 +2531,54 @@ function FichaLinea({
           </p>
         )}
 
-        {/* Duración estimada */}
-        <div className="flex flex-col gap-1">
-          <Rotulo>Duración estimada</Rotulo>
-          <div className="flex gap-1.5">
-            <input
-              type="number"
-              min={0}
-              value={draft.dur.v ?? ""}
-              onChange={(e) =>
-                setDraft({
-                  ...draft,
-                  dur: { v: e.target.value === "" ? null : Math.max(0, Math.trunc(Number(e.target.value))), u: draft.dur.u },
-                })
-              }
-              className={cn(fieldFicha, "w-16")}
-              aria-label="Cantidad"
-            />
-            <SelFicha
-              valor={draft.dur.u}
-              opciones={DURACION_UNIDADES.map((du) => [du.code, du.plural] as [string, string])}
-              onChange={(u) => setDraft({ ...draft, dur: { v: draft.dur.v, u } })}
-              className="flex-1"
-            />
+        {/* Hito : juste une date (pas de durée) vs plage temporelle. */}
+        <label className="flex cursor-pointer items-center gap-2 text-[13px] text-[var(--text)]">
+          <input
+            type="checkbox"
+            checked={esHito}
+            onChange={(e) =>
+              e.target.checked
+                ? setDraft({ ...draft, dur: { v: null, u: draft.dur.u }, fin: null })
+                : setDraft({ ...draft, dur: { v: 2, u: "semana" } })
+            }
+            className="h-3.5 w-3.5 cursor-pointer accent-[var(--focus)]"
+          />
+          <span>Es un hito (solo una fecha, sin duración)</span>
+        </label>
+
+        {/* Duración estimada — masquée pour un hito. */}
+        {!esHito && (
+          <div className="flex flex-col gap-1">
+            <Rotulo>Duración estimada</Rotulo>
+            <div className="flex gap-1.5">
+              <input
+                type="number"
+                min={0}
+                value={draft.dur.v ?? ""}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    dur: { v: e.target.value === "" ? null : Math.max(0, Math.trunc(Number(e.target.value))), u: draft.dur.u },
+                  })
+                }
+                className={cn(fieldFicha, "w-16")}
+                aria-label="Cantidad"
+              />
+              <SelFicha
+                valor={draft.dur.u}
+                opciones={DURACION_UNIDADES.map((du) => [du.code, du.plural] as [string, string])}
+                onChange={(u) => setDraft({ ...draft, dur: { v: draft.dur.v, u } })}
+                className="flex-1"
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Cuándo empieza : fecha fija ou dependencia (onglets seulement si la
-            feuille utilise des liaisons — sinon fecha fija uniquement). */}
+            feuille utilise des liaisons — sinon fecha fija uniquement). Pour un
+            hito, c'est simplement « Fecha ». */}
         <div className="flex flex-col gap-1.5">
-          <Rotulo>Cuándo empieza</Rotulo>
+          <Rotulo>{esHito ? "Fecha" : "Cuándo empieza"}</Rotulo>
           {conDependencia && (
             <Pestanas
               opciones={[
@@ -2609,7 +2706,8 @@ function FichaLinea({
           )}
         </div>
 
-        {/* Cuándo termina : durée estimée ou fecha forcée */}
+        {/* Cuándo termina : durée estimée ou fecha forcée — sans objet pour un hito. */}
+        {!esHito && (
         <div className="flex flex-col gap-1.5">
           <Rotulo>Cuándo termina</Rotulo>
           <Pestanas
@@ -2659,6 +2757,7 @@ function FichaLinea({
             </>
           )}
         </div>
+        )}
 
         {/* Frase récapitulative */}
         <p
@@ -2668,7 +2767,9 @@ function FichaLinea({
           )}
         >
           {preview
-            ? `Empieza el ${fmtFecha(preview.ini)} · termina el ${fmtFecha(preview.fin)}`
+            ? esHito
+              ? `Hito el ${fmtFecha(preview.ini)}`
+              : `Empieza el ${fmtFecha(preview.ini)} · termina el ${fmtFecha(preview.fin)}`
             : "Sin fecha todavía — falta una referencia/fecha, o la dependencia forma un ciclo."}
         </p>
 

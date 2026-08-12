@@ -320,14 +320,18 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     - **Capacitaciones = cartes CRÉÉES** de la feuille `global` (fila `cap`),
       pas des libellés figés : **nom éditable, ajout et suppression** comme les
       lignes libres. Les deux connues (`capacitacion-ee` / `capacitacion-genero`)
-      sont **semées** (migration 045). Toujours affichées (barre si planifiée).
-      Le **nom des cartes créées** s'édite dans la ficha (champ nom pour toute
-      carte `creada` ; la composante ne se choisit qu'à la création) et se
-      persiste via `roadmapSetEdicion` au Guardar. Une capacitación planifiée
-      apparaît alors aussi dans « Próximas tareas » (`lib/agenda.ts`) — c'est une
-      vraie tâche datée.
-    - **Dates du cronograma au format `jj/mm/aaaa`** (`fmtFecha`) — numérique,
-      non ambigu (identique es-AR / fr), tooltips et frases de la ficha compris.
+      sont **semées** (migration 045). Toujours affichées (barre si planifiée),
+      **triées chronologiquement** (non planifiées à la fin). Le **nom des cartes
+      créées** s'édite dans la ficha (champ nom pour toute carte `creada` ; la
+      composante ne se choisit qu'à la création) et se persiste via
+      `roadmapSetEdicion` au Guardar. Une capacitación planifiée apparaît aussi
+      dans « Próximas tareas » (`lib/agenda.ts`) — c'est une vraie tâche datée.
+    - **Dates du cronograma au format `jj/mm/aaaa`** — l'affichage (`fmtFecha`,
+      tooltips, frases) ET la SAISIE : le `<input type="date">` natif suit la
+      langue du navigateur (mm/dd/yyyy) et ne se force pas, donc `FichaLinea`
+      utilise `FechaInput` = champ texte masqué `jj/mm/aaaa` (les `/` s'insèrent
+      seuls) + un `<input type="date">` caché déclenché par une icône calendrier
+      (`showPicker`), converti en ISO en interne.
   - **PAG** : édition **dates/durées uniquement** (ficha sans Dependencia,
     surcharge du plan `pag-<code>` par-dessus le catalogue `lib/pag.ts`). **Pas
     de `+` ni de `×`** : la liste des acciones vient du catalogue (source unique).
@@ -343,6 +347,13 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     empieza* (Fecha fija | Dependencia à **références multiples**, la plus tardive
     gagne) · *Cuándo termina* (durée estimée | forcer une fecha → excédent hachuré
     si plus tard, durée réécrite si plus tôt) · frase. Appliqué à « Listo ».
+  - **Case « Hito »** (toute ligne éditable) : cochée = point daté **sans durée**
+    (juste une *Fecha* ; durée et *Cuándo termina* masqués) → rendu en **losange**
+    (`esBarraHito` : barre de longueur nulle). Décochée = plage temporelle. Pas de
+    colonne DB : **hito ⟺ `durValor` null**. Conséquence pour le PAG : quand une
+    ligne `pag-<code>` existe (le seed en crée 33), sa `durValor` fait foi **y
+    compris `null`** — `tareasPag` ne retombe plus sur la durée du catalogue, sinon
+    on ne pourrait jamais effacer la durée d'une acción.
   - **`+`** (en-tête de phase) insère une ligne (nom + composante), ancrée par
     défaut au repère *Inicio* de la phase ; **`×`** (survol d'une tâche) supprime
     avec **recouture** (les dépendants se raccrochent aux références de la
