@@ -68,6 +68,7 @@ import { useAuthUser } from "@/components/auth-context";
 import {
   roadmapSetRealizada,
   roadmapSetPlan,
+  roadmapSetEdicion,
   roadmapAddEnlace,
   roadmapRemoveEnlace,
   roadmapEliminarCarta,
@@ -327,7 +328,14 @@ function construirDraft(rm: Roadmap, feuille: string, key: string, sinLiaisons =
   } else {
     ancla = { t: "dep", extremo: "inicio", valor: 0, unidad: "dia", sentido: "despues", punto: "fin", refs: [] };
   }
-  return { key, dur, ancla, fin };
+  const draft: DraftLinea = { key, dur, ancla, fin };
+  // Carte créée (ligne libre, capacitación) : son nom est éditable → on le
+  // charge dans le brouillon (la ficha montrera le champ nom).
+  if (est?.creada) {
+    draft.nombre = est.nombre ?? "";
+    draft.comp = (est.componente as ComponenteCode | null) ?? "GP";
+  }
+  return draft;
 }
 
 // Brouillon d'une ligne NOUVELLE (insertion), pas encore dans le borrador. En
@@ -366,7 +374,15 @@ function aplicarDraft(rm: Roadmap, feuille: string, draft: DraftLinea): Roadmap 
   const roadmapEstadoBase = existe
     ? rm.roadmapEstado.map((r) =>
         r.feuille === feuille && r.tareaKey === draft.key
-          ? { ...r, durValor, durUnidad, fechaInicio, fechaFin }
+          ? {
+              ...r,
+              durValor,
+              durUnidad,
+              fechaInicio,
+              fechaFin,
+              // Nom éditable des cartes créées (ligne libre, capacitación).
+              ...(r.creada && draft.nombre != null ? { nombre: draft.nombre } : {}),
+            }
           : r,
       )
     : [
@@ -542,10 +558,13 @@ function barraFase(
     : null;
 }
 
-// Date courte (survol des segments de fase) — ex. « 3 jun 2027 ».
+// Date courte au format français/argentin jj/mm/aaaa — ex. « 03/06/2027 »
+// (numérique, non ambigu, identique en es-AR et fr).
 const fmtFecha = (ms: number): string => {
   const d = new Date(ms);
-  return `${d.getDate()} ${MES_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}/${mm}/${d.getFullYear()}`;
 };
 
 // Barre d'un repère ou d'un jalon (modèle enveloppe). Les repères de phase
@@ -720,14 +739,11 @@ export function seccionesSub(
 // compris Género) ont chacune leur ligne éditable et restent ici. Le titre est
 // écrit À CÔTÉ de la barre (comme pour les sous-projets). Les deux
 // capacitaciones sortent dans leur propre section « Capacitaciones ».
-// Capacitaciones du programme : deux lignes NOMMÉES, planifiables (fecha fija +
-// durée), toujours affichées (barre seulement une fois un plan saisi). Ce ne
-// sont ni des informes (règle par semestre) ni des cartes créées : cartes à clé
-// fixe, éditables depuis le mode Editar de la vue globale.
-const CAPACITACIONES_GLOBAL: { key: string; comp: ComponenteCode; nombre: string }[] = [
-  { key: "capacitacion-ee", comp: "EE", nombre: "Capacitaciones Eficiencia Energética" },
-  { key: "capacitacion-genero", comp: "G", nombre: "Capacitaciones Género" },
-];
+// Fila-sentinelle des capacitaciones. Ce sont des cartes CRÉÉES de la feuille
+// « global » (comme les lignes libres, mais dans leur propre section) : nom
+// éditable, ajout et suppression. Les deux connues sont semées en base
+// (migration 045, clés `capacitacion-ee` / `capacitacion-genero`).
+const FILA_CAP = "cap";
 
 function seccionGlobalRoadmap(
   d: DatosCronograma,
@@ -765,10 +781,23 @@ function seccionGlobalRoadmap(
     fechaFin: string | null;
   }[] = [];
   const items: { key: string; comp: ComponenteCode; nombre: string }[] = [];
+  // Capacitaciones (fila 'cap') : collectées à part — elles s'affichent TOUJOURS
+  // (même sans plan) dans leur propre section, sans filtre de composante.
+  const capCards: { key: string; comp: ComponenteCode; nombre: string; orden: number }[] = [];
   for (const [colKey, cards] of columnas) {
     const sem = colKey.split("|")[0];
     for (const c of cards) {
-      if (c.nota || !filtros.has(c.componente)) continue;
+      if (c.nota) continue;
+      if (sem === FILA_CAP) {
+        capCards.push({ key: c.key, comp: c.componente, nombre: c.nombre, orden: c.orden ?? 0 });
+        const p = planGlobalEfectivo(sem, c.key, stored.get(c.key));
+        // Barre seulement quand un plan est saisi ; sinon ligne sans barre.
+        if (p.fechaInicio != null || p.durValor != null) {
+          tasks.push({ key: c.key, fase: sem, durValor: p.durValor, durUnidad: p.durUnidad, fechaInicio: p.fechaInicio, fechaFin: p.fechaFin });
+        }
+        continue;
+      }
+      if (!filtros.has(c.componente)) continue;
       const p = planGlobalEfectivo(sem, c.key, stored.get(c.key));
       if (p.fechaInicio == null && p.durValor == null) continue;
       tasks.push({
@@ -782,21 +811,7 @@ function seccionGlobalRoadmap(
       items.push({ key: c.key, comp: c.componente, nombre: c.nombre });
     }
   }
-  // Capacitaciones : entrent dans le planning seulement quand un plan est saisi
-  // (fecha fija ou durée). Sinon la ligne s'affiche sans barre (à planifier).
-  for (const cap of CAPACITACIONES_GLOBAL) {
-    const s = stored.get(cap.key);
-    if (s && (s.fechaInicio || s.durValor != null)) {
-      tasks.push({
-        key: cap.key,
-        fase: FILA_LIBRE,
-        durValor: s.durValor ?? null,
-        durUnidad: asUnidad(s.durUnidad),
-        fechaInicio: s.fechaInicio ?? null,
-        fechaFin: s.fechaFin ?? null,
-      });
-    }
-  }
+  capCards.sort((a, b) => a.orden - b.orden || (a.key < b.key ? -1 : 1));
   const sched = computeSchedule({ tasks, links: [], faseInicio: {}, projectStart: PROJECT_START });
 
   // Barre d'une carte : couleur de composante + titre écrit à côté (dentro=false).
@@ -838,10 +853,10 @@ function seccionGlobalRoadmap(
   const desnudar = (f: (Fila & { _s: number })[]) =>
     f.map(({ label, barras, key }) => ({ label, barras, key }));
 
-  // Capacitaciones : section À PART, toujours affichée, chaque ligne à clé fixe
-  // (éditable) ; barre seulement une fois planifiée. La capacitación Género
-  // reste donc ici, pas dans le PAG.
-  const capFilas: Fila[] = CAPACITACIONES_GLOBAL.map((cap) => {
+  // Capacitaciones : section À PART. Cartes créées de la fila 'cap' — nom
+  // éditable, ajout (« + ») et suppression. Toujours affichées ; barre seulement
+  // une fois planifiée. La capacitación Género reste ici, pas dans le PAG.
+  const capFilas: Fila[] = capCards.map((cap) => {
     const b = barraCard(cap.key, cap.comp, cap.nombre);
     return { label: cap.nombre, key: cap.key, barras: b ? [b] : [] };
   });
@@ -856,6 +871,8 @@ function seccionGlobalRoadmap(
     },
     capacitaciones: {
       titulo: "Capacitaciones",
+      // Fila-sentinelle : le « + » ajoute une capacitación (carte créée).
+      faseCode: FILA_CAP,
       barras: [],
       filas: capFilas,
     },
@@ -1167,7 +1184,9 @@ export function CronogramaClient() {
   // un brouillon neuf ; il n'entre dans le borrador qu'à « Listo » (Cancelar le jette).
   const insertarLinea = (fase: string, x: number, y: number) => {
     if (!borrador || !feuilleEd) return;
-    const d = construirDraftNueva(fase, "GP", !feuilleUsaLiaisons(feuilleEd));
+    // Capacitación : composante EE par défaut (l'admin peut la changer) ; ailleurs GP.
+    const compDefaut: ComponenteCode = fase === FILA_CAP ? "EE" : "GP";
+    const d = construirDraftNueva(fase, compDefaut, !feuilleUsaLiaisons(feuilleEd));
     setDraft(d);
     setFicha({ key: d.key, label: d.nombre ?? "Nueva tarea", x, y });
   };
@@ -1311,6 +1330,19 @@ export function CronogramaClient() {
               fechaInicio: r.fechaInicio,
               fechaFin: r.fechaFin,
             }),
+          );
+        }
+      }
+      // 2b) Nom des cartes CRÉÉES déjà existantes (ligne libre, capacitación)
+      //     modifié. Les créations neuves ont déjà leur nom (roadmapCrearCarta).
+      //     On préserve descripción/responsable (roadmapSetEdicion les réécrit).
+      for (const r of borrador.roadmapEstado) {
+        if (!r.creada) continue;
+        const o = orig.get(r.tareaKey);
+        if (!o) continue;
+        if ((r.nombre ?? "") !== (o.nombre ?? "")) {
+          ops.push(
+            roadmapSetEdicion(feuilleFixe, r.tareaKey, r.nombre ?? "", o.descripcion ?? "", o.responsable ?? ""),
           );
         }
       }
@@ -2107,6 +2139,13 @@ export function CronogramaClient() {
           refOpciones={refOpciones}
           preview={previewLinea}
           conDependencia={feuilleUsaLiaisons(feuilleEd ?? "")}
+          permiteNombre={
+            draft.nueva === true ||
+            (borrador?.roadmapEstado.some(
+              (r) => r.feuille === feuilleEd && r.tareaKey === draft.key && r.creada,
+            ) ??
+              false)
+          }
           onListo={aplicarFicha}
           onCancelar={cerrarFicha}
         />
@@ -2269,6 +2308,7 @@ function FichaLinea({
   refOpciones,
   preview,
   conDependencia,
+  permiteNombre,
   onListo,
   onCancelar,
 }: {
@@ -2282,6 +2322,10 @@ function FichaLinea({
   // Feuille avec liaisons (sous-projet) : montre l'onglet « Dependencia ».
   // Global / PAG : uniquement « Fecha fija » (les liaisons y sont ignorées).
   conDependencia: boolean;
+  // Nom éditable : vrai pour une ligne NOUVELLE et pour une carte créée déjà
+  // posée (ligne libre, capacitación). La composante ne se choisit qu'à la
+  // création (`draft.nueva`) — pas d'action pour la changer ensuite.
+  permiteNombre: boolean;
   onListo: () => void;
   onCancelar: () => void;
 }) {
@@ -2301,34 +2345,37 @@ function FichaLinea({
         role="dialog"
         aria-label="Editar línea"
       >
-        {draft.nueva ? (
+        {permiteNombre ? (
           <div className="flex flex-col gap-1.5">
             <input
               type="text"
               value={draft.nombre ?? ""}
               onChange={(e) => setDraft({ ...draft, nombre: e.target.value })}
-              placeholder="Nombre de la tarea"
+              placeholder="Nombre de la línea"
               className={cn(fieldFicha, "w-full font-medium")}
               autoFocus
             />
-            <div className="flex gap-1">
-              {(["GP", "EE", "AyS", "G"] as ComponenteCode[]).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={draft.comp === c}
-                  onClick={() => setDraft({ ...draft, comp: c })}
-                  style={{
-                    backgroundColor: CARD_TONOS[c].head,
-                    color: CARD_TONOS[c].headText,
-                    borderColor: draft.comp === c ? "var(--text)" : "var(--border)",
-                  }}
-                  className="rounded border px-2.5 py-1 text-[11px] font-semibold"
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+            {/* Composante : choisie à la création seulement. */}
+            {draft.nueva && (
+              <div className="flex gap-1">
+                {(["GP", "EE", "AyS", "G"] as ComponenteCode[]).map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={draft.comp === c}
+                    onClick={() => setDraft({ ...draft, comp: c })}
+                    style={{
+                      backgroundColor: CARD_TONOS[c].head,
+                      color: CARD_TONOS[c].headText,
+                      borderColor: draft.comp === c ? "var(--text)" : "var(--border)",
+                    }}
+                    className="rounded border px-2.5 py-1 text-[11px] font-semibold"
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <p className="truncate text-sm font-semibold text-[var(--text)]" title={label}>

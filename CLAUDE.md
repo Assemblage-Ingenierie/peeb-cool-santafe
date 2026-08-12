@@ -310,14 +310,24 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     insertion `+` ancrée sur le repère `Inicio`, suppression `×` + recouture.
   - **Vue globale** : la section « Proyecto global » est scindée en
     **« Gestión de proyecto »** (informes GP/AyS **non éditables** — règle par
-    semestre figée — + lignes libres) et une section **« Capacitaciones »**
-    (les deux capacitaciones, cartes à clé fixe `capacitacion-ee` /
-    `capacitacion-genero`, planifiables). Ficha **sans onglet Dependencia**
-    (fecha fija seule ; `links: []`). Le `+` de « Gestión de proyecto » ajoute
-    une **ligne libre** (jalon hors PAG/hors sous-projets, fila-sentinelle
-    `libre`). Les lignes de composante **Género restent dans la vue globale**
+    semestre figée — + lignes libres) et une section **« Capacitaciones »**.
+    Ficha **sans onglet Dependencia** (fecha fija seule ; `links: []`). Le `+`
+    de « Gestión de proyecto » ajoute une **ligne libre** (fila-sentinelle
+    `libre`) ; celui de « Capacitaciones » une capacitación (fila-sentinelle
+    `cap`). Les lignes de composante **Género restent dans la vue globale**
     (le renvoi « genero → PAG » et le bloc « Fichas Género de la hoja global »
     ont été retirés — ils étaient vides en base).
+    - **Capacitaciones = cartes CRÉÉES** de la feuille `global` (fila `cap`),
+      pas des libellés figés : **nom éditable, ajout et suppression** comme les
+      lignes libres. Les deux connues (`capacitacion-ee` / `capacitacion-genero`)
+      sont **semées** (migration 045). Toujours affichées (barre si planifiée).
+      Le **nom des cartes créées** s'édite dans la ficha (champ nom pour toute
+      carte `creada` ; la composante ne se choisit qu'à la création) et se
+      persiste via `roadmapSetEdicion` au Guardar. Une capacitación planifiée
+      apparaît alors aussi dans « Próximas tareas » (`lib/agenda.ts`) — c'est une
+      vraie tâche datée.
+    - **Dates du cronograma au format `jj/mm/aaaa`** (`fmtFecha`) — numérique,
+      non ambigu (identique es-AR / fr), tooltips et frases de la ficha compris.
   - **PAG** : édition **dates/durées uniquement** (ficha sans Dependencia,
     surcharge du plan `pag-<code>` par-dessus le catalogue `lib/pag.ts`). **Pas
     de `+` ni de `×`** : la liste des acciones vient du catalogue (source unique).
@@ -344,7 +354,11 @@ Application web de suivi de projet (PWA) — réhabilitation énergétique de b�
     l'ordre des lignes est **chronologique** (dérivé des dates), donc il se
     pilote par l'ancrage, pas par la position.
 
-**Migrations** : dans `supabase/migrations/`, **dernière = 044**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+**Migrations** : dans `supabase/migrations/`, **dernière = 045**. Toute migration passe par MCP `execute_sql` (dev) ET un fichier `NNN_*.sql` versionné.
+- 045 : les **capacitaciones** du « Proyecto global » deviennent des **cartes
+  créées** (feuille `global`, fila `cap`, clés `capacitacion-ee` /
+  `capacitacion-genero`) → nom éditable, ajout et suppression depuis le mode
+  Editar. Sème les deux connues, sans plan. Idempotente (`on conflict do nothing`).
 - 044 : corrige la cible de 043 — le « recollage » AP↔EP visait les **5 écoles
   d'origine** (SUB-E67/E407/E574/E1109/E331), pas le lot Norte. Annule 043 (Norte
   reprend son AP fixe 2028-11-01) et met le décalage EP→AP des 5 écoles d'origine
